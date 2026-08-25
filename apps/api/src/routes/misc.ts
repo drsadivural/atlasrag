@@ -73,7 +73,7 @@ export function dashboardRoutes(deps: AppDeps) {
     };
 
     const response: DashboardResponse = {
-      greetingName: session.user.fullName.split(' ').slice(-1)[0] ?? session.user.fullName,
+      greetingName: greetingNameFor(session.user.fullName),
       kpis: [
         {
           key: 'consultations',
@@ -149,6 +149,26 @@ export function dashboardRoutes(deps: AppDeps) {
   });
 
   return app;
+}
+
+/**
+ * The name to greet someone by.
+ *
+ * Takes the given name, and keeps an honorific attached to it when one is present, so
+ * "Dr Sadi Vural" is greeted as "Dr Sadi" rather than as "Vural" — which is how the person
+ * is actually addressed.
+ */
+function greetingNameFor(fullName: string): string {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return fullName;
+
+  const honorifics = new Set(['dr', 'dr.', 'prof', 'prof.', 'mr', 'mr.', 'mrs', 'mrs.', 'ms', 'ms.', 'mx', 'mx.', 'sir', 'eng', 'eng.']);
+  const first = parts[0] as string;
+
+  if (honorifics.has(first.toLowerCase()) && parts.length > 1) {
+    return `${first} ${parts[1]}`;
+  }
+  return first;
 }
 
 /* -------------------------------------------------------------------------- */

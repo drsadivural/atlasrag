@@ -1,3 +1,6 @@
+// Node-only: loads .env before configuration is validated. The Workers build uses its
+// own entry point and receives configuration through bindings instead.
+import 'dotenv/config';
 import { serve } from '@hono/node-server';
 import { buildApp } from './app.js';
 import { startWorkerLoop } from './jobs/loop.js';

@@ -1,0 +1,123 @@
+@import 'tailwindcss';
+@import '@fontsource-variable/inter/index.css';
+
+/**
+ * Tailwind v4 auto-detects sources under the project root only, which in a workspace means
+ * `apps/web` alone. The design system lives in `packages/ui`, so classes used exclusively
+ * there — the whole primitive layer — were silently never generated. Registering it
+ * explicitly is what makes the shared components actually pick up their styles.
+ */
+@source "../../../packages/ui/src";
+
+/**
+ * Tailwind theme bridge.
+ *
+ * Every colour is mapped to a design token rather than a literal, so `bg-surface` follows
+ * the theme automatically and no component ever needs to know whether it is rendering
+ * light or dark.
+ */
+@theme {
+  --color-bg: var(--uxe-bg);
+  --color-surface: var(--uxe-surface);
+  --color-surface-raised: var(--uxe-surface-raised);
+  --color-surface-sunken: var(--uxe-surface-sunken);
+  --color-surface-hover: var(--uxe-surface-hover);
+  --color-surface-selected: var(--uxe-surface-selected);
+
+  --color-ink: var(--uxe-text);
+  --color-ink-secondary: var(--uxe-text-secondary);
+  --color-ink-tertiary: var(--uxe-text-tertiary);
+
+  --color-line: var(--uxe-border);
+  --color-line-strong: var(--uxe-border-strong);
+
+  --color-cobalt: var(--uxe-cobalt);
+  --color-violet: var(--uxe-violet);
+  --color-success: var(--uxe-success);
+  --color-warning: var(--uxe-warning);
+  --color-danger: var(--uxe-danger);
+  --color-info: var(--uxe-info);
+  --color-teal: var(--uxe-teal);
+
+  --font-sans: var(--uxe-font-sans);
+  --font-mono: var(--uxe-font-mono);
+
+  --radius-control: var(--uxe-radius-control);
+  --radius-card: var(--uxe-radius-card);
+  --radius-card-lg: var(--uxe-radius-card-lg);
+
+  /**
+   * The complete breakpoint scale.
+   *
+   * Declared in full rather than overriding one or two values: Tailwind v4 sorts variants
+   * by the order breakpoints are registered, and a partial override re-registers only the
+   * named ones, which pushed `sm:` to sort AFTER `xl:` and silently defeated every
+   * `xl:grid-cols-*` in the app. The three that matter are the brief's own: 768 for
+   * tablet, 1280 for the persistent rail.
+   */
+  --breakpoint-sm: 640px;
+  --breakpoint-md: 768px;
+  --breakpoint-lg: 1024px;
+  --breakpoint-xl: 1280px;
+  --breakpoint-2xl: 1536px;
+}
+
+/* Utility layer -------------------------------------------------------- */
+
+@utility gradient-text {
+  background-image: var(--uxe-gradient);
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+}
+
+@utility gradient-surface {
+  background-image: var(--uxe-gradient);
+}
+
+/**
+ * Safe-area padding for the sticky composer and bottom navigation, so neither sits under
+ * the home indicator on an iPhone.
+ */
+@utility pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+@utility mb-safe {
+  margin-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Scrollbars: visible enough to find, quiet enough not to compete. */
+@layer base {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--uxe-border-strong) transparent;
+  }
+
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background: var(--uxe-border-strong);
+    border: 3px solid transparent;
+    background-clip: content-box;
+    border-radius: 999px;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background: var(--uxe-text-tertiary);
+    background-clip: content-box;
+  }
+
+  /* Headings inherit the body font and sit tighter than body copy. */
+  h1, h2, h3, h4 {
+    line-height: 1.25;
+    letter-spacing: -0.011em;
+  }
+}

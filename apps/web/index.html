@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <meta
+      name="description"
+      content="UXE Consulting AI — verified answers, exact evidence, corrected documents."
+    />
+    <meta name="theme-color" content="#3156F5" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0A0D18" media="(prefers-color-scheme: dark)" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <title>UXE Consulting AI</title>
+    <script>
+      /**
+       * Applies the stored theme before first paint.
+       *
+       * Inline and synchronous on purpose: doing this in React would let the light theme
+       * paint first and flash white for a dark-mode user on every navigation.
+       */
+      (function () {
+        try {
+          var stored = localStorage.getItem('uxe-theme');
+          if (stored === 'dark' || stored === 'light') {
+            document.documentElement.setAttribute('data-theme', stored);
+          }
+        } catch (e) {
+          /* Private browsing blocks localStorage; the system preference still applies. */
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <noscript>
+      <div style="padding: 2rem; font-family: system-ui">
+        <h1>JavaScript is required</h1>
+        <p>UXE Consulting AI needs JavaScript enabled to review documents and show evidence.</p>
+      </div>
+    </noscript>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

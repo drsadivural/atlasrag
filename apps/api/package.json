@@ -19,7 +19,8 @@
     "@uxe/observability": "workspace:*",
     "@uxe/rag": "workspace:*",
     "hono": "4.13.4",
-    "zod": "4.4.3"
+    "zod": "4.4.3",
+    "dotenv": "17.4.2"
   },
   "devDependencies": {
     "@uxe/config": "workspace:*",

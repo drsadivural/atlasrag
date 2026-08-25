@@ -1,0 +1,10 @@
+{
+  "extends": "@uxe/config/tsconfig/react.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node", "vitest/globals"],
+    "noUnusedLocals": false,
+    "noUnusedParameters": false
+  },
+  "include": ["**/*.ts", "**/*.tsx"]
+}

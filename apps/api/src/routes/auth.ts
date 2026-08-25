@@ -3,6 +3,10 @@ import type { Context } from 'hono';
 import {
   CSRF_COOKIE,
   SESSION_COOKIE,
+  assertDomainAllowed,
+  buildAuthorizationRequest,
+  exchangeCode,
+  fetchProfile,
   buildOtpauthUrl,
   checkPasswordStrength,
   clearCookie,
@@ -49,6 +53,7 @@ import { RateLimitBuckets } from '../services/rate-limit.js';
 import { EmailTemplates } from '../services/email.js';
 import { isProduction } from '../env.js';
 import { defaultWorkspaceSettings, workspaceSettingsFrom } from '../services/settings.js';
+import type { OAuthConfig, OAuthProvider } from '@uxe/auth';
 
 const VERIFY_TTL_HOURS = 24;
 const RESET_TTL_MINUTES = 30;
@@ -374,6 +379,126 @@ export function authRoutes(deps: AppDeps) {
     await deps.repos.identity.activateFactor(factor.id, hashes);
 
     return c.json({ ok: true as const, recoveryCodes });
+  });
+
+  /* ---------------------------------------------------------------------- */
+  /* OAuth                                                                  */
+  /* ---------------------------------------------------------------------- */
+
+  /**
+   * Starts an OAuth authorization-code flow with PKCE.
+   *
+   * The `state` and `code_verifier` are stored server-side as a short-lived, single-use
+   * token and only their hash reaches the database, so a callback that does not match the
+   * request this browser started cannot be replayed.
+   */
+  app.post('/oauth/:provider/start', async (c) => {
+    const provider = c.req.param('provider');
+    if (provider !== 'google' && provider !== 'microsoft') throw ApiError.notFound('Provider');
+
+    const config = oauthConfigFor(deps, provider);
+    if (!config) {
+      throw new ApiError(
+        400,
+        'provider_unconfigured',
+        `${provider === 'google' ? 'Google' : 'Microsoft'} sign-in is not configured for this deployment. An administrator needs to add the OAuth client ID and secret.`,
+        { details: { requiredEnv: provider === 'google'
+          ? ['GOOGLE_OAUTH_CLIENT_ID', 'GOOGLE_OAUTH_CLIENT_SECRET']
+          : ['MICROSOFT_OAUTH_CLIENT_ID', 'MICROSOFT_OAUTH_CLIENT_SECRET'] } },
+      );
+    }
+
+    const request = await buildAuthorizationRequest(provider, config);
+    await deps.repos.identity.createAuthToken({
+      userId: null,
+      email: null,
+      kind: 'oauth_state',
+      tokenHash: await sha256Hex(request.state),
+      ttlMinutes: 10,
+      metadata: { provider, codeVerifier: request.codeVerifier, nonce: request.nonce },
+    });
+
+    return c.json({ url: request.url });
+  });
+
+  app.get('/oauth/:provider/callback', async (c) => {
+    const provider = c.req.param('provider');
+    const failure = (reason: string) =>
+      c.redirect(`${deps.env.PUBLIC_APP_URL}/login?sso=failed&reason=${encodeURIComponent(reason)}`, 302);
+
+    if (provider !== 'google' && provider !== 'microsoft') return failure('unknown_provider');
+
+    const config = oauthConfigFor(deps, provider);
+    if (!config) return failure('not_configured');
+
+    const url = new URL(c.req.url);
+    const code = url.searchParams.get('code');
+    const state = url.searchParams.get('state');
+    if (!code || !state) return failure('missing_code');
+
+    // Single-use: consuming the state here means a replayed callback cannot succeed.
+    const stored = await deps.repos.identity.consumeAuthToken(await sha256Hex(state), 'oauth_state');
+    if (!stored) return failure('invalid_state');
+
+    const metadata = stored.metadata as { provider?: string; codeVerifier?: string };
+    if (metadata.provider !== provider || !metadata.codeVerifier) return failure('invalid_state');
+
+    try {
+      const tokens = await exchangeCode(provider, config, code, metadata.codeVerifier);
+      const profile = await fetchProfile(provider, config, tokens.accessToken);
+      if (!profile.email) return failure('no_email');
+      if (!profile.emailVerified) return failure('unverified_email');
+
+      let account = await deps.repos.identity.findOAuthAccount(provider, profile.providerAccountId);
+      let user = account ? await deps.repos.identity.findUserById(account.userId) : null;
+
+      if (!user) {
+        // Link by verified email when the address already has an account, so signing in
+        // with Google after registering with a password reaches the same workspace.
+        user = await deps.repos.identity.findUserByEmail(profile.email);
+        if (!user) {
+          user = await deps.repos.identity.createUser({
+            email: profile.email,
+            passwordHash: null,
+            fullName: profile.fullName ?? profile.email.split('@')[0] ?? profile.email,
+            emailVerified: true,
+          });
+        }
+        account = await deps.repos.identity.linkOAuthAccount({
+          userId: user.id,
+          provider,
+          providerAccountId: profile.providerAccountId,
+          email: profile.email,
+          refreshTokenEncrypted: tokens.refreshToken
+            ? await encryptSecret(tokens.refreshToken, deps.env.ENCRYPTION_KEY)
+            : null,
+          scopes: tokens.scopes,
+        });
+      }
+
+      if (!user.emailVerifiedAt) await deps.repos.identity.markEmailVerified(user.id);
+
+      const workspaces = await deps.repos.identity.listWorkspacesForUser(user.id);
+      const primary = workspaces[0];
+      if (primary) {
+        const workspace = await deps.repos.identity.getWorkspace(primary.id);
+        const settings = workspaceSettingsFrom(workspace?.settings ?? {}, workspace?.name ?? '');
+        try {
+          assertDomainAllowed(profile.email, settings.security.allowedEmailDomains);
+        } catch {
+          return failure('domain_not_allowed');
+        }
+      }
+
+      await issueSession(deps, c, user, primary?.id ?? null, true, true);
+      return c.redirect(`${deps.env.PUBLIC_APP_URL}/dashboard`, 302);
+    } catch (error) {
+      deps.logger.warn('oauth.callback_failed', {
+        provider,
+        error: error instanceof Error ? error.message : 'unknown',
+      });
+      return failure('exchange_failed');
+    }
   });
 
   /* ---------------------------------------------------------------------- */
@@ -789,3 +914,23 @@ function slugify(value: string): string {
 }
 
 export { newId, parseCookies, hashSessionToken, mustEnrollMfa };
+
+
+/** Returns the OAuth configuration for a provider, or null when it is not configured. */
+function oauthConfigFor(deps: AppDeps, provider: OAuthProvider): OAuthConfig | null {
+  if (provider === 'google') {
+    if (!deps.env.GOOGLE_OAUTH_CLIENT_ID || !deps.env.GOOGLE_OAUTH_CLIENT_SECRET) return null;
+    return {
+      clientId: deps.env.GOOGLE_OAUTH_CLIENT_ID,
+      clientSecret: deps.env.GOOGLE_OAUTH_CLIENT_SECRET,
+      redirectUri: `${deps.env.PUBLIC_API_URL}/api/v1/auth/oauth/google/callback`,
+    };
+  }
+  if (!deps.env.MICROSOFT_OAUTH_CLIENT_ID || !deps.env.MICROSOFT_OAUTH_CLIENT_SECRET) return null;
+  return {
+    clientId: deps.env.MICROSOFT_OAUTH_CLIENT_ID,
+    clientSecret: deps.env.MICROSOFT_OAUTH_CLIENT_SECRET,
+    redirectUri: `${deps.env.PUBLIC_API_URL}/api/v1/auth/oauth/microsoft/callback`,
+    tenant: deps.env.MICROSOFT_OAUTH_TENANT,
+  };
+}

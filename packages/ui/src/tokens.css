@@ -1,0 +1,270 @@
+/**
+ * Design tokens for UXE Consulting AI.
+ *
+ * Every colour is a semantic token, never a raw hex, so the dark theme is a genuine
+ * re-mapping rather than an inversion of the light one. The light values are taken from
+ * the supplied screen concepts; the dark values are re-derived to hold the same contrast
+ * relationships rather than being computed by flipping lightness.
+ */
+
+@font-face {
+  font-family: 'Inter Variable';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('@fontsource-variable/inter/files/inter-latin-wght-normal.woff2') format('woff2-variations');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212,
+    U+2215, U+FEFF, U+FFFD;
+}
+
+:root {
+  /* --- Brand ------------------------------------------------------------ */
+  --uxe-cobalt: #3156f5;
+  --uxe-violet: #7c3aed;
+  --uxe-gradient: linear-gradient(90deg, #3156f5 0%, #7c3aed 100%);
+  --uxe-gradient-diagonal: linear-gradient(135deg, #3156f5 0%, #7c3aed 100%);
+
+  /* --- Surfaces --------------------------------------------------------- */
+  --uxe-bg: #f8faff;
+  --uxe-surface: #ffffff;
+  --uxe-surface-raised: #ffffff;
+  --uxe-surface-sunken: #f4f7fe;
+  --uxe-surface-hover: #f2f6ff;
+  --uxe-surface-selected: #eef3ff;
+
+  /* --- Text ------------------------------------------------------------- */
+  --uxe-text: #10162f;
+  --uxe-text-secondary: #667085;
+  --uxe-text-tertiary: #98a2b3;
+  --uxe-text-inverse: #ffffff;
+  --uxe-text-on-brand: #ffffff;
+
+  /* --- Lines ------------------------------------------------------------ */
+  --uxe-border: #e4e7ec;
+  --uxe-border-strong: #d0d5dd;
+  --uxe-border-focus: #3156f5;
+
+  /* --- Status ----------------------------------------------------------- */
+  --uxe-success: #12a86b;
+  --uxe-success-bg: #e7f8f0;
+  --uxe-success-border: #b6ecd3;
+  --uxe-warning: #f59e0b;
+  --uxe-warning-bg: #fef6e7;
+  --uxe-warning-border: #fbe0ac;
+  --uxe-danger: #e5484d;
+  --uxe-danger-bg: #fdeced;
+  --uxe-danger-border: #f8c3c5;
+  --uxe-info: #2563eb;
+  --uxe-info-bg: #e8f0ff;
+  --uxe-info-border: #bcd3ff;
+  --uxe-teal: #0ea5a8;
+  --uxe-teal-bg: #e3f7f7;
+  --uxe-neutral-bg: #f2f4f7;
+
+  /* --- Elevation -------------------------------------------------------- */
+  /* Cool-tinted so shadows read as depth on the pale blue ground, not as grey dirt. */
+  --uxe-shadow-xs: 0 1px 2px rgba(16, 22, 47, 0.05);
+  --uxe-shadow-sm: 0 1px 3px rgba(16, 22, 47, 0.07), 0 1px 2px rgba(16, 22, 47, 0.04);
+  --uxe-shadow-md: 0 4px 12px rgba(16, 22, 47, 0.07), 0 2px 4px rgba(16, 22, 47, 0.04);
+  --uxe-shadow-lg: 0 12px 28px rgba(16, 22, 47, 0.1), 0 4px 8px rgba(16, 22, 47, 0.05);
+  --uxe-shadow-xl: 0 24px 48px rgba(16, 22, 47, 0.12), 0 8px 16px rgba(16, 22, 47, 0.06);
+  --uxe-shadow-brand: 0 8px 20px rgba(49, 86, 245, 0.24);
+
+  /* --- Radii ------------------------------------------------------------ */
+  --uxe-radius-control: 10px;
+  --uxe-radius-control-lg: 12px;
+  --uxe-radius-card: 14px;
+  --uxe-radius-card-lg: 16px;
+  --uxe-radius-pill: 999px;
+
+  /* --- Typography ------------------------------------------------------- */
+  --uxe-font-sans: 'Inter Variable', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI',
+    Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --uxe-font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+
+  /* --- Motion ----------------------------------------------------------- */
+  --uxe-duration-fast: 150ms;
+  --uxe-duration: 180ms;
+  --uxe-duration-slow: 220ms;
+  --uxe-ease: cubic-bezier(0.2, 0, 0, 1);
+
+  /* --- Layout ----------------------------------------------------------- */
+  --uxe-nav-width: 264px;
+  --uxe-nav-width-compact: 72px;
+  --uxe-rail-width: 340px;
+  --uxe-header-height: 68px;
+  --uxe-bottom-nav-height: 60px;
+}
+
+/**
+ * Dark theme.
+ *
+ * Applies when the user picks dark explicitly, and when they leave the app on "system"
+ * and their OS is dark. Both selectors set the same tokens so a toggle wins in either
+ * direction without any component knowing a theme exists.
+ */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --uxe-bg: #0a0d18;
+    --uxe-surface: #131829;
+    --uxe-surface-raised: #182034;
+    --uxe-surface-sunken: #0e1320;
+    --uxe-surface-hover: #1c2439;
+    --uxe-surface-selected: #1e2a4d;
+
+    --uxe-text: #eef1f8;
+    --uxe-text-secondary: #98a2b3;
+    --uxe-text-tertiary: #6c7689;
+    --uxe-text-inverse: #10162f;
+
+    --uxe-border: #242c42;
+    --uxe-border-strong: #313b56;
+
+    /* Status hues are lifted so they keep AA contrast on a dark surface. */
+    --uxe-success: #34d399;
+    --uxe-success-bg: #0d2a20;
+    --uxe-success-border: #17513c;
+    --uxe-warning: #fbbf24;
+    --uxe-warning-bg: #2c2110;
+    --uxe-warning-border: #5a4318;
+    --uxe-danger: #f87171;
+    --uxe-danger-bg: #2e1416;
+    --uxe-danger-border: #5d2427;
+    --uxe-info: #60a5fa;
+    --uxe-info-bg: #101d33;
+    --uxe-info-border: #1d3a63;
+    --uxe-teal: #2dd4bf;
+    --uxe-teal-bg: #0c2727;
+    --uxe-neutral-bg: #1a2032;
+
+    --uxe-shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --uxe-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.45), 0 1px 2px rgba(0, 0, 0, 0.3);
+    --uxe-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5), 0 2px 4px rgba(0, 0, 0, 0.3);
+    --uxe-shadow-lg: 0 12px 28px rgba(0, 0, 0, 0.55), 0 4px 8px rgba(0, 0, 0, 0.35);
+    --uxe-shadow-xl: 0 24px 48px rgba(0, 0, 0, 0.6), 0 8px 16px rgba(0, 0, 0, 0.4);
+    --uxe-shadow-brand: 0 8px 20px rgba(49, 86, 245, 0.35);
+  }
+}
+
+:root[data-theme='dark'] {
+  --uxe-bg: #0a0d18;
+  --uxe-surface: #131829;
+  --uxe-surface-raised: #182034;
+  --uxe-surface-sunken: #0e1320;
+  --uxe-surface-hover: #1c2439;
+  --uxe-surface-selected: #1e2a4d;
+
+  --uxe-text: #eef1f8;
+  --uxe-text-secondary: #98a2b3;
+  --uxe-text-tertiary: #6c7689;
+  --uxe-text-inverse: #10162f;
+
+  --uxe-border: #242c42;
+  --uxe-border-strong: #313b56;
+
+  --uxe-success: #34d399;
+  --uxe-success-bg: #0d2a20;
+  --uxe-success-border: #17513c;
+  --uxe-warning: #fbbf24;
+  --uxe-warning-bg: #2c2110;
+  --uxe-warning-border: #5a4318;
+  --uxe-danger: #f87171;
+  --uxe-danger-bg: #2e1416;
+  --uxe-danger-border: #5d2427;
+  --uxe-info: #60a5fa;
+  --uxe-info-bg: #101d33;
+  --uxe-info-border: #1d3a63;
+  --uxe-teal: #2dd4bf;
+  --uxe-teal-bg: #0c2727;
+  --uxe-neutral-bg: #1a2032;
+
+  --uxe-shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --uxe-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.45), 0 1px 2px rgba(0, 0, 0, 0.3);
+  --uxe-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5), 0 2px 4px rgba(0, 0, 0, 0.3);
+  --uxe-shadow-lg: 0 12px 28px rgba(0, 0, 0, 0.55), 0 4px 8px rgba(0, 0, 0, 0.35);
+  --uxe-shadow-xl: 0 24px 48px rgba(0, 0, 0, 0.6), 0 8px 16px rgba(0, 0, 0, 0.4);
+  --uxe-shadow-brand: 0 8px 20px rgba(49, 86, 245, 0.35);
+}
+
+/* --- Base ---------------------------------------------------------------- */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--uxe-bg);
+  color: var(--uxe-text);
+  font-family: var(--uxe-font-sans);
+  /* 15px body text, per the visual system. */
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* The page never scrolls sideways; wide content scrolls inside its own container. */
+  overflow-x: hidden;
+}
+
+:focus-visible {
+  outline: 2px solid var(--uxe-border-focus);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* A focus ring must remain visible against a brand-coloured background. */
+.uxe-on-brand :focus-visible {
+  outline-color: #ffffff;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--uxe-cobalt) 22%, transparent);
+}
+
+/**
+ * Motion is decorative here, so `prefers-reduced-motion` disables it outright rather than
+ * merely shortening it. Durations are set to 1ms rather than 0 so transitionend still fires
+ * and no component waits forever for an event that never arrives.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@keyframes uxe-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes uxe-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes uxe-fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes uxe-slide-in-right {
+  from { transform: translateX(100%); }
+  to { transform: none; }
+}
+
+@keyframes uxe-pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}

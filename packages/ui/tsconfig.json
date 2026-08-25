@@ -1,0 +1,5 @@
+{
+  "extends": "@uxe/config/tsconfig/react.json",
+  "compilerOptions": { "noEmit": true, "types": [] },
+  "include": ["src/**/*.ts", "src/**/*.tsx"]
+}
