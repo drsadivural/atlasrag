@@ -28,6 +28,13 @@ blob-report/
 tests/**/.auth/
 artifacts/screenshots/actual/
 artifacts/screenshots/diff/
+# Run output, not deliverables. `.auth` holds a live session cookie: never commit it.
+artifacts/.auth/
+artifacts/test-results/
+artifacts/a11y-results/
+artifacts/playwright-report/
+artifacts/a11y-report/
+artifacts/coverage/
 
 # local runtime data
 .data/
