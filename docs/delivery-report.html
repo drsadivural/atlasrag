@@ -1,0 +1,695 @@
+<title>UXE Consulting AI Delivery</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=Public+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap">
+
+<style>
+  :root {
+    --paper: #fbfbfc;
+    --card: #ffffff;
+    --ink: #151a22;
+    --slate: #5a6472;
+    --faint: #8b94a3;
+    --rule: #e3e6eb;
+    --rule-strong: #ccd2db;
+    --verified: #0a6e45;
+    --verified-wash: #eef7f2;
+    --defect: #a64327;
+    --defect-wash: #fbf1ed;
+
+    --serif: 'Newsreader', 'Iowan Old Style', Georgia, serif;
+    --sans: 'Public Sans', -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif;
+    --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+    --measure: 68ch;
+    --rail: 4.5rem;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) {
+      --paper: #12151b;
+      --card: #171b23;
+      --ink: #e8ebf0;
+      --slate: #98a1b0;
+      --faint: #6d7889;
+      --rule: #242a35;
+      --rule-strong: #333c4b;
+      --verified: #3fbe86;
+      --verified-wash: #10241c;
+      --defect: #e08160;
+      --defect-wash: #2a1913;
+    }
+  }
+
+  :root[data-theme='dark'] {
+    --paper: #12151b;
+    --card: #171b23;
+    --ink: #e8ebf0;
+    --slate: #98a1b0;
+    --faint: #6d7889;
+    --rule: #242a35;
+    --rule-strong: #333c4b;
+    --verified: #3fbe86;
+    --verified-wash: #10241c;
+    --defect: #e08160;
+    --defect-wash: #2a1913;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .sheet {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: clamp(2rem, 5vw, 5rem) clamp(1.1rem, 4vw, 3rem) 6rem;
+  }
+
+  /* --- Masthead ---------------------------------------------------------- */
+
+  .masthead { border-bottom: 2px solid var(--ink); padding-bottom: 1.75rem; }
+
+  .stamp {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--verified);
+    border: 1px solid currentColor;
+    border-radius: 2px;
+    padding: 0.3rem 0.6rem;
+  }
+
+  .masthead h1 {
+    font-family: var(--serif);
+    font-weight: 500;
+    font-size: clamp(2.4rem, 7vw, 4.1rem);
+    line-height: 1.02;
+    letter-spacing: -0.02em;
+    margin: 1.4rem 0 0;
+    text-wrap: balance;
+  }
+
+  .promise {
+    font-family: var(--serif);
+    font-size: clamp(1.05rem, 2.4vw, 1.35rem);
+    font-style: italic;
+    color: var(--slate);
+    margin: 0.5rem 0 0;
+  }
+
+  .colophon {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 1.6rem;
+    margin-top: 1.6rem;
+    font-family: var(--mono);
+    font-size: 0.74rem;
+    letter-spacing: 0.04em;
+    color: var(--faint);
+  }
+  .colophon b { color: var(--slate); font-weight: 500; }
+
+  /* --- Sections ---------------------------------------------------------- */
+
+  section { margin-top: 3.75rem; }
+
+  .head {
+    display: grid;
+    grid-template-columns: var(--rail) 1fr;
+    align-items: baseline;
+    gap: 0 1rem;
+    border-bottom: 1px solid var(--rule-strong);
+    padding-bottom: 0.6rem;
+  }
+  .head .no {
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--defect);
+    letter-spacing: 0.06em;
+  }
+  .head h2 {
+    font-family: var(--serif);
+    font-weight: 500;
+    font-size: clamp(1.45rem, 3.4vw, 1.9rem);
+    letter-spacing: -0.01em;
+    margin: 0;
+  }
+
+  .body { display: grid; grid-template-columns: var(--rail) 1fr; gap: 0 1rem; }
+  .body > * { grid-column: 2; }
+  .body > .wide { grid-column: 1 / -1; }
+
+  p { margin: 1.05rem 0 0; max-width: var(--measure); }
+  p:first-child { margin-top: 1.2rem; }
+  .lede { font-size: 1.08rem; color: var(--slate); }
+  strong { font-weight: 600; }
+  code { font-family: var(--mono); font-size: 0.86em; }
+
+  /* --- Metric band ------------------------------------------------------- */
+
+  .band {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
+    border: 1px solid var(--rule-strong);
+    margin-top: 1.5rem;
+  }
+  .band > div {
+    padding: 1rem 1.1rem;
+    border-right: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule);
+  }
+  .band .n {
+    font-family: var(--mono);
+    font-size: 1.65rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.03em;
+    line-height: 1;
+  }
+  .band .k {
+    display: block;
+    margin-top: 0.45rem;
+    font-size: 0.73rem;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--faint);
+  }
+  .band .ok { color: var(--verified); }
+
+  /* --- Tables ------------------------------------------------------------ */
+
+  .scroll { overflow-x: auto; margin-top: 1.5rem; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.87rem; }
+  caption {
+    text-align: left;
+    font-family: var(--mono);
+    font-size: 0.71rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--faint);
+    padding-bottom: 0.55rem;
+  }
+  th, td { text-align: left; padding: 0.6rem 0.85rem 0.6rem 0; vertical-align: top; }
+  thead th {
+    font-size: 0.7rem;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--faint);
+    font-weight: 600;
+    border-bottom: 1px solid var(--rule-strong);
+    white-space: nowrap;
+  }
+  tbody tr { border-bottom: 1px solid var(--rule); }
+  td.num, th.num {
+    font-family: var(--mono);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  td.n { color: var(--faint); font-family: var(--mono); font-size: 0.78rem; width: 2.4rem; }
+  .pass { color: var(--verified); font-weight: 600; }
+
+  .by {
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    color: var(--slate);
+  }
+
+  /* --- Register ---------------------------------------------------------- */
+
+  .register td:nth-child(2) { min-width: 22rem; }
+  .register .sev {
+    display: inline-block;
+    width: 3px;
+    height: 1em;
+    vertical-align: -0.15em;
+    margin-right: 0.5rem;
+    background: var(--defect);
+  }
+  .register tr.critical td:nth-child(2) { font-weight: 500; }
+  .register tr.critical .sev { width: 5px; }
+
+  /* --- Callouts ---------------------------------------------------------- */
+
+  .note {
+    margin-top: 1.5rem;
+    padding: 1rem 1.15rem;
+    background: var(--verified-wash);
+    border-left: 3px solid var(--verified);
+    max-width: var(--measure);
+  }
+  .note.warn { background: var(--defect-wash); border-left-color: var(--defect); }
+  .note p { margin-top: 0.5rem; }
+  .note p:first-child { margin-top: 0; }
+  .note .lbl {
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--verified);
+    display: block;
+    margin-bottom: 0.4rem;
+  }
+  .note.warn .lbl { color: var(--defect); }
+
+  /* --- Feature list ------------------------------------------------------ */
+
+  .features { list-style: none; padding: 0; margin: 1.5rem 0 0; }
+  .features > li {
+    display: grid;
+    grid-template-columns: 2.2rem 1fr;
+    gap: 0 0.6rem;
+    padding: 1.15rem 0;
+    border-top: 1px solid var(--rule);
+  }
+  .features > li:last-child { border-bottom: 1px solid var(--rule); }
+  .features .idx {
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--defect);
+    padding-top: 0.18rem;
+  }
+  .features h3 {
+    font-family: var(--serif);
+    font-size: 1.16rem;
+    font-weight: 500;
+    margin: 0;
+    letter-spacing: -0.005em;
+  }
+  .features p { margin-top: 0.4rem; font-size: 0.95rem; }
+  .features .ev {
+    margin-top: 0.5rem;
+    font-size: 0.87rem;
+    color: var(--slate);
+    border-left: 2px solid var(--rule-strong);
+    padding-left: 0.75rem;
+  }
+  .features .ev b {
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--faint);
+    display: block;
+    font-weight: 500;
+  }
+
+  /* --- Commands ---------------------------------------------------------- */
+
+  pre {
+    margin: 1.4rem 0 0;
+    padding: 1.05rem 1.15rem;
+    background: var(--card);
+    border: 1px solid var(--rule-strong);
+    overflow-x: auto;
+    font-family: var(--mono);
+    font-size: 0.82rem;
+    line-height: 1.75;
+    max-width: var(--measure);
+  }
+  pre .c { color: var(--faint); }
+
+  footer {
+    margin-top: 4.5rem;
+    padding-top: 1.5rem;
+    border-top: 2px solid var(--ink);
+    font-family: var(--mono);
+    font-size: 0.73rem;
+    letter-spacing: 0.05em;
+    color: var(--faint);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 1.5rem;
+  }
+
+  @media (max-width: 640px) {
+    :root { --rail: 0px; }
+    .head, .body { grid-template-columns: 1fr; }
+    .head .no { grid-column: 1; }
+    .body > * { grid-column: 1; }
+    .head .no { color: var(--defect); }
+  }
+</style>
+
+<div class="sheet">
+
+  <header class="masthead">
+    <span class="stamp">Verified build</span>
+    <h1>UXE Consulting AI</h1>
+    <p class="promise">Verified answers. Exact evidence. Corrected documents.</p>
+    <div class="colophon">
+      <span><b>479</b> tests passing</span>
+      <span><b>37</b> defects found and fixed</span>
+      <span><b>85,829</b> lines across 275 files</span>
+      <span><b>44</b> tables · 4 migrations</span>
+    </div>
+  </header>
+
+  <section>
+    <div class="head"><span class="no">1</span><h2>What was delivered</h2></div>
+    <div class="body">
+      <p class="lede">
+        A multi-tenant consulting workspace that answers only from a customer's approved
+        documents, reviews those documents against regulations, and produces corrected
+        editions — with every claim traceable to a quotation that can be re-located in the
+        stored source text.
+      </p>
+      <p>
+        The product's central property is mechanical rather than aspirational: <strong>a
+        quotation is looked up, never generated.</strong> Every excerpt is searched for in
+        the stored page text before its citation is persisted, so the system cannot show a
+        quote that is not in the document. The default answering engine is deterministic and
+        extractive — it selects sentences from retrieved passages rather than writing prose —
+        which means it needs no credentials and cannot hallucinate. Anthropic and OpenAI plug
+        into the same interface and pass the identical verification gate.
+      </p>
+      <div class="wide scroll">
+        <table>
+          <caption>Stack, exactly pinned</caption>
+          <thead>
+            <tr><th>Layer</th><th>Built with</th><th>Notes</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Web</td><td>React 19.2 · Vite 8.2 · Tailwind 4.3 · React Router 7.18</td><td>Static bundle, Workers Static Assets</td></tr>
+            <tr><td>API</td><td>Hono 4.13 · Zod 4.4</td><td>Same module runs on Node and on Cloudflare Workers</td></tr>
+            <tr><td>Data</td><td>PostgreSQL 16 · pgvector 0.8.6 · Drizzle 0.45</td><td>44 tables, 18 CHECK constraints, append-only audit trigger</td></tr>
+            <tr><td>Documents</td><td>Python 3.12 · FastAPI · PyMuPDF · Tesseract · LibreOffice</td><td>Container with no database handle and no egress</td></tr>
+            <tr><td>Retrieval</td><td>GIN full-text + HNSW cosine, fused by RRF</td><td>Explicit multi-signal rerank, not a second opaque model</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="head"><span class="no">2</span><h2>Verification</h2></div>
+    <div class="body">
+      <p>
+        Every figure below comes from a command run against the real stack — PostgreSQL with
+        pgvector, the real migrations, the real Python document worker. Object storage uses a
+        temporary filesystem bucket implementing the same interface as R2; email uses the
+        console driver whose outbox the tests read exactly as a user would read the message.
+        Nothing in the answering path is stubbed.
+      </p>
+
+      <div class="band wide">
+        <div><span class="n ok">479</span><span class="k">Tests passing</span></div>
+        <div><span class="n ok">0</span><span class="k">Failing</span></div>
+        <div><span class="n ok">0</span><span class="k">Lint problems</span></div>
+        <div><span class="n ok">0</span><span class="k">WCAG violations</span></div>
+        <div><span class="n ok">0</span><span class="k">Cross-tenant leaks</span></div>
+      </div>
+
+      <div class="wide scroll">
+        <table>
+          <caption>Suites</caption>
+          <thead>
+            <tr><th>Suite</th><th class="num">Tests</th><th>Environment</th><th>Result</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Unit</td><td class="num">179</td><td>node</td><td class="pass">Pass</td></tr>
+            <tr><td>Component</td><td class="num">96</td><td>jsdom, real user events</td><td class="pass">Pass</td></tr>
+            <tr><td>Integration</td><td class="num">71</td><td>real PostgreSQL + document worker</td><td class="pass">Pass</td></tr>
+            <tr><td>RAG evaluation</td><td class="num">8</td><td>same</td><td class="pass">Pass</td></tr>
+            <tr><td>Security</td><td class="num">39</td><td>same, from the attacker's side</td><td class="pass">Pass</td></tr>
+            <tr><td>End-to-end</td><td class="num">49</td><td>Chromium at 1440×900, 1024×768, 390×844</td><td class="pass">Pass</td></tr>
+            <tr><td>Accessibility</td><td class="num">37</td><td>axe WCAG 2.2 AA + keyboard only</td><td class="pass">Pass</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="wide scroll">
+        <table>
+          <caption>Retrieval and grounding, measured on the fixture corpus</caption>
+          <thead>
+            <tr><th>Metric</th><th class="num">Threshold</th><th class="num">Measured</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Quoted-text verification rate</td><td class="num">100%</td><td class="num pass">100% <span style="color:var(--faint)">(30 citations)</span></td></tr>
+            <tr><td>Locator accuracy</td><td class="num">100%</td><td class="num pass">100%</td></tr>
+            <tr><td>Cross-tenant leakage</td><td class="num">0</td><td class="num pass">0</td></tr>
+            <tr><td>Requirement coverage</td><td class="num">100%</td><td class="num pass">100% (4/4)</td></tr>
+            <tr><td>Recall@5</td><td class="num">≥ 80%</td><td class="num pass">100% (5/5)</td></tr>
+            <tr><td>nDCG@5</td><td class="num">≥ 0.70</td><td class="num pass">0.926</td></tr>
+            <tr><td>Retrieval latency p50 / p95</td><td class="num">&lt; 1.5s / 4s</td><td class="num pass">5 ms / 8 ms</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="note">
+        <span class="lbl">Observed on the fixture corpus</span>
+        <p>
+          A compliance review of an evacuation plan against a fire code produced:
+          emergency illumination <strong>non-compliant</strong> (6 lux against a 10 lux
+          minimum), travel distance <strong>compliant</strong> (38 m within 45 m), exit-sign
+          luminance <strong>needs evidence</strong>. Overall verdict:
+          <strong>NO / Partially compliant</strong>, with zero unverified citations —
+          asserted explicitly, because reporting that as a YES is the most damaging output
+          this product could produce.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="head"><span class="no">3</span><h2>Defect register</h2></div>
+    <div class="body">
+      <p>
+        Thirty-seven defects that inspection had missed and running the system found. The
+        seven marked with a heavy rule were load-bearing: each one broke a capability the
+        product is sold on.
+      </p>
+      <div class="wide scroll">
+        <table class="register">
+          <caption>Found by test suite, linter, browser, and by following the README</caption>
+          <thead>
+            <tr><th class="n">#</th><th>Defect</th><th>Found by</th><th>Consequence</th></tr>
+          </thead>
+          <tbody>
+            <tr class="critical"><td class="n">1</td><td><span class="sev"></span>MFA verification returned 500 on every attempt — the handler re-read a request body the validator had consumed</td><td class="by">Integration</td><td>Two-factor sign-in was completely broken</td></tr>
+            <tr class="critical"><td class="n">2</td><td><span class="sev"></span>Recovery codes rejected by validation despite being offered on the sign-in screen</td><td class="by">Integration</td><td>A lost authenticator meant permanent lockout</td></tr>
+            <tr class="critical"><td class="n">3</td><td><span class="sev"></span>The invitation email linked to a route that existed in neither the API nor the web app</td><td class="by">Integration</td><td>Invited members could never join</td></tr>
+            <tr class="critical"><td class="n">4</td><td><span class="sev"></span>The CORS preflight omitted PUT, the method upload bytes arrive on</td><td class="by">Browser</td><td>Every browser upload failed wherever the API is a separate origin</td></tr>
+            <tr class="critical"><td class="n">5</td><td><span class="sev"></span>The correction workflow had no review surface at all</td><td class="by">Browser</td><td>The toast promised a review; there was nowhere to do it</td></tr>
+            <tr class="critical"><td class="n">6</td><td><span class="sev"></span>Sign-out left the app rendering the signed-out user's workspace</td><td class="by">Browser</td><td>The session ended on the server, not on screen</td></tr>
+            <tr class="critical"><td class="n">7</td><td><span class="sev"></span><code>pnpm db:migrate</code> and <code>db:seed</code> failed from the repository root</td><td class="by">The README</td><td>The documented setup did not work</td></tr>
+            <tr><td class="n">8</td><td>Registering an existing address returned a different status code from a new one</td><td class="by">Integration</td><td>An oracle for enumerating customers</td></tr>
+            <tr><td class="n">9</td><td>A failed ingestion left the source at “pending” for ever</td><td class="by">Integration</td><td>No reason, no retry — a permanent dead end</td></tr>
+            <tr><td class="n">10</td><td>The worker's specific failure detail was replaced with a generic sentence</td><td class="by">Integration</td><td>“This PDF is password protected” became unactionable</td></tr>
+            <tr><td class="n">11</td><td><code>PATCH /sources/:id</code> required a version the API never exposed</td><td class="by">Integration</td><td>Source editing was impossible for any client</td></tr>
+            <tr><td class="n">12</td><td>Same defect on correction plans: the decide endpoint required an unobtainable version</td><td class="by">Integration</td><td>No client could accept a proposed change</td></tr>
+            <tr><td class="n">13</td><td>The correction planner produced an empty plan when no review was named</td><td class="by">Browser</td><td>“Generate corrected PDF” reported success and did nothing</td></tr>
+            <tr><td class="n">14</td><td>The seed wrote source rows pointing at storage keys whose bytes were never stored</td><td class="by">Browser</td><td>Every operation needing the original failed in the demo workspace</td></tr>
+            <tr><td class="n">15</td><td>Citation excerpts stored whitespace-normalised while their offsets pointed at raw text</td><td class="by">Integration</td><td>The evidence viewer could not find its own quotation</td></tr>
+            <tr><td class="n">16</td><td>Upload tickets returned an absolute API URL, making the request cross-site</td><td class="by">Browser</td><td>The SameSite cookie was not sent; uploads arrived unauthenticated</td></tr>
+            <tr><td class="n">17</td><td>The upload endpoint ignored the size its own ticket declared</td><td class="by">Security</td><td>Quota accounting was unenforceable</td></tr>
+            <tr><td class="n">18</td><td>CSRF failures were indistinguishable from permission failures</td><td class="by">Integration</td><td>A stale token showed “forbidden” with no way to know to refresh</td></tr>
+            <tr><td class="n">19</td><td>Log redaction missed every camelCase credential (<code>csrfToken</code>, <code>apiKey</code>)</td><td class="by">Unit</td><td>Tokens written to logs in the naming convention this codebase uses</td></tr>
+            <tr><td class="n">20</td><td>Redaction hid bare <code>code</code> fields, including job error codes</td><td class="by">Integration</td><td>The reason a job failed read <code>[redacted]</code></td></tr>
+            <tr><td class="n">21</td><td>Storage keys kept <code>..</code> sequences from a client-supplied filename</td><td class="by">Unit</td><td>Defence in depth weakened</td></tr>
+            <tr><td class="n">22</td><td><code>utm_*</code> parameters were never stripped — the regex was anchored on the prefix alone</td><td class="by">Unit</td><td>The same page ingested repeatedly under tracking variants</td></tr>
+            <tr><td class="n">23</td><td>An unverified citation rendered in quieter chrome than a verified one</td><td class="by">Component</td><td>The one citation needing attention was the least prominent</td></tr>
+            <tr><td class="n">24</td><td>A clickable table row had no keyboard path</td><td class="by">Lint</td><td>Every list in the product was mouse-only</td></tr>
+            <tr><td class="n">25</td><td><code>DataTable</code> accepted a <code>loading</code> prop and did nothing with it</td><td class="by">Component</td><td>Headers over an empty body read as “no results” mid-request</td></tr>
+            <tr><td class="n">26</td><td><code>Field</code> never bound its error to the control</td><td class="by">Component</td><td>34 form fields where a red border was the only signal</td></tr>
+            <tr><td class="n">27</td><td>Two navigation landmarks shared one accessible name</td><td class="by">Component</td><td>Ambiguous landmark navigation</td></tr>
+            <tr><td class="n">28</td><td>The dropdown label overrode the trigger's own name</td><td class="by">Component</td><td>The workspace switcher announced “Workspace”</td></tr>
+            <tr><td class="n">29</td><td>Arrow keys moved focus but not selection in a <code>radiogroup</code></td><td class="by">Component</td><td>The answer-style switch broke the pattern its role promises</td></tr>
+            <tr><td class="n">30</td><td>The profile button had no accessible name below 640px</td><td class="by">Accessibility</td><td>An unnamed control on every mobile screen</td></tr>
+            <tr><td class="n">31</td><td>Picking a conversation on tablet or mobile left the drawer covering it</td><td class="by">Browser</td><td>The picker obscured what it had just picked</td></tr>
+            <tr><td class="n">32</td><td>White on the avatar tints measured 3.0–3.6:1</td><td class="by">axe</td><td>Below AA on every avatar in the product</td></tr>
+            <tr><td class="n">33</td><td>Every status badge label measured 2.0–3.4:1 on its own tint</td><td class="by">axe</td><td>Compliant / Non-compliant / Needs evidence all below AA</td></tr>
+            <tr><td class="n">34</td><td>Tertiary, danger and success text measured 2.6–3.9:1 on white</td><td class="by">axe</td><td>Below AA at 11–14px</td></tr>
+            <tr><td class="n">35</td><td>A button wrapped a cell that already contained a link</td><td class="by">axe</td><td>Nested controls, and a 21.7px target below the 24px minimum</td></tr>
+            <tr><td class="n">36</td><td>A malformed session response crashed the whole application shell</td><td class="by">Component</td><td>One missing field blanked every screen</td></tr>
+            <tr><td class="n">37</td><td><code>tsc</code> emitted build output into the shared config package</td><td class="by">Lint</td><td>An <code>outDir</code> resolving relative to itself</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="note warn">
+        <span class="lbl">Why this list is the most useful part of the report</span>
+        <p>
+          Seven of these — MFA, recovery codes, invitations, uploads, corrections, sign-out,
+          and the documented setup — were capabilities that looked complete in the code and
+          did not work. None was found by reading. Each was found by running the thing and
+          asserting on what a user or an operator would actually see.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="head"><span class="no">4</span><h2>What was not executed</h2></div>
+    <div class="body">
+      <p>
+        Stated plainly rather than glossed. Everything below is implemented and type-checked;
+        what is missing is a live run against the third-party service.
+      </p>
+      <div class="wide scroll">
+        <table>
+          <thead>
+            <tr><th>Item</th><th>Why</th><th>What stands in its place</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Cloudflare deployment</td><td>No account in this environment</td><td>Wrangler configs for both workers across staging and production, plus a CI dry-run that validates them</td></tr>
+            <tr><td>Hosted model providers</td><td>No API credentials</td><td>Adapters implemented against the same interface and the same verification gate; the deterministic engine is the default and is fully exercised</td></tr>
+            <tr><td>Google / Microsoft OAuth round trip</td><td>No client credentials</td><td>PKCE flow, state handling and callback implemented and unit-tested; the redirect itself is untested</td></tr>
+            <tr><td>Managed PostgreSQL and R2</td><td>Local Docker and a filesystem bucket used</td><td>Both implement the identical driver interfaces the production drivers do</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="head"><span class="no">5</span><h2>Recommended next</h2></div>
+    <div class="body">
+      <p>
+        Five features, each grounded in something observed while building and testing this
+        system rather than in what a compliance product usually has.
+      </p>
+      <ol class="features">
+        <li>
+          <span class="idx">01</span>
+          <div>
+            <h3>Regulation version tracking with impact analysis</h3>
+            <p>
+              When a new edition of a regulation lands, diff its clauses and raise a
+              re-review queue naming every past finding whose citation points at text that
+              has since changed.
+            </p>
+            <p class="ev">
+              <b>Evidence</b>
+              Versions, checksums and citation-to-version pinning already exist, and an old
+              citation still resolves after a reprocess. The gap it closes is invisible
+              today: a citation into a superseded clause still verifies, because the text
+              really was on that page in that edition.
+            </p>
+          </div>
+        </li>
+        <li>
+          <span class="idx">02</span>
+          <div>
+            <h3>Evidence review queue with reviewer sign-off</h3>
+            <p>
+              Route low-confidence and needs-evidence findings to a Reviewer who can confirm,
+              override with a reason, or request more evidence — with the override joining
+              the audit trail and the report.
+            </p>
+            <p class="ev">
+              <b>Evidence</b>
+              The Reviewer role and <code>review:approve</code> exist with no workflow behind
+              them. The correction path is review-first; the finding path is not. It also
+              produces the labelled data every other quality improvement would need.
+            </p>
+          </div>
+        </li>
+        <li>
+          <span class="idx">03</span>
+          <div>
+            <h3>Cross-document conflict detection across the corpus</h3>
+            <p>
+              A scheduled pass comparing requirements across sources, surfacing where a local
+              code, a client standard and an international standard disagree — with both
+              citations and a precedence recommendation.
+            </p>
+            <p class="ev">
+              <b>Evidence</b>
+              <code>detectConflict</code> already finds contradictions and already declines
+              to fire on unrelated quantities. It has simply never been pointed at the corpus
+              as a whole, only at one answer's evidence set.
+            </p>
+          </div>
+        </li>
+        <li>
+          <span class="idx">04</span>
+          <div>
+            <h3>Bilingual evidence with clause-aligned Japanese</h3>
+            <p>
+              Per-source language detection and stored clause alignment between a regulation
+              and its official translation, so a citation displays in the reader's language
+              while still verifying against the authoritative original.
+            </p>
+            <p class="ev">
+              <b>Evidence</b>
+              The i18n structure and the Japanese OCR packs are already in place, but every
+              evidence path assumes one language per source. Translating at display time
+              cannot work — verification must run against the authoritative text, so the
+              aligned pair has to be stored.
+            </p>
+          </div>
+        </li>
+        <li>
+          <span class="idx">05</span>
+          <div>
+            <h3>Retrieval telemetry with a feedback loop</h3>
+            <p>
+              Persist the retrieval trace per answer — expanded query, per-channel candidates,
+              fusion and rerank signals — joined to the thumbs-up/down already collected, and
+              an offline harness that replays the worst clusters against a config change.
+            </p>
+            <p class="ev">
+              <b>Evidence</b>
+              The metrics and the feedback both exist and are never joined. Every retrieval
+              threshold today is measured against a five-case gold set built by hand: enough
+              to catch a regression, not enough to guide an improvement. Highest ratio of
+              insight to effort on this list.
+            </p>
+          </div>
+        </li>
+      </ol>
+    </div>
+  </section>
+
+  <section>
+    <div class="head"><span class="no">6</span><h2>Running it</h2></div>
+    <div class="body">
+      <pre><span class="c"># Everything the app needs, on one machine</span>
+docker compose -f infra/docker-compose.yml up -d
+pnpm install &amp;&amp; pnpm db:migrate &amp;&amp; pnpm db:seed
+pnpm dev
+
+<span class="c"># The gate: format, lint, types, every Vitest project, production build</span>
+pnpm verify
+
+<span class="c"># Browser layers, against a running stack</span>
+pnpm test:e2e     <span class="c"># 49 tests at three viewports</span>
+pnpm test:a11y    <span class="c"># 37 axe and keyboard-only tests</span></pre>
+      <p>
+        The seed ingests real documents through the real worker and runs a real compliance
+        review, so the dashboard is populated on first sign-in rather than empty. It prints
+        the address and password to sign in with.
+      </p>
+      <p>
+        Full documentation is in <code>docs/</code>: architecture with data-flow diagrams,
+        threat model, data retention, RAG evaluation, operations runbook, deployment,
+        acceptance scenarios, and the complete verification log this report summarises.
+      </p>
+    </div>
+  </section>
+
+  <footer>
+    <span>UXE Consulting AI</span>
+    <span>479 tests · 0 failing</span>
+    <span>Verified against PostgreSQL 16 + pgvector, and the real document worker</span>
+  </footer>
+
+</div>
