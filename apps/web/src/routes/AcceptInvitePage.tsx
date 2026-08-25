@@ -123,7 +123,7 @@ export function AcceptInvitePage() {
         {formError && (
           <p
             role="alert"
-            className="mt-4 rounded-[var(--uxe-radius-control)] border border-[var(--uxe-danger-border)] bg-[var(--uxe-danger-bg)] px-3 py-2.5 text-[13px] font-medium text-[var(--uxe-danger)]"
+            className="mt-4 rounded-[var(--uxe-radius-control)] border border-[var(--uxe-danger-border)] bg-[var(--uxe-danger-bg)] px-3 py-2.5 text-[13px] font-medium text-[var(--uxe-danger-text)]"
           >
             {formError}
           </p>
@@ -218,7 +218,7 @@ function InvalidLink({ message }: { message: string }) {
     <Card className="p-8 text-center">
       <span
         aria-hidden
-        className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[var(--uxe-warning-bg)] text-[var(--uxe-warning)]"
+        className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[var(--uxe-warning-bg)] text-[var(--uxe-warning-text)]"
       >
         <AlertTriangle className="h-7 w-7" />
       </span>

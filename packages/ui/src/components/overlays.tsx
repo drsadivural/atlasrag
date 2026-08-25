@@ -356,7 +356,7 @@ export function DropdownMenu({
                   'data-[highlighted]:bg-[var(--uxe-surface-hover)]',
                   'data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
                   item.destructive
-                    ? 'text-[var(--uxe-danger)] data-[highlighted]:bg-[var(--uxe-danger-bg)]'
+                    ? 'text-[var(--uxe-danger-text)] data-[highlighted]:bg-[var(--uxe-danger-bg)]'
                     : 'text-[var(--uxe-text)]',
                 )}
               >
@@ -455,11 +455,12 @@ export function useToast(): ToastContextValue {
 
 const TOAST_TONES = {
   success:
-    'border-[var(--uxe-success-border)] bg-[var(--uxe-success-bg)] text-[var(--uxe-success)]',
-  error: 'border-[var(--uxe-danger-border)] bg-[var(--uxe-danger-bg)] text-[var(--uxe-danger)]',
-  info: 'border-[var(--uxe-info-border)] bg-[var(--uxe-info-bg)] text-[var(--uxe-info)]',
+    'border-[var(--uxe-success-border)] bg-[var(--uxe-success-bg)] text-[var(--uxe-success-text)]',
+  error:
+    'border-[var(--uxe-danger-border)] bg-[var(--uxe-danger-bg)] text-[var(--uxe-danger-text)]',
+  info: 'border-[var(--uxe-info-border)] bg-[var(--uxe-info-bg)] text-[var(--uxe-info-text)]',
   warning:
-    'border-[var(--uxe-warning-border)] bg-[var(--uxe-warning-bg)] text-[var(--uxe-warning)]',
+    'border-[var(--uxe-warning-border)] bg-[var(--uxe-warning-bg)] text-[var(--uxe-warning-text)]',
 } as const;
 
 function ToastViewport({

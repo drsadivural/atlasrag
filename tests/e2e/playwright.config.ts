@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
+import { STORAGE_STATE } from './fixtures.js';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = fileURLToPath(new URL('../..', import.meta.url));
@@ -37,22 +38,37 @@ export default defineConfig({
     navigationTimeout: 30_000,
   },
   projects: [
+    // Signs in once. Sign-in is rate limited per IP, so a suite that authenticated for
+    // every test at every viewport would trip a control the product is supposed to have.
+    { name: 'setup', testMatch: /auth\.setup\.ts/ },
     {
       name: 'desktop',
-      use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } },
+      dependencies: ['setup'],
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 1440, height: 900 },
+        storageState: STORAGE_STATE,
+      },
     },
     {
       name: 'tablet',
-      use: { ...devices['Desktop Chrome'], viewport: { width: 1024, height: 768 } },
+      dependencies: ['setup'],
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 1024, height: 768 },
+        storageState: STORAGE_STATE,
+      },
     },
     {
       name: 'mobile',
+      dependencies: ['setup'],
       use: {
         ...devices['iPhone 14 Pro'],
         // Chromium rather than the device's default WebKit: the requirement is the 390px
         // viewport and touch input, and pinning one engine keeps visual diffs comparable.
         browserName: 'chromium',
         viewport: { width: 390, height: 844 },
+        storageState: STORAGE_STATE,
       },
     },
   ],

@@ -252,9 +252,9 @@ function ConfidenceBadge({ answer }: { answer: StructuredAnswer }) {
         className={cn(
           'shrink-0 cursor-help rounded-[var(--uxe-radius-pill)] px-2.5 py-1 text-[12px] font-semibold',
           percent >= 80
-            ? 'bg-[var(--uxe-success-bg)] text-[var(--uxe-success)]'
+            ? 'bg-[var(--uxe-success-bg)] text-[var(--uxe-success-text)]'
             : percent >= 55
-              ? 'bg-[var(--uxe-warning-bg)] text-[var(--uxe-warning)]'
+              ? 'bg-[var(--uxe-warning-bg)] text-[var(--uxe-warning-text)]'
               : 'bg-[var(--uxe-neutral-bg)] text-[var(--uxe-text-secondary)]',
         )}
       >

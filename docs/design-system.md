@@ -17,15 +17,20 @@ the dark theme a redefinition of variables rather than a second stylesheet.
 | `--uxe-surface`        | `#FFFFFF`                                  | Cards, panels, table rows           |
 | `--uxe-surface-sunken` | `#F4F7FE`                                  | Wells, inactive segments            |
 | `--uxe-text`           | `#10162F`                                  | Primary text                        |
-| `--uxe-text-secondary` | `#667085`                                  | Secondary text                      |
+| `--uxe-text-secondary` | `#5F6876`                                  | Secondary text                      |
 | `--uxe-cobalt`         | `#3156F5`                                  | Primary action                      |
 | `--uxe-violet`         | `#7C3AED`                                  | Gradient terminus                   |
 | `--uxe-gradient`       | `linear-gradient(90deg, #3156F5, #7C3AED)` | Brand surfaces                      |
-| `--uxe-success`        | `#12A86B`                                  | Compliant                           |
+| `--uxe-success`        | `#0A7A4D`                                  | Compliant                           |
 | `--uxe-warning`        | `#F59E0B`                                  | Needs evidence, partial             |
-| `--uxe-danger`         | `#E5484D`                                  | Non-compliant, destructive          |
+| `--uxe-danger`         | `#C1272D`                                  | Non-compliant, destructive          |
 | `--uxe-info`           | `#2563EB`                                  | Neutral information                 |
 | `--uxe-teal`           | `#0EA5A8`                                  | Project documents, secondary accent |
+
+Each status colour also has a `-text` variant (`--uxe-success-text`, `--uxe-warning-text`,
+`--uxe-danger-text`, `--uxe-info-text`, `--uxe-teal-text`) used for labels on the matching
+tint. The accent alone is around 2.8:1 there, which is fine for a dot or an icon and not
+fine for an 11px word; the axe scan asserts the difference.
 
 Status is never conveyed by colour alone. Every badge carries a word, and most carry an
 icon as well — a reader with a colour-vision difference gets the same information as anyone

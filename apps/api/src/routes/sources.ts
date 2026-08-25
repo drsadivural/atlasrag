@@ -321,7 +321,11 @@ export function sourceRoutes(deps: AppDeps) {
           uploadId: ticket.id,
           sourceId: source.id,
           fileName: file.fileName,
-          uploadUrl: `${deps.env.PUBLIC_API_URL}/api/v1/sources/uploads/${ticket.id}/content`,
+          // Relative, so the browser uploads to the origin it loaded the app from and the
+          // session cookie travels. An absolute URL to another origin makes the request
+          // cross-site, and a SameSite=Lax cookie is not sent on one — the upload would
+          // arrive unauthenticated.
+          uploadUrl: `/api/v1/sources/uploads/${ticket.id}/content`,
           method: 'PUT' as const,
           headers: { 'content-type': file.contentType },
           expiresAt: ticket.expiresAt.toISOString(),

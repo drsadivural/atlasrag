@@ -34,32 +34,39 @@ during render, and a dead assignment.
 
 ## Defects found by running the system
 
-The table below lists what the test suites found that inspection had not. Each was fixed
-and is now covered.
+The table below lists what running the system found that inspection had not — the test
+suites, the linter, the browser, and following the README as written. Each was fixed and is
+now covered.
 
-| #   | Defect                                                                                                                 | Found by                         | Consequence if shipped                                                                         |
-| --- | ---------------------------------------------------------------------------------------------------------------------- | -------------------------------- | ---------------------------------------------------------------------------------------------- |
-| 1   | MFA verification returned 500 on every attempt — the handler re-read a request body the validator had already consumed | Integration                      | **Two-factor sign-in was completely broken.** Anyone with MFA enabled could not sign in.       |
-| 2   | Recovery codes were rejected by validation (`/^\d{6}$/`) despite being offered on the sign-in screen                   | Integration                      | A user who lost their authenticator was permanently locked out.                                |
-| 3   | Registering an existing address returned 200 while a new one returned 201                                              | Integration                      | A status-code oracle for enumerating customers.                                                |
-| 4   | A failed ingestion left the source at `pending` for ever                                                               | Integration                      | A document stuck in "Processing" with no reason and no retry — the dead end the brief forbids. |
-| 5   | Worker failure detail was replaced with "The document worker rejected this file"                                       | Integration                      | "This PDF is password protected" became a message the user could do nothing with.              |
-| 6   | `PATCH /sources/:id` required a `version` the API never exposed                                                        | Integration                      | Source editing was impossible for any client.                                                  |
-| 7   | The invitation email linked to `/accept-invite`, which existed in neither the API nor the web app                      | Integration                      | **Invited members could never join.** The entire invitation flow was a dead end.               |
-| 8   | The upload endpoint ignored the size its own ticket declared                                                           | Security                         | The declared size — used for quota accounting — was unenforceable.                             |
-| 9   | CSRF failures were indistinguishable from permission failures                                                          | Integration                      | A stale token showed "forbidden", so a client could not know to refresh and retry.             |
-| 10  | `utm_*` parameters were never stripped (the regex was anchored on the prefix alone)                                    | Unit                             | The same page ingested repeatedly under tracking-parameter variants.                           |
-| 11  | Storage keys kept `..` sequences from a client-supplied filename                                                       | Unit                             | Defence in depth weakened; a filename of `..` produced a traversal segment.                    |
-| 12  | Log redaction missed every camelCase credential (`csrfToken`, `sessionToken`, `apiKey`)                                | Unit                             | Tokens written to logs in the naming convention this codebase actually uses.                   |
-| 13  | Redaction hid bare `code` fields, including job error codes                                                            | Integration (observed in output) | The reason a job failed was `[redacted]` in the logs.                                          |
-| 14  | Citation excerpts were stored whitespace-normalised while offsets pointed at the raw text                              | Integration                      | The evidence viewer could not find its own quotation on the page.                              |
-| 15  | An unverified citation was rendered in quieter chrome than a verified one                                              | Component                        | The one citation needing attention was the least visually prominent.                           |
-| 16  | A clickable table row had no keyboard path                                                                             | Lint + component                 | Every list in the product was mouse-only.                                                      |
-| 17  | `DataTable` accepted a `loading` prop and did nothing with it                                                          | Component                        | Headers over an empty body read as "no results" while the request was still running.           |
-| 18  | `Field` never bound its error to the control                                                                           | Component                        | 34 form fields where a red border was the only signal, with no `aria-invalid`.                 |
-| 19  | Two navigation landmarks shared one accessible name                                                                    | Component                        | Ambiguous landmark navigation for screen-reader users.                                         |
-| 20  | The dropdown label overrode the trigger's own name                                                                     | Component                        | The workspace switcher announced "Workspace" instead of the workspace.                         |
-| 21  | Arrow keys moved focus but not selection in a `radiogroup`                                                             | Component                        | The answer-style switch violated the pattern its own role promises.                            |
+| #   | Defect                                                                                                                 | Found by                         | Consequence if shipped                                                                                                  |
+| --- | ---------------------------------------------------------------------------------------------------------------------- | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| 1   | MFA verification returned 500 on every attempt — the handler re-read a request body the validator had already consumed | Integration                      | **Two-factor sign-in was completely broken.** Anyone with MFA enabled could not sign in.                                |
+| 2   | Recovery codes were rejected by validation (`/^\d{6}$/`) despite being offered on the sign-in screen                   | Integration                      | A user who lost their authenticator was permanently locked out.                                                         |
+| 3   | Registering an existing address returned 200 while a new one returned 201                                              | Integration                      | A status-code oracle for enumerating customers.                                                                         |
+| 4   | A failed ingestion left the source at `pending` for ever                                                               | Integration                      | A document stuck in "Processing" with no reason and no retry — the dead end the brief forbids.                          |
+| 5   | Worker failure detail was replaced with "The document worker rejected this file"                                       | Integration                      | "This PDF is password protected" became a message the user could do nothing with.                                       |
+| 6   | `PATCH /sources/:id` required a `version` the API never exposed                                                        | Integration                      | Source editing was impossible for any client.                                                                           |
+| 7   | The invitation email linked to `/accept-invite`, which existed in neither the API nor the web app                      | Integration                      | **Invited members could never join.** The entire invitation flow was a dead end.                                        |
+| 8   | The upload endpoint ignored the size its own ticket declared                                                           | Security                         | The declared size — used for quota accounting — was unenforceable.                                                      |
+| 9   | CSRF failures were indistinguishable from permission failures                                                          | Integration                      | A stale token showed "forbidden", so a client could not know to refresh and retry.                                      |
+| 10  | `utm_*` parameters were never stripped (the regex was anchored on the prefix alone)                                    | Unit                             | The same page ingested repeatedly under tracking-parameter variants.                                                    |
+| 11  | Storage keys kept `..` sequences from a client-supplied filename                                                       | Unit                             | Defence in depth weakened; a filename of `..` produced a traversal segment.                                             |
+| 12  | Log redaction missed every camelCase credential (`csrfToken`, `sessionToken`, `apiKey`)                                | Unit                             | Tokens written to logs in the naming convention this codebase actually uses.                                            |
+| 13  | Redaction hid bare `code` fields, including job error codes                                                            | Integration (observed in output) | The reason a job failed was `[redacted]` in the logs.                                                                   |
+| 14  | Citation excerpts were stored whitespace-normalised while offsets pointed at the raw text                              | Integration                      | The evidence viewer could not find its own quotation on the page.                                                       |
+| 15  | An unverified citation was rendered in quieter chrome than a verified one                                              | Component                        | The one citation needing attention was the least visually prominent.                                                    |
+| 16  | A clickable table row had no keyboard path                                                                             | Lint + component                 | Every list in the product was mouse-only.                                                                               |
+| 17  | `DataTable` accepted a `loading` prop and did nothing with it                                                          | Component                        | Headers over an empty body read as "no results" while the request was still running.                                    |
+| 18  | `Field` never bound its error to the control                                                                           | Component                        | 34 form fields where a red border was the only signal, with no `aria-invalid`.                                          |
+| 19  | Two navigation landmarks shared one accessible name                                                                    | Component                        | Ambiguous landmark navigation for screen-reader users.                                                                  |
+| 20  | The dropdown label overrode the trigger's own name                                                                     | Component                        | The workspace switcher announced "Workspace" instead of the workspace.                                                  |
+| 21  | Arrow keys moved focus but not selection in a `radiogroup`                                                             | Component                        | The answer-style switch violated the pattern its own role promises.                                                     |
+| 22  | The correction workflow had no review surface: the API could plan and generate, the web app could only start a plan    | Browser                          | The toast promised "you will review each proposed change" and there was nowhere to do it.                               |
+| 23  | `CorrectionPlan.version` was required by the decide endpoint but never returned                                        | Integration                      | No client could ever accept a proposed change.                                                                          |
+| 24  | The correction planner produced an empty plan when no review was named                                                 | Browser                          | "Generate corrected PDF" reported success and did nothing.                                                              |
+| 25  | `pnpm db:migrate` / `db:seed` / `db:reset` failed from the repository root with "DATABASE_URL is not set"              | Following the README             | The documented setup did not work: dotenv reads the working directory, and pnpm sets that to the package.               |
+| 26  | The seed wrote source rows pointing at storage keys whose bytes were never stored                                      | Browser                          | Every operation needing the original — download, reprocess, correction — failed in the demonstration workspace.         |
+| 27  | `tsc` emitted build output into `packages/config`                                                                      | Lint                             | The shared React tsconfig set an `outDir` that resolves relative to itself, so every consumer that emitted wrote there. |
 
 ## Test results
 
@@ -103,6 +110,18 @@ From `tests/integration/consultation.test.ts`, running the real pipeline:
 - **Compliance review** → emergency illumination non-compliant (6 lux against a 10 lux
   minimum), travel distance compliant (38 m within 45 m), exit-sign luminance
   `needs_evidence`. Overall: **NO / Partially compliant**, with zero unverified citations.
+
+## Verified in the browser
+
+Beyond the automated suites, the following were driven through a real browser against the
+seeded workspace and confirmed by inspecting the artifacts they produced:
+
+| Flow                | Observed                                                                                                                                                       |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Sign in → dashboard | Real KPIs from seeded rows; the consultant's given name and honorific in the greeting                                                                          |
+| Edit a source       | Title, tags, effective date and access scope saved; tags appear immediately in the metadata card                                                               |
+| Correction workflow | Plan produced two changes; accepting one and generating produced a corrected PDF and a redline                                                                 |
+| Corrected document  | The generated PDF reads "The design illuminance at floor level is 10 lux" where the original read "6 lux"; the original source is unchanged at its own version |
 
 ## What was not executed
 

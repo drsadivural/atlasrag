@@ -336,7 +336,8 @@ export function consultationRoutes(deps: AppDeps) {
           uploadId: ticket.id,
           sourceId: source.id,
           fileName: file.fileName,
-          uploadUrl: `${deps.env.PUBLIC_API_URL}/api/v1/sources/uploads/${ticket.id}/content`,
+          // Relative: see the note on the same field in the sources route.
+          uploadUrl: `/api/v1/sources/uploads/${ticket.id}/content`,
           method: 'PUT' as const,
           headers: { 'content-type': file.contentType },
           expiresAt: ticket.expiresAt.toISOString(),

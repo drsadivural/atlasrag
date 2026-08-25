@@ -251,7 +251,7 @@ function SourcesVerifiedCard() {
       <div className="flex items-center gap-2.5">
         <span
           aria-hidden
-          className="flex h-9 w-9 items-center justify-center rounded-[var(--uxe-radius-control)] bg-[var(--uxe-success-bg)] text-[var(--uxe-success)]"
+          className="flex h-9 w-9 items-center justify-center rounded-[var(--uxe-radius-control)] bg-[var(--uxe-success-bg)] text-[var(--uxe-success-text)]"
         >
           <ShieldCheck className="h-5 w-5" />
         </span>
@@ -401,6 +401,10 @@ function TopBar({ onOpenMenu }: { onOpenMenu: () => void }) {
           trigger={
             <button
               type="button"
+              // Below `sm` the name is hidden and only the avatar remains, which leaves the
+              // button with no accessible name at all. The label is stated explicitly so it
+              // reads the same at every width.
+              aria-label={`${session.user.fullName} — ${t('common.profile')}`}
               className="flex items-center gap-2.5 rounded-[var(--uxe-radius-control-lg)] border border-[var(--uxe-border)] bg-[var(--uxe-surface)] p-1 pr-2.5 transition-colors hover:bg-[var(--uxe-surface-hover)]"
             >
               <Avatar name={session.user.fullName} src={session.user.avatarUrl} size={30} />

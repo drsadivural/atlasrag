@@ -19,6 +19,11 @@ export interface Column<T> {
   hideOnMobile?: boolean;
   /** Pinned columns stay visible while the table scrolls horizontally. */
   sticky?: boolean;
+  /**
+   * The cell already renders its own link or button, so no activator is added around it.
+   * Wrapping one would nest interactive controls and shrink the real target.
+   */
+  selfActivating?: boolean;
 }
 
 export interface DataTableProps<T> {
@@ -155,7 +160,7 @@ export function DataTable<T>({
                         column.sticky && 'sticky left-0 z-10 bg-inherit',
                       )}
                     >
-                      {onRowClick && column === primary ? (
+                      {onRowClick && column === primary && !column.selfActivating ? (
                         // A row that only responds to a click is unreachable by keyboard.
                         // The primary cell carries a real control, so the row has one
                         // focusable, named activator without breaking table semantics.
@@ -205,7 +210,7 @@ export function DataTable<T>({
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1 text-[15px] font-medium text-[var(--uxe-text)]">
-                    {onRowClick ? (
+                    {onRowClick && primary && !primary.selfActivating ? (
                       <button
                         type="button"
                         onClick={(event) => {
@@ -214,7 +219,7 @@ export function DataTable<T>({
                         }}
                         className="w-full min-w-0 text-left"
                       >
-                        {primary?.render(row)}
+                        {primary.render(row)}
                       </button>
                     ) : (
                       primary?.render(row)

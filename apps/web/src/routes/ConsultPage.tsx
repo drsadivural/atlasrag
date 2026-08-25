@@ -348,6 +348,7 @@ function HistoryPanel({
                 <ConsultationListItem
                   consultation={consultation}
                   active={consultation.id === activeId}
+                  onSelected={() => onOpenChange(false)}
                 />
               </li>
             ))}
@@ -383,9 +384,12 @@ function HistoryPanel({
 function ConsultationListItem({
   consultation,
   active,
+  onSelected,
 }: {
   consultation: ConsultationSummary;
   active: boolean;
+  /** Called after navigation, so the drawer closes instead of covering the conversation. */
+  onSelected?: () => void;
 }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -422,7 +426,10 @@ function ConsultationListItem({
     >
       <button
         type="button"
-        onClick={() => navigate(`/consult/${consultation.id}`)}
+        onClick={() => {
+          navigate(`/consult/${consultation.id}`);
+          onSelected?.();
+        }}
         className="flex min-w-0 flex-1 items-start gap-2.5 text-left"
         aria-current={active ? 'page' : undefined}
       >
@@ -465,7 +472,10 @@ function ConsultationListItem({
           {
             label: 'Open',
             icon: <ArrowRight className="h-4 w-4" aria-hidden />,
-            onSelect: () => navigate(`/consult/${consultation.id}`),
+            onSelect: () => {
+              navigate(`/consult/${consultation.id}`);
+              onSelected?.();
+            },
           },
           {
             label: 'Delete',

@@ -36,8 +36,8 @@
 
   /* --- Text ------------------------------------------------------------- */
   --uxe-text: #10162f;
-  --uxe-text-secondary: #667085;
-  --uxe-text-tertiary: #98a2b3;
+  --uxe-text-secondary: #5f6876;
+  --uxe-text-tertiary: #66707f;
   --uxe-text-inverse: #ffffff;
   --uxe-text-on-brand: #ffffff;
 
@@ -47,20 +47,26 @@
   --uxe-border-focus: #3156f5;
 
   /* --- Status ----------------------------------------------------------- */
-  --uxe-success: #12a86b;
+  --uxe-success: #0a7a4d;
   --uxe-success-bg: #e7f8f0;
   --uxe-success-border: #b6ecd3;
+  /* Label colour for text on the tint above; the accent alone is 2.8:1 there. */
+  --uxe-success-text: #087045;
   --uxe-warning: #f59e0b;
   --uxe-warning-bg: #fef6e7;
   --uxe-warning-border: #fbe0ac;
-  --uxe-danger: #e5484d;
+  --uxe-warning-text: #7c5100;
+  --uxe-danger: #c1272d;
   --uxe-danger-bg: #fdeced;
   --uxe-danger-border: #f8c3c5;
+  --uxe-danger-text: #a81f25;
   --uxe-info: #2563eb;
   --uxe-info-bg: #e8f0ff;
   --uxe-info-border: #bcd3ff;
+  --uxe-info-text: #1d4ed8;
   --uxe-teal: #0ea5a8;
   --uxe-teal-bg: #e3f7f7;
+  --uxe-teal-text: #0a6467;
   --uxe-neutral-bg: #f2f4f7;
 
   /* --- Elevation -------------------------------------------------------- */
@@ -117,7 +123,7 @@
 
     --uxe-text: #eef1f8;
     --uxe-text-secondary: #98a2b3;
-    --uxe-text-tertiary: #6c7689;
+    --uxe-text-tertiary: #8a94a8;
     --uxe-text-inverse: #10162f;
 
     --uxe-border: #242c42;
@@ -127,17 +133,23 @@
     --uxe-success: #34d399;
     --uxe-success-bg: #0d2a20;
     --uxe-success-border: #17513c;
+    /* On a dark tint the lifted accent already clears AA, so text reuses it. */
+    --uxe-success-text: #34d399;
     --uxe-warning: #fbbf24;
     --uxe-warning-bg: #2c2110;
     --uxe-warning-border: #5a4318;
+    --uxe-warning-text: #fbbf24;
     --uxe-danger: #f87171;
     --uxe-danger-bg: #2e1416;
     --uxe-danger-border: #5d2427;
+    --uxe-danger-text: #f87171;
     --uxe-info: #60a5fa;
     --uxe-info-bg: #101d33;
     --uxe-info-border: #1d3a63;
+    --uxe-info-text: #60a5fa;
     --uxe-teal: #2dd4bf;
     --uxe-teal-bg: #0c2727;
+    --uxe-teal-text: #2dd4bf;
     --uxe-neutral-bg: #1a2032;
 
     --uxe-shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
@@ -159,7 +171,7 @@
 
   --uxe-text: #eef1f8;
   --uxe-text-secondary: #98a2b3;
-  --uxe-text-tertiary: #6c7689;
+  --uxe-text-tertiary: #8a94a8;
   --uxe-text-inverse: #10162f;
 
   --uxe-border: #242c42;
@@ -168,17 +180,22 @@
   --uxe-success: #34d399;
   --uxe-success-bg: #0d2a20;
   --uxe-success-border: #17513c;
+  --uxe-success-text: #34d399;
   --uxe-warning: #fbbf24;
   --uxe-warning-bg: #2c2110;
   --uxe-warning-border: #5a4318;
+  --uxe-warning-text: #fbbf24;
   --uxe-danger: #f87171;
   --uxe-danger-bg: #2e1416;
   --uxe-danger-border: #5d2427;
+  --uxe-danger-text: #f87171;
   --uxe-info: #60a5fa;
   --uxe-info-bg: #101d33;
   --uxe-info-border: #1d3a63;
+  --uxe-info-text: #60a5fa;
   --uxe-teal: #2dd4bf;
   --uxe-teal-bg: #0c2727;
+  --uxe-teal-text: #2dd4bf;
   --uxe-neutral-bg: #1a2032;
 
   --uxe-shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);

@@ -73,7 +73,7 @@ export function ResetPasswordPage() {
           {error && (
             <p
               role="alert"
-              className="mt-4 rounded-[var(--uxe-radius-control)] border border-[var(--uxe-danger-border)] bg-[var(--uxe-danger-bg)] px-3 py-2.5 text-[13px] text-[var(--uxe-danger)]"
+              className="mt-4 rounded-[var(--uxe-radius-control)] border border-[var(--uxe-danger-border)] bg-[var(--uxe-danger-bg)] px-3 py-2.5 text-[13px] text-[var(--uxe-danger-text)]"
             >
               {error}
             </p>

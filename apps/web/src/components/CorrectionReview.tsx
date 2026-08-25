@@ -162,7 +162,7 @@ export function CorrectionReviewDialog({
           {plan.data?.signatureNotice && (
             <p
               role="alert"
-              className="flex items-start gap-2.5 rounded-[var(--uxe-radius-control)] border border-[var(--uxe-danger-border)] bg-[var(--uxe-danger-bg)] p-3 text-[13px] font-medium text-[var(--uxe-danger)]"
+              className="flex items-start gap-2.5 rounded-[var(--uxe-radius-control)] border border-[var(--uxe-danger-border)] bg-[var(--uxe-danger-bg)] p-3 text-[13px] font-medium text-[var(--uxe-danger-text)]"
             >
               <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
               {plan.data.signatureNotice}

@@ -41,7 +41,7 @@ export function ForgotPasswordPage() {
             <div className="text-center">
               <span
                 aria-hidden
-                className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[var(--uxe-success-bg)] text-[var(--uxe-success)]"
+                className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[var(--uxe-success-bg)] text-[var(--uxe-success-text)]"
               >
                 <Mail className="h-6 w-6" />
               </span>
@@ -67,7 +67,7 @@ export function ForgotPasswordPage() {
               {error && (
                 <p
                   role="alert"
-                  className="mt-4 rounded-[var(--uxe-radius-control)] border border-[var(--uxe-danger-border)] bg-[var(--uxe-danger-bg)] px-3 py-2.5 text-[13px] text-[var(--uxe-danger)]"
+                  className="mt-4 rounded-[var(--uxe-radius-control)] border border-[var(--uxe-danger-border)] bg-[var(--uxe-danger-bg)] px-3 py-2.5 text-[13px] text-[var(--uxe-danger-text)]"
                 >
                   {error}
                 </p>

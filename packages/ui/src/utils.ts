@@ -88,15 +88,9 @@ export function initials(name: string): string {
  * which makes a participant list scannable without reading every label.
  */
 export function avatarTint(name: string): string {
-  const palette = [
-    'var(--uxe-cobalt)',
-    'var(--uxe-violet)',
-    'var(--uxe-teal)',
-    'var(--uxe-success)',
-    'var(--uxe-info)',
-    '#DB2777',
-    '#EA580C',
-  ];
+  // Every entry clears 4.5:1 against the white initials drawn on it, and none of them is a
+  // status colour — an avatar tint must not read as a verdict.
+  const palette = ['#3156F5', '#7C3AED', '#0F766E', '#047857', '#2563EB', '#BE185D', '#C2410C'];
   let hash = 0;
   for (let i = 0; i < name.length; i += 1) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
   return palette[hash % palette.length] as string;

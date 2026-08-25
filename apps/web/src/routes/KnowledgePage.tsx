@@ -79,7 +79,7 @@ const TYPE_COLORS: Record<string, string> = {
   csv: 'text-[#12A86B] bg-[var(--uxe-success-bg)]',
   pptx: 'text-[#EA580C] bg-[var(--uxe-warning-bg)]',
   image: 'text-[var(--uxe-violet)] bg-[color-mix(in_srgb,var(--uxe-violet)_12%,transparent)]',
-  html: 'text-[var(--uxe-teal)] bg-[var(--uxe-teal-bg)]',
+  html: 'text-[var(--uxe-teal-text)] bg-[var(--uxe-teal-bg)]',
 };
 
 /** Reproduces `assets/screens/03-knowledge-base.png`. */
@@ -495,6 +495,8 @@ export function KnowledgePage() {
                         width: '30%',
                         header: t('knowledge.document'),
                         primary: true,
+                        // The title is already a link to the source.
+                        selfActivating: true,
                         render: (row) => <SourceTitleCell source={row} />,
                       },
                       {
@@ -819,12 +821,12 @@ export function UploadList({
               className={cn(
                 'flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--uxe-radius-control)]',
                 upload.status === 'failed'
-                  ? 'bg-[var(--uxe-danger-bg)] text-[var(--uxe-danger)]'
+                  ? 'bg-[var(--uxe-danger-bg)] text-[var(--uxe-danger-text)]'
                   : upload.status === 'duplicate'
-                    ? 'bg-[var(--uxe-warning-bg)] text-[var(--uxe-warning)]'
+                    ? 'bg-[var(--uxe-warning-bg)] text-[var(--uxe-warning-text)]'
                     : upload.status === 'processing'
-                      ? 'bg-[var(--uxe-success-bg)] text-[var(--uxe-success)]'
-                      : 'bg-[var(--uxe-info-bg)] text-[var(--uxe-info)]',
+                      ? 'bg-[var(--uxe-success-bg)] text-[var(--uxe-success-text)]'
+                      : 'bg-[var(--uxe-info-bg)] text-[var(--uxe-info-text)]',
               )}
             >
               {upload.status === 'failed' ? (
@@ -905,7 +907,8 @@ function SourceTitleCell({ source }: { source: SourceSummary }) {
         <Link
           to={`/knowledge/${source.id}`}
           onClick={(event) => event.stopPropagation()}
-          className="block truncate font-medium text-[var(--uxe-text)] hover:text-[var(--uxe-cobalt)] hover:underline"
+          // py-1 brings the target to 24px, which is the WCAG 2.2 minimum.
+          className="block truncate py-1 font-medium text-[var(--uxe-text)] hover:text-[var(--uxe-cobalt)] hover:underline"
         >
           {source.title}
         </Link>

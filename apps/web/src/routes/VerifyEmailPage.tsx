@@ -54,7 +54,7 @@ export function VerifyEmailPage() {
             <>
               <span
                 aria-hidden
-                className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[var(--uxe-success-bg)] text-[var(--uxe-success)]"
+                className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[var(--uxe-success-bg)] text-[var(--uxe-success-text)]"
               >
                 <CheckCircle2 className="h-7 w-7" />
               </span>
@@ -70,7 +70,7 @@ export function VerifyEmailPage() {
             <>
               <span
                 aria-hidden
-                className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[var(--uxe-danger-bg)] text-[var(--uxe-danger)]"
+                className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[var(--uxe-danger-bg)] text-[var(--uxe-danger-text)]"
               >
                 <XCircle className="h-7 w-7" />
               </span>

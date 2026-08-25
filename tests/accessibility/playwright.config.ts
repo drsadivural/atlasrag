@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
+import { STORAGE_STATE } from '../e2e/fixtures.js';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = fileURLToPath(new URL('../..', import.meta.url));
@@ -31,16 +32,26 @@ export default defineConfig({
     navigationTimeout: 30_000,
   },
   projects: [
+    // Signs in once, for the same reason the E2E suite does: authentication is rate
+    // limited per IP and re-authenticating per test would trip it.
+    { name: 'setup', testMatch: /auth\.setup\.ts/, testDir: '../e2e' },
     {
       name: 'desktop',
-      use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } },
+      dependencies: ['setup'],
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 1440, height: 900 },
+        storageState: STORAGE_STATE,
+      },
     },
     {
       name: 'mobile',
+      dependencies: ['setup'],
       use: {
         ...devices['iPhone 14 Pro'],
         browserName: 'chromium',
         viewport: { width: 390, height: 844 },
+        storageState: STORAGE_STATE,
       },
     },
   ],

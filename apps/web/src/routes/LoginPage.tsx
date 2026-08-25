@@ -158,7 +158,7 @@ export function LoginPage() {
                   {notice && (
                     <p
                       role="status"
-                      className="mt-4 rounded-[var(--uxe-radius-control)] border border-[var(--uxe-info-border)] bg-[var(--uxe-info-bg)] px-3 py-2.5 text-[13px] text-[var(--uxe-info)]"
+                      className="mt-4 rounded-[var(--uxe-radius-control)] border border-[var(--uxe-info-border)] bg-[var(--uxe-info-bg)] px-3 py-2.5 text-[13px] text-[var(--uxe-info-text)]"
                     >
                       {notice}
                     </p>
@@ -167,7 +167,7 @@ export function LoginPage() {
                   {formError && (
                     <p
                       role="alert"
-                      className="mt-4 rounded-[var(--uxe-radius-control)] border border-[var(--uxe-danger-border)] bg-[var(--uxe-danger-bg)] px-3 py-2.5 text-[13px] font-medium text-[var(--uxe-danger)]"
+                      className="mt-4 rounded-[var(--uxe-radius-control)] border border-[var(--uxe-danger-border)] bg-[var(--uxe-danger-bg)] px-3 py-2.5 text-[13px] font-medium text-[var(--uxe-danger-text)]"
                     >
                       {formError}
                       {rateLimited && ` You can try again in ${retryAfter}s.`}
@@ -423,8 +423,8 @@ function TrustCue({
   tone: 'info' | 'success' | 'violet';
 }) {
   const tones = {
-    info: 'bg-[var(--uxe-info-bg)] text-[var(--uxe-info)]',
-    success: 'bg-[var(--uxe-success-bg)] text-[var(--uxe-success)]',
+    info: 'bg-[var(--uxe-info-bg)] text-[var(--uxe-info-text)]',
+    success: 'bg-[var(--uxe-success-bg)] text-[var(--uxe-success-text)]',
     violet: 'bg-[color-mix(in_srgb,var(--uxe-violet)_12%,transparent)] text-[var(--uxe-violet)]',
   } as const;
 
@@ -580,7 +580,7 @@ function VerifyEmailNotice({ email, onBack }: { email: string; onBack: () => voi
     <div className="text-center">
       <span
         aria-hidden
-        className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[var(--uxe-success-bg)] text-[var(--uxe-success)]"
+        className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[var(--uxe-success-bg)] text-[var(--uxe-success-text)]"
       >
         <Mail className="h-6 w-6" />
       </span>

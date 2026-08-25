@@ -237,6 +237,38 @@ describe('injected content', () => {
   }, 120_000);
 });
 
+describe('cross-origin requests', () => {
+  it('answers the preflight with every method the API actually serves', async () => {
+    const response = await owner.client.request('OPTIONS', '/sources/uploads/01TEST/content', {
+      headers: {
+        'access-control-request-method': 'PUT',
+        'access-control-request-headers': 'x-csrf-token,content-type',
+      },
+    });
+
+    expect(response.status).toBe(204);
+    const methods = (response.headers.get('access-control-allow-methods') ?? '')
+      .split(',')
+      .map((method) => method.trim());
+
+    // PUT is how upload bytes arrive. Omitting it fails the preflight, and every browser
+    // upload then reports a network error with no server-side trace of the attempt.
+    for (const method of ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']) {
+      expect(methods, `preflight omits ${method}`).toContain(method);
+    }
+    expect(response.headers.get('access-control-allow-credentials')).toBe('true');
+  });
+
+  it('refuses a preflight from an origin that is not on the allowlist', async () => {
+    const response = await owner.client.request('OPTIONS', '/sources', {
+      origin: 'https://evil.example.com',
+      headers: { 'access-control-request-method': 'GET' },
+    });
+    expect(response.status).toBe(403);
+    expect(response.headers.get('access-control-allow-origin')).toBeNull();
+  });
+});
+
 describe('response hardening', () => {
   it('sets the security headers every response needs', async () => {
     const response = await owner.client.get('/sources');

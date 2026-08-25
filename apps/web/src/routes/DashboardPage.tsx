@@ -339,8 +339,8 @@ const KPI_META = {
 const KPI_TONES = {
   violet: 'bg-[color-mix(in_srgb,var(--uxe-violet)_14%,transparent)] text-[var(--uxe-violet)]',
   cobalt: 'bg-[color-mix(in_srgb,var(--uxe-cobalt)_14%,transparent)] text-[var(--uxe-cobalt)]',
-  success: 'bg-[var(--uxe-success-bg)] text-[var(--uxe-success)]',
-  teal: 'bg-[var(--uxe-teal-bg)] text-[var(--uxe-teal)]',
+  success: 'bg-[var(--uxe-success-bg)] text-[var(--uxe-success-text)]',
+  teal: 'bg-[var(--uxe-teal-bg)] text-[var(--uxe-teal-text)]',
 } as const;
 
 function KpiCard({ kpi, days }: { kpi: DashboardResponse['kpis'][number]; days: number }) {
@@ -472,9 +472,9 @@ const ATTENTION_ICONS = {
 } as const;
 
 const SEVERITY_STYLES = {
-  critical: 'bg-[var(--uxe-danger-bg)] text-[var(--uxe-danger)]',
-  warning: 'bg-[var(--uxe-warning-bg)] text-[var(--uxe-warning)]',
-  info: 'bg-[var(--uxe-info-bg)] text-[var(--uxe-info)]',
+  critical: 'bg-[var(--uxe-danger-bg)] text-[var(--uxe-danger-text)]',
+  warning: 'bg-[var(--uxe-warning-bg)] text-[var(--uxe-warning-text)]',
+  info: 'bg-[var(--uxe-info-bg)] text-[var(--uxe-info-text)]',
 } as const;
 
 function NeedsAttentionCard({ items }: { items: DashboardResponse['needsAttention'] }) {

@@ -182,7 +182,17 @@ async function main() {
     await recordIngestJob(ctx, sourceId, doc.status);
   }
 
-  // A deliberately failed source, so the failure and retry affordances are visible.
+  /*
+   * A deliberately failed source, so the failure reason and the Retry affordance are
+   * visible in a fresh workspace. Its job is recorded as already failed, which the worker
+   * loop never touches.
+   *
+   * There is deliberately no equivalent "permanently indexing" row: a job left running is
+   * reclaimed after its stale window and genuinely re-run, so a fabricated one would not
+   * stay put — and a source that claims to be processing while nothing is processing it is
+   * exactly the fake state this product is not allowed to show. The processing states are
+   * demonstrated by uploading a document, which really does pass through them.
+   */
   const failedId = newId();
   await sql`
     INSERT INTO sources (id, organization_id, workspace_id, title, document_type, status, tags, access_scope,
@@ -193,20 +203,9 @@ async function main() {
   `;
   await sql`INSERT INTO source_permissions (id, source_id, workspace_id, scope, capability) VALUES (${newId()}, ${failedId}, ${workspaceId}, 'workspace', 'read')`;
 
-  // A source still indexing, so the progress states are visible.
-  const processingId = newId();
-  await sql`
-    INSERT INTO sources (id, organization_id, workspace_id, title, document_type, status, tags, access_scope,
-                         owner_user_id, promoted_to_knowledge, last_synced_at)
-    VALUES (${processingId}, ${orgId}, ${workspaceId}, 'ISO 9001:2015 Quality Management', 'pdf', 'indexing',
-            '["standard","iso"]'::jsonb, 'workspace', ${ownerId}, true, now())
-  `;
-  await sql`INSERT INTO source_permissions (id, source_id, workspace_id, scope, capability) VALUES (${newId()}, ${processingId}, ${workspaceId}, 'workspace', 'read')`;
-
   await recordIngestJob(ctx, failedId, 'failed');
-  await recordIngestJob(ctx, processingId, 'indexing');
 
-  console.log(`  sources: ${documents.length + 2}`);
+  console.log(`  sources: ${documents.length + 1}`);
 
   // --- Consultations ------------------------------------------------------
   const consultations = [

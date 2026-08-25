@@ -1,4 +1,4 @@
-import { expect, signIn, test, waitForSettled } from '../e2e/fixtures.js';
+import { expect, test, waitForSettled } from '../e2e/fixtures.js';
 
 /**
  * Keyboard-only smoke tests.
@@ -8,7 +8,6 @@ import { expect, signIn, test, waitForSettled } from '../e2e/fixtures.js';
  */
 
 test('the first tab stop is a skip link that reaches the main region', async ({ page }) => {
-  await signIn(page);
   await page.goto('/dashboard');
   await waitForSettled(page);
 
@@ -21,11 +20,16 @@ test('the first tab stop is a skip link that reaches the main region', async ({ 
 });
 
 test('every navigation destination is reachable by keyboard', async ({ page }) => {
-  await signIn(page);
   await page.goto('/dashboard');
   await waitForSettled(page);
 
-  const nav = page.getByRole('navigation', { name: 'Main navigation' }).first();
+  // Desktop uses the persistent rail ("Main navigation"); below 768px the bottom bar
+  // ("Primary navigation") is the one on screen. Whichever is visible must be operable.
+  const nav = page
+    .getByRole('navigation', { name: /Main navigation|Primary navigation/ })
+    .filter({ visible: true })
+    .first();
+
   const links = await nav.getByRole('link').all();
   expect(links.length).toBeGreaterThan(3);
 
@@ -36,7 +40,6 @@ test('every navigation destination is reachable by keyboard', async ({ page }) =
 });
 
 test('the answer-style control is operable with the arrow keys', async ({ page }) => {
-  await signIn(page);
   await page.goto('/consult');
   await waitForSettled(page);
 
@@ -54,7 +57,6 @@ test('the answer-style control is operable with the arrow keys', async ({ page }
 });
 
 test('a citation can be opened and dismissed without a mouse', async ({ page }) => {
-  await signIn(page);
   await page.goto('/consult');
   await waitForSettled(page);
 
@@ -70,21 +72,24 @@ test('a citation can be opened and dismissed without a mouse', async ({ page }) 
   await expect(viewer).toBeHidden();
 });
 
-test('a form reports its errors to the keyboard user, not only in colour', async ({ page }) => {
-  await page.goto('/login');
-  await page.getByRole('button', { name: 'Sign in' }).click();
+test.describe('signed out', () => {
+  test.use({ storageState: { cookies: [], origins: [] } });
 
-  const email = page.getByLabel('Work email');
-  // The browser's own constraint validation or the app's — either way the field must be
-  // marked invalid programmatically.
-  const invalid = await email.evaluate(
-    (node) => node.matches(':invalid') || node.getAttribute('aria-invalid') === 'true',
-  );
-  expect(invalid).toBe(true);
+  test('a form reports its errors to the keyboard user, not only in colour', async ({ page }) => {
+    await page.goto('/login');
+    await page.getByRole('button', { name: 'Sign in' }).click();
+
+    const email = page.getByLabel('Work email');
+    // The browser's own constraint validation or the app's — either way the field must be
+    // marked invalid programmatically.
+    const invalid = await email.evaluate(
+      (node) => node.matches(':invalid') || node.getAttribute('aria-invalid') === 'true',
+    );
+    expect(invalid).toBe(true);
+  });
 });
 
 test('focus is visible on every interactive element it lands on', async ({ page }) => {
-  await signIn(page);
   await page.goto('/knowledge');
   await waitForSettled(page);
 

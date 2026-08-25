@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, signIn, test, waitForSettled } from '../e2e/fixtures.js';
+import { expect, test, waitForSettled } from '../e2e/fixtures.js';
 import type { Page } from '@playwright/test';
 
 /**
@@ -28,6 +28,9 @@ function describeViolations(results: Awaited<ReturnType<typeof scan>>): string {
 }
 
 test.describe('unauthenticated pages', () => {
+  // These pages are only reachable signed out.
+  test.use({ storageState: { cookies: [], origins: [] } });
+
   for (const [name, path] of [
     ['sign in', '/login'],
     ['register', '/register'],
@@ -43,10 +46,6 @@ test.describe('unauthenticated pages', () => {
 });
 
 test.describe('authenticated pages', () => {
-  test.beforeEach(async ({ page }) => {
-    await signIn(page);
-  });
-
   for (const [name, path] of [
     ['dashboard', '/dashboard'],
     ['consult', '/consult'],

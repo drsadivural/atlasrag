@@ -1,7 +1,7 @@
 import { mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import type { Page } from '@playwright/test';
-import { expect, signIn, test, waitForSettled } from './fixtures.js';
+import { expect, test, waitForSettled } from './fixtures.js';
 
 const ROOT = fileURLToPath(new URL('../..', import.meta.url));
 
@@ -17,15 +17,22 @@ test.describe('@visual primary screens', () => {
     await mkdir(`${ROOT}/artifacts/screenshots`, { recursive: true });
   });
 
-  test('login', async ({ page }, testInfo) => {
+  // The sign-in screen must be captured signed out; the rest use the shared session.
+  test('login', async ({ browser }, testInfo) => {
+    const context = await browser.newContext({
+      viewport: testInfo.project.use.viewport,
+      storageState: { cookies: [], origins: [] },
+    });
+    const page = await context.newPage();
     await page.goto('/login');
     await waitForSettled(page);
     await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible();
     await capture(page, testInfo.project.name, '01-login');
+    await context.close();
   });
 
   test('dashboard', async ({ page }, testInfo) => {
-    await signIn(page);
+    await page.goto('/dashboard');
     await waitForSettled(page);
     await expect(
       page.getByRole('button', { name: 'Start consultation', exact: true }),
@@ -34,7 +41,6 @@ test.describe('@visual primary screens', () => {
   });
 
   test('knowledge base', async ({ page }, testInfo) => {
-    await signIn(page);
     await page.goto('/knowledge');
     await waitForSettled(page);
     await expect(page.getByRole('heading', { name: 'Knowledge Base' })).toBeVisible();
@@ -42,7 +48,6 @@ test.describe('@visual primary screens', () => {
   });
 
   test('consult now', async ({ page }, testInfo) => {
-    await signIn(page);
     await page.goto('/consult');
     await waitForSettled(page);
 

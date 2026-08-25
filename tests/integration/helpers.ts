@@ -58,6 +58,8 @@ export async function uploadFixture(
   }
 
   const ticket = ticketResponse.body.tickets[0]!;
+  // The ticket URL is relative so the browser stays on its own origin; the harness client
+  // already prefixes /api/v1.
   const path = new URL(ticket.uploadUrl, 'http://localhost:8788').pathname.replace('/api/v1', '');
 
   const put = await client.request<{

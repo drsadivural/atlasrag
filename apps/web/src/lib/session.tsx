@@ -58,7 +58,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       setCsrfToken(null);
       // Everything cached is tenant data; keeping any of it after sign-out would leak it
       // into the next session on a shared machine.
-      queryClient.clear();
+      //
+      // The session query is emptied rather than removed. `queryClient.clear()` drops the
+      // query out from under its observer without giving it a new result, so the app would
+      // keep rendering the signed-out user's workspace until something else forced a
+      // render — which is what used to happen here.
+      queryClient.removeQueries({
+        predicate: (query) => query.queryKey[0] !== 'session',
+      });
       queryClient.setQueryData(['session'], null);
     }
   }, [queryClient]);
@@ -67,8 +74,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     async (workspaceId: string) => {
       const next = await api.post<SessionResponse>('/auth/switch-workspace', { workspaceId });
       setCsrfToken(next.csrfToken);
-      // Every cached list is scoped to the previous workspace.
-      queryClient.clear();
+      // Every cached list is scoped to the previous workspace. The session itself is
+      // replaced rather than dropped, for the same reason as in `signOut`.
+      queryClient.removeQueries({
+        predicate: (query) => query.queryKey[0] !== 'session',
+      });
       queryClient.setQueryData(['session'], next);
     },
     [queryClient],

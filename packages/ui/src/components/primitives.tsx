@@ -317,13 +317,15 @@ const badgeVariants = cva(
   {
     variants: {
       tone: {
+        // The `-text` tokens rather than the accents: a badge label is 11-13px, and the
+        // accent on its own tint is around 2.8:1.
         neutral: 'bg-[var(--uxe-neutral-bg)] text-[var(--uxe-text-secondary)]',
         brand: 'bg-[var(--uxe-surface-selected)] text-[var(--uxe-cobalt)]',
-        success: 'bg-[var(--uxe-success-bg)] text-[var(--uxe-success)]',
-        warning: 'bg-[var(--uxe-warning-bg)] text-[var(--uxe-warning)]',
-        danger: 'bg-[var(--uxe-danger-bg)] text-[var(--uxe-danger)]',
-        info: 'bg-[var(--uxe-info-bg)] text-[var(--uxe-info)]',
-        teal: 'bg-[var(--uxe-teal-bg)] text-[var(--uxe-teal)]',
+        success: 'bg-[var(--uxe-success-bg)] text-[var(--uxe-success-text)]',
+        warning: 'bg-[var(--uxe-warning-bg)] text-[var(--uxe-warning-text)]',
+        danger: 'bg-[var(--uxe-danger-bg)] text-[var(--uxe-danger-text)]',
+        info: 'bg-[var(--uxe-info-bg)] text-[var(--uxe-info-text)]',
+        teal: 'bg-[var(--uxe-teal-bg)] text-[var(--uxe-teal-text)]',
       },
       size: {
         sm: 'px-2 py-0.5 text-[11px]',

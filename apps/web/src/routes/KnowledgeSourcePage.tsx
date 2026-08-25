@@ -254,7 +254,7 @@ export function KnowledgeSourcePage() {
                     aria-hidden
                     className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--uxe-radius-control)] ${
                       version.isCurrent
-                        ? 'bg-[var(--uxe-success-bg)] text-[var(--uxe-success)]'
+                        ? 'bg-[var(--uxe-success-bg)] text-[var(--uxe-success-text)]'
                         : 'bg-[var(--uxe-neutral-bg)] text-[var(--uxe-text-secondary)]'
                     }`}
                   >

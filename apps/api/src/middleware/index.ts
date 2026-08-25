@@ -97,7 +97,9 @@ export function cors(deps: AppDeps): MiddlewareHandler<AppBindings> {
       return c.body(null, 204, {
         'access-control-allow-origin': origin,
         'access-control-allow-credentials': 'true',
-        'access-control-allow-methods': 'GET,POST,PATCH,DELETE,OPTIONS',
+        // PUT is how upload bytes arrive; omitting it fails the preflight and every
+        // browser upload reports a network error.
+        'access-control-allow-methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS',
         'access-control-allow-headers': `content-type,${CSRF_HEADER},idempotency-key,traceparent`,
         'access-control-max-age': '600',
         vary: 'Origin',

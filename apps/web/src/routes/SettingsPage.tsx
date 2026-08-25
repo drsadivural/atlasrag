@@ -150,7 +150,7 @@ function useSaveSettings() {
 function ReadOnlyNotice() {
   const { t } = useI18n();
   return (
-    <p className="mb-4 flex items-center gap-2 rounded-[var(--uxe-radius-control)] border border-[var(--uxe-info-border)] bg-[var(--uxe-info-bg)] px-3 py-2.5 text-[13px] text-[var(--uxe-info)]">
+    <p className="mb-4 flex items-center gap-2 rounded-[var(--uxe-radius-control)] border border-[var(--uxe-info-border)] bg-[var(--uxe-info-bg)] px-3 py-2.5 text-[13px] text-[var(--uxe-info-text)]">
       <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden />
       {t('common.permissionDeniedBody')}
     </p>
