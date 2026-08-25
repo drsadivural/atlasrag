@@ -163,8 +163,23 @@ export function toErrorResponse(
   };
 }
 
-export function respondWithError(c: Context, error: unknown, traceId: string) {
+/**
+ * Builds the error Response directly rather than through the context.
+ *
+ * By the time an error surfaces the context may already be past the point where `c.json`
+ * can write, so constructing the Response here is what guarantees the caller receives the
+ * structured envelope (with its traceId) instead of Hono's bare "Internal Server Error".
+ */
+export function respondWithError(_c: Context, error: unknown, traceId: string): Response {
   const mapped = toErrorResponse(error, traceId);
-  for (const [key, value] of Object.entries(mapped.headers)) c.header(key, value);
-  return c.json(mapped.body, mapped.status as never);
+  return new Response(JSON.stringify(mapped.body), {
+    status: mapped.status,
+    headers: {
+      'content-type': 'application/json; charset=utf-8',
+      'cache-control': 'no-store, private',
+      'x-content-type-options': 'nosniff',
+      'x-trace-id': traceId,
+      ...mapped.headers,
+    },
+  });
 }

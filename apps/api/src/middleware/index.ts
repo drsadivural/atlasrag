@@ -13,7 +13,7 @@ import { formatTraceparent, newSpanId, newTraceId, parseTraceparent } from '@uxe
 import { permissionsForRole, type Permission, type Role } from '@uxe/contracts';
 import type { TenantContext } from '@uxe/db';
 import type { AppBindings, AppDeps } from '../context.js';
-import { ApiError, respondWithError } from '../errors.js';
+import { ApiError, respondWithError, toErrorResponse } from '../errors.js';
 import { corsOrigins, isProduction } from '../env.js';
 import { RateLimitBuckets } from '../services/rate-limit.js';
 
@@ -115,27 +115,31 @@ export function cors(deps: AppDeps): MiddlewareHandler<AppBindings> {
   };
 }
 
-/** Converts any thrown error into the single error envelope and logs it once. */
-export function errorHandler(): MiddlewareHandler<AppBindings> {
-  return async (c, next) => {
-    try {
-      await next();
-    } catch (error) {
-      const traceId = c.get('traceId') ?? 'unknown';
-      const logger = c.get('logger');
-      const { logLevel } = (await import('../errors.js')).toErrorResponse(error, traceId);
+/**
+ * Converts any thrown error into the single error envelope and logs it exactly once.
+ *
+ * Registered through `app.onError` rather than as a middleware: once an error escapes the
+ * handler chain the context can no longer write a body, so Hono's dedicated error hook is
+ * the only place a structured response can still be produced.
+ */
+export function errorHandler(deps: AppDeps) {
+  return (error: Error, c: Context<AppBindings>): Response => {
+    const traceId = c.get('traceId') ?? 'unknown';
+    const logger = c.get('logger') ?? deps.logger;
+    const mapped = toErrorResponse(error, traceId);
 
-      const fields = {
-        path: c.req.path,
-        method: c.req.method,
-        error: error instanceof Error ? { name: error.name, message: error.message } : String(error),
-        stack: error instanceof Error && logLevel === 'error' ? error.stack?.slice(0, 2000) : undefined,
-      };
-      if (logLevel === 'error') logger?.error('request.failed', fields);
-      else logger?.warn('request.rejected', fields);
+    const fields = {
+      path: c.req.path,
+      method: c.req.method,
+      status: mapped.status,
+      error: { name: error.name, message: error.message },
+      ...(mapped.logLevel === 'error' ? { stack: error.stack?.slice(0, 2000) } : {}),
+    };
 
-      return respondWithError(c, error, traceId);
-    }
+    if (mapped.logLevel === 'error') logger.error('request.failed', fields);
+    else logger.warn('request.rejected', fields);
+
+    return respondWithError(c, error, traceId);
   };
 }
 

@@ -312,6 +312,7 @@ async def correct_endpoint(
         "validation": {
             "opened": True,
             "pages": output.pages,
+            "addendumPages": output.addendum_pages,
             "textLength": output.text_length,
             "mediaCount": output.media_count,
             "pageSizes": output.page_sizes,

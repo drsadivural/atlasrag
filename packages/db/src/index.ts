@@ -25,6 +25,9 @@ export {
   AuditRepository,
   CorrectionRepository,
   IdempotencyRepository,
+  PipelineRepository,
   SettingsRepository,
+  UploadTicketRepository,
 } from './repositories/artifacts.js';
+export { MetricsRepository, type PeriodSummary } from './repositories/metrics.js';
 export { runMigrations, MIGRATIONS } from './migrate.js';

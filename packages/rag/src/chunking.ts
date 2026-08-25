@@ -68,13 +68,18 @@ export function chunkSections(sections: DetectedSection[], options: ChunkOptions
   for (const section of sections) {
     const body = normalizeWhitespace(section.body);
     /**
-     * Regulations routinely repeat the heading as the opening words of the clause
-     * ("6.4.2 Emergency illumination" followed by "Emergency illumination shall ...").
-     * Re-prefixing the title there would produce a stuttering excerpt, so the title is
-     * only prepended when the body does not already start with it.
+     * The title is prepended only when it is real source text.
+     *
+     * Two things disqualify it. First, an inherited or synthetic title (`fromHeading`
+     * false) does not appear on the page at all, so quoting it would make the excerpt
+     * unverifiable. Second, regulations routinely repeat the heading as the opening words
+     * of the clause ("6.4.2 Emergency illumination" then "Emergency illumination shall
+     * ..."), where re-prefixing would produce a stuttering quotation.
      */
     const titlePrefix =
-      section.title && !body.toLowerCase().startsWith(section.title.toLowerCase())
+      section.fromHeading &&
+      section.title &&
+      !body.toLowerCase().startsWith(section.title.toLowerCase())
         ? `${section.title}\n`
         : '';
     const headingLine = section.headingPath.length > 0 ? section.headingPath.join(' > ') : section.title;

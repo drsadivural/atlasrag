@@ -324,6 +324,8 @@ export function validateDerivative(input: {
   original: { pages: number | null; textLength: number; mediaCount: number; pageSizes: Array<{ w: number; h: number }> };
   generated: { opened: boolean; pages: number | null; textLength: number; mediaCount: number; pageSizes: Array<{ w: number; h: number }> };
   acceptedChangeCount: number;
+  /** Pages the generator deliberately appended (e.g. an addendum for inserted provisions). */
+  allowedExtraPages?: number;
 }): ValidationReport {
   const checks: ValidationReport['checks'] = [];
 
@@ -333,18 +335,25 @@ export function validateDerivative(input: {
     detail: input.generated.opened ? 'The generated file re-opened successfully.' : 'The generated file could not be re-opened.',
   });
 
+  // Losing a page is content loss and blocks release. Gaining exactly the pages the
+  // generator declared it appended is expected and is reported, not treated as a failure.
+  const extra = input.allowedExtraPages ?? 0;
   const pagesMatch =
     input.original.pages === null ||
     input.generated.pages === null ||
-    input.original.pages === input.generated.pages;
+    input.generated.pages === input.original.pages + extra;
   checks.push({
     name: 'page_count',
     passed: pagesMatch,
     detail: pagesMatch
-      ? `Page/section count preserved (${input.generated.pages ?? 'n/a'}).`
-      : `Page count changed from ${input.original.pages} to ${input.generated.pages}.`,
+      ? extra > 0
+        ? `Original ${input.original.pages} page(s) preserved, plus ${extra} declared addendum page(s).`
+        : `Page/section count preserved (${input.generated.pages ?? 'n/a'}).`
+      : `Page count changed from ${input.original.pages} to ${input.generated.pages}, which was not expected.`,
   });
 
+  // Only the original pages are size-checked; an addendum is generated at the same size
+  // but is not part of the original layout contract.
   const sizesMatch = input.original.pageSizes.every((size, index) => {
     const other = input.generated.pageSizes[index];
     if (!other) return input.original.pageSizes.length === 0;

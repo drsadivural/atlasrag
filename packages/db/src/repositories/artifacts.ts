@@ -1,7 +1,8 @@
-import { and, count, desc, eq, ilike, inArray, isNull, lte, or, sql } from 'drizzle-orm';
+import { and, count, desc, eq, gte, ilike, inArray, isNull, lte, or, sql } from 'drizzle-orm';
 import type { Database } from '../client.js';
 import {
   auditEvents,
+  uploadTickets,
   correctionChanges,
   correctionPlans,
   consultations,
@@ -9,6 +10,7 @@ import {
   generatedArtifacts,
   idempotencyRecords,
   modelConfigurations,
+  processingJobs,
   reports,
   retentionPolicies,
   sources,
@@ -424,7 +426,7 @@ export class AuditRepository {
     }
     if (params.actorId) filters.push(eq(auditEvents.actorUserId, params.actorId));
     if (params.result && params.result !== 'all') filters.push(eq(auditEvents.result, params.result));
-    if (params.from) filters.push(sql`${auditEvents.createdAt} >= ${params.from}`);
+    if (params.from) filters.push(gte(auditEvents.createdAt, params.from));
     if (params.to) filters.push(lte(auditEvents.createdAt, params.to));
     if (params.q?.trim()) {
       const term = `%${params.q.trim()}%`;
@@ -726,5 +728,100 @@ export class IdempotencyRepository {
       .where(sql`${idempotencyRecords.expiresAt} < now()`)
       .returning({ id: idempotencyRecords.id });
     return rows.length;
+  }
+}
+
+
+export class UploadTicketRepository {
+  constructor(private readonly db: Database) {}
+
+  async create(
+    ctx: TenantContext,
+    input: {
+      sourceId: string;
+      consultationId?: string | null;
+      fileName: string;
+      contentType: string;
+      declaredBytes: number;
+      storageKey: string;
+      promoteToKnowledge: boolean;
+      tags: string[];
+      accessScope: string;
+      ttlHours?: number;
+    },
+  ) {
+    const [row] = await this.db
+      .insert(uploadTickets)
+      .values({
+        id: newId(),
+        organizationId: ctx.organizationId,
+        workspaceId: ctx.workspaceId,
+        userId: ctx.userId,
+        sourceId: input.sourceId,
+        consultationId: input.consultationId ?? null,
+        fileName: input.fileName,
+        contentType: input.contentType,
+        declaredBytes: input.declaredBytes,
+        storageKey: input.storageKey,
+        promoteToKnowledge: input.promoteToKnowledge,
+        tags: input.tags,
+        accessScope: input.accessScope,
+        expiresAt: new Date(Date.now() + (input.ttlHours ?? 2) * 3_600_000),
+      })
+      .returning();
+    if (!row) throw new Error('Failed to create upload ticket');
+    return row;
+  }
+
+  /** Only the ticket's own creator, in its own workspace, may complete it. */
+  async findPending(ctx: TenantContext, ticketId: string) {
+    const [row] = await this.db
+      .select()
+      .from(uploadTickets)
+      .where(
+        and(
+          eq(uploadTickets.id, ticketId),
+          eq(uploadTickets.workspaceId, ctx.workspaceId),
+          eq(uploadTickets.userId, ctx.userId),
+          eq(uploadTickets.status, 'pending'),
+          sql`${uploadTickets.expiresAt} > now()`,
+        ),
+      )
+      .limit(1);
+    return row ?? null;
+  }
+
+  async markReceived(ticketId: string, receivedBytes: number) {
+    await this.db
+      .update(uploadTickets)
+      .set({ status: 'received', receivedBytes, completedAt: new Date() })
+      .where(eq(uploadTickets.id, ticketId));
+  }
+
+  async purgeExpired() {
+    const rows = await this.db
+      .delete(uploadTickets)
+      .where(and(eq(uploadTickets.status, 'pending'), sql`${uploadTickets.expiresAt} < now()`))
+      .returning({ id: uploadTickets.id });
+    return rows.length;
+  }
+}
+
+/** Aggregates per-stage progress across in-flight ingestion jobs for the pipeline panel. */
+export class PipelineRepository {
+  constructor(private readonly db: Database) {}
+
+  async recentIngestJobs(workspaceId: string, limit = 200) {
+    return this.db
+      .select({ stages: processingJobs.stages, status: processingJobs.status })
+      .from(processingJobs)
+      .where(
+        and(
+          eq(processingJobs.workspaceId, workspaceId),
+          inArray(processingJobs.kind, ['source_ingest', 'source_reprocess', 'source_sync']),
+        ),
+      )
+      .orderBy(desc(processingJobs.createdAt))
+      .limit(limit);
   }
 }

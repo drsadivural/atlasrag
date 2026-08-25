@@ -19,6 +19,15 @@ export interface DetectedSection {
   ordinal: number;
   level: number;
   kind: SectionKind;
+  /**
+   * True when `title` was read from a heading line in the document.
+   *
+   * Body text that appears before any heading inherits a title (or gets a synthetic
+   * "Introduction"), and that string is NOT present in the page text. Prefixing a chunk
+   * with it would produce excerpts that fail verbatim citation verification, so chunking
+   * only prepends the title when this flag is set.
+   */
+  fromHeading: boolean;
   chapter: string | null;
   section: string | null;
   clause: string | null;
@@ -253,6 +262,7 @@ export function detectStructure(pages: ExtractedPage[]): DetectedSection[] {
           ordinal,
           level: heading.level,
           kind: heading.kind,
+          fromHeading: true,
           chapter,
           section,
           clause,
@@ -280,6 +290,7 @@ export function detectStructure(pages: ExtractedPage[]): DetectedSection[] {
           ordinal,
           level: headingStack.length || 1,
           kind: 'paragraph',
+          fromHeading: false,
           chapter,
           section,
           clause,

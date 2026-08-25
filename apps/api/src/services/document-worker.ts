@@ -58,6 +58,7 @@ export interface CorrectionResult {
   validation: {
     opened: boolean;
     pages: number | null;
+    addendumPages: number;
     textLength: number;
     mediaCount: number;
     pageSizes: Array<{ w: number; h: number }>;

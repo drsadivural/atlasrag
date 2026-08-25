@@ -336,8 +336,47 @@ export class SourceRepository {
   }
 
   /**
-   * Returns the existing row when the same bytes are uploaded again, instead of creating a
-   * duplicate version.
+   * Finds an existing version anywhere in the workspace with these exact bytes.
+   *
+   * Checked before a new upload is accepted so re-uploading a file the workspace already
+   * holds points the user at the existing source rather than silently creating a second
+   * copy that would then need de-duplicating, re-indexing and re-permissioning.
+   */
+  async findDuplicateInWorkspace(ctx: TenantContext, sha256: string, excludeSourceId?: string) {
+    const [row] = await this.db
+      .select({ version: sourceVersions, source: sources })
+      .from(sourceVersions)
+      .innerJoin(sources, eq(sources.id, sourceVersions.sourceId))
+      .where(
+        and(
+          eq(sourceVersions.workspaceId, ctx.workspaceId),
+          eq(sourceVersions.sha256, sha256),
+          isNull(sources.deletedAt),
+          excludeSourceId ? sql`${sources.id} <> ${excludeSourceId}` : sql`true`,
+        ),
+      )
+      .limit(1);
+    return row ?? null;
+  }
+
+  /** Hard-deletes a source that never received content, used to undo a duplicate upload. */
+  async discardEmptySource(ctx: TenantContext, sourceId: string) {
+    const [existing] = await this.db
+      .select({ currentVersionId: sources.currentVersionId })
+      .from(sources)
+      .where(and(eq(sources.id, sourceId), eq(sources.workspaceId, ctx.workspaceId)))
+      .limit(1);
+    // Refuse to hard-delete anything that ever became citable.
+    if (!existing || existing.currentVersionId !== null) return false;
+    await this.db
+      .delete(sources)
+      .where(and(eq(sources.id, sourceId), eq(sources.workspaceId, ctx.workspaceId)));
+    return true;
+  }
+
+  /**
+   * Returns the existing row when the same bytes are uploaded again as a new version of
+   * the SAME source, instead of creating a duplicate version.
    */
   async findVersionBySha(sourceId: string, sha256: string) {
     const [row] = await this.db

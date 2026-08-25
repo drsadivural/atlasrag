@@ -597,6 +597,9 @@ export async function runComplianceReview(
       ordinal: section.ordinal,
       level: section.level,
       kind: section.kind as never,
+      // Sections reloaded from the database always came from a detected heading: only
+      // heading-derived sections are ever flagged as requirements.
+      fromHeading: true,
       chapter: section.chapter,
       section: section.section,
       clause: section.clause,

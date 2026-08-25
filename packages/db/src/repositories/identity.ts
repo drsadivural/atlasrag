@@ -497,14 +497,19 @@ export class IdentityRepository {
     return row ?? null;
   }
 
-  /** Sliding idle expiry, capped by the absolute lifetime set at sign-in. */
+  /**
+   * Sliding idle expiry, capped by the absolute lifetime set at sign-in.
+   *
+   * The new expiry is computed in SQL from `now()` rather than from a JavaScript Date, so
+   * it uses the database clock (the single source of truth for every other timestamp) and
+   * avoids binding a Date inside a raw fragment, which postgres-js cannot encode.
+   */
   async touchSession(sessionId: string, idleMinutes: number) {
-    const now = new Date();
     await this.db
       .update(sessions)
       .set({
-        lastSeenAt: now,
-        expiresAt: sql`LEAST(${new Date(now.getTime() + idleMinutes * 60_000)}::timestamptz, ${sessions.absoluteExpiresAt})`,
+        lastSeenAt: sql`now()`,
+        expiresAt: sql`LEAST(now() + (interval '1 minute' * ${idleMinutes}), ${sessions.absoluteExpiresAt})`,
       })
       .where(eq(sessions.id, sessionId));
   }

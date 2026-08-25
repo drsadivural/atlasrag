@@ -8,10 +8,13 @@ import type {
   IdempotencyRepository,
   IdentityRepository,
   JobRepository,
+  MetricsRepository,
+  PipelineRepository,
   RetrievalRepository,
   SettingsRepository,
   SourceRepository,
   TenantContext,
+  UploadTicketRepository,
 } from '@uxe/db';
 import type { Logger, MetricsRegistry, Tracer } from '@uxe/observability';
 import type { ChatProvider, EmbeddingProvider } from '@uxe/rag';
@@ -31,6 +34,9 @@ export interface Repositories {
   audit: AuditRepository;
   settings: SettingsRepository;
   idempotency: IdempotencyRepository;
+  uploads: UploadTicketRepository;
+  pipeline: PipelineRepository;
+  metrics: MetricsRepository;
 }
 
 export interface Services {

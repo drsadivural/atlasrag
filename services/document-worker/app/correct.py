@@ -56,6 +56,7 @@ class CorrectionOutput:
     applied_changes: int = 0
     unmatched_changes: list[int] = field(default_factory=list)
     pages: int | None = None
+    addendum_pages: int = 0
     text_length: int = 0
     media_count: int = 0
     page_sizes: list[dict[str, float]] = field(default_factory=list)
@@ -225,10 +226,15 @@ def correct_pdf_overlay(data: bytes, changes: list[Change], include_redline: boo
     warnings: list[str] = []
     original_page_count = document.page_count
 
+    insertions: list[Change] = []
+
     for change in changes:
         target = _normalise(change.current_content)
         if not target:
-            unmatched.append(change.ordinal)
+            # An insertion has no text to anchor to. Collect it and append it on a clearly
+            # labelled addendum page rather than reporting the change as un-appliable:
+            # closing an evidence gap usually means adding a provision that is not there.
+            insertions.append(change)
             continue
 
         page_indexes = (
@@ -273,6 +279,11 @@ def correct_pdf_overlay(data: bytes, changes: list[Change], include_redline: boo
         if not matched:
             unmatched.append(change.ordinal)
 
+    addendum_pages = 0
+    if insertions:
+        applied += _append_addendum(document, insertions)
+        addendum_pages = 1
+
     output = document.tobytes(garbage=3, deflate=True)
     page_sizes = [{"w": float(p.rect.width), "h": float(p.rect.height)} for p in document]
     document.close()
@@ -283,7 +294,12 @@ def correct_pdf_overlay(data: bytes, changes: list[Change], include_redline: boo
     pages = reopened.page_count
     reopened.close()
 
-    if pages != original_page_count:
+    if insertions:
+        warnings.append(
+            f"{len(insertions)} added provision(s) could not be placed inline because the document has no "
+            "corresponding text to replace. They were appended on a labelled addendum page."
+        )
+    elif pages != original_page_count:
         warnings.append(
             f"Page count changed from {original_page_count} to {pages}; the correction was not applied cleanly."
         )
@@ -300,11 +316,51 @@ def correct_pdf_overlay(data: bytes, changes: list[Change], include_redline: boo
         applied_changes=applied,
         unmatched_changes=unmatched,
         pages=pages,
+        addendum_pages=addendum_pages,
         text_length=text_length,
         media_count=media_count,
         page_sizes=page_sizes,
         warnings=warnings,
     )
+
+
+def _append_addendum(document: pymupdf.Document, insertions: list[Change]) -> int:
+    """Appends inserted provisions on their own page, matching the document's page size.
+
+    Inserting into the middle of a fixed-layout PDF would reflow nothing and overwrite
+    neighbouring content, so additions go on a page of their own that states exactly what
+    was added and under which citation.
+    """
+    from .pdfkit import COBALT, Document as FlowDocument, INK, MUTED, SUCCESS
+
+    template = document[0].rect if document.page_count else pymupdf.Rect(0, 0, 595, 842)
+
+    flow = FlowDocument(width=float(template.width), height=float(template.height))
+    flow.footer_text = "UXE Consulting AI  -  addendum to the corrected edition"
+    flow.text("ADDENDUM", size=9.5, color=COBALT, bold=True, gap=4)
+    flow.text("Provisions added by this correction", size=18, bold=True, gap=6)
+    flow.text(
+        "The following provisions were not present in the original document and could not be "
+        "placed inline. They form part of the corrected edition.",
+        size=9.5,
+        color=MUTED,
+        gap=12,
+    )
+    flow.rule()
+
+    for change in insertions:
+        flow.text(f"Addition {change.ordinal}", size=12, bold=True, color=SUCCESS, gap=5)
+        flow.text(change.proposed_content, size=10.5, color=INK, gap=5)
+        if change.reason:
+            flow.text(f"Reason:  {change.reason}", size=9, color=MUTED, gap=3)
+        if change.citation:
+            flow.text(f"Governing citation:  {change.citation}", size=9, color=MUTED, gap=3)
+        flow.rule(gap=10)
+
+    addendum = pymupdf.open(stream=flow.finish(), filetype="pdf")
+    document.insert_pdf(addendum)
+    addendum.close()
+    return len(insertions)
 
 
 def _block_rect_for(page: pymupdf.Page, rect: pymupdf.Rect) -> pymupdf.Rect | None:
