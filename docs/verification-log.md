@@ -156,6 +156,19 @@ pnpm test:e2e     # 49 tests across three viewports
 pnpm test:a11y    # 37 axe and keyboard-only tests, nothing skipped
 ```
 
+## Staging provisioning
+
+`infra/staging/provision-postgres.sh` was exercised end to end on a clean
+`ubuntu:24.04` host rather than only read for correctness. The full result is in
+[infra/staging/README.md](../infra/staging/README.md); the part worth repeating
+here is that the application's own migrations, seed and smoke test were then run
+against the database the script produced — `applied 4, already present 0`, seven
+sources seeded, and 10/10 smoke checks passed.
+
+One defect was found and fixed that way: the script called `systemctl` directly,
+so it aborted on any host where systemd is not PID 1. Service control now falls
+back to `pg_ctlcluster` and then to `pg_ctl`.
+
 ## Reproducing
 
 ```bash
