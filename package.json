@@ -1,0 +1,51 @@
+{
+  "name": "uxe-consulting-ai",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "UXE Consulting AI \u2014 verified answers, exact evidence, corrected documents.",
+  "license": "UNLICENSED",
+  "packageManager": "pnpm@11.16.0",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "build": "pnpm -r --filter=./packages/** build && pnpm -r --filter=./apps/** build",
+    "dev": "pnpm --parallel --filter=@uxe/api --filter=@uxe/web dev",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write \"**/*.{ts,tsx,js,json,md,css,yml,yaml}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,json,md,css,yml,yaml}\"",
+    "test": "vitest run --project unit --project component --project integration --project rag-evals --project security",
+    "test:unit": "vitest run --project unit",
+    "test:component": "vitest run --project component",
+    "test:integration": "vitest run --project integration",
+    "test:rag-evals": "vitest run --project rag-evals",
+    "test:security": "vitest run --project security",
+    "test:coverage": "vitest run --coverage --project unit --project component --project integration",
+    "test:e2e": "playwright test --config tests/e2e/playwright.config.ts",
+    "test:a11y": "playwright test --config tests/accessibility/playwright.config.ts",
+    "test:visual": "playwright test --config tests/e2e/playwright.config.ts --grep @visual",
+    "db:generate": "pnpm --filter @uxe/db generate",
+    "db:migrate": "pnpm --filter @uxe/db migrate",
+    "db:seed": "pnpm --filter @uxe/db seed",
+    "db:reset": "pnpm --filter @uxe/db reset",
+    "docker:db": "docker compose -f infra/docker-compose.yml up -d postgres",
+    "worker:dev": "cd services/document-worker && .venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8099 --reload",
+    "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.2",
+    "@uxe/config": "workspace:*",
+    "@vitest/coverage-v8": "4.1.11",
+    "eslint": "10.9.1",
+    "prettier": "3.9.6",
+    "tsx": "4.23.12",
+    "typescript": "5.9.3",
+    "vitest": "4.1.11",
+    "@playwright/test": "1.62.1",
+    "prettier-plugin-tailwindcss": "0.8.1",
+    "dotenv": "17.4.2"
+  }
+}

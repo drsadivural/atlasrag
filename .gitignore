@@ -1,0 +1,37 @@
+# dependencies
+node_modules/
+.pnpm-store/
+.venv/
+__pycache__/
+*.egg-info/
+
+# build output
+dist/
+build/
+.output/
+.wrangler/
+storybook-static/
+*.tsbuildinfo
+
+# env & secrets
+.env
+.env.*
+!.env.example
+*.pem
+!tests/fixtures/**/*.pem
+
+# test artifacts
+coverage/
+playwright-report/
+test-results/
+blob-report/
+tests/**/.auth/
+artifacts/screenshots/actual/
+artifacts/screenshots/diff/
+
+# local runtime data
+.data/
+storage-local/
+*.log
+.DS_Store
+.scratch/

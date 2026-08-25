@@ -1,0 +1,5 @@
+{
+  "extends": "@uxe/config/tsconfig/base.json",
+  "compilerOptions": { "types": ["node"], "outDir": "dist", "rootDir": "." },
+  "include": ["src/**/*.ts", "drizzle.config.ts"]
+}

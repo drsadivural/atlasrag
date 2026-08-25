@@ -1,0 +1,11 @@
+pnpm-lock.yaml
+dist/
+coverage/
+playwright-report/
+test-results/
+packages/db/drizzle/**/*.sql
+docs/product/
+assets/
+artifacts/
+.venv/
+services/document-worker/.venv/
