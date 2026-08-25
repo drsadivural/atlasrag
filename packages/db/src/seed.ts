@@ -36,7 +36,9 @@ function ts(value: Date | null): string | null {
 async function main() {
   console.log('Seeding development data…');
 
-  const existing = await sql<{ id: string }[]>`SELECT id FROM users WHERE lower(email) = lower(${OWNER_EMAIL})`;
+  const existing = await sql<
+    { id: string }[]
+  >`SELECT id FROM users WHERE lower(email) = lower(${OWNER_EMAIL})`;
   if (existing.length > 0) {
     console.log(`  ${OWNER_EMAIL} already exists. Run "pnpm db:reset" first to reseed.`);
     return;
@@ -206,7 +208,13 @@ async function main() {
   const consultations = [
     { title: 'UAE Fire Code Review', status: 'action_required', score: 68, pinned: true, days: 0 },
     { title: 'Employment Policy Audit', status: 'report_ready', score: 94, pinned: false, days: 1 },
-    { title: 'Supplier Contract Summary', status: 'report_ready', score: 96, pinned: false, days: 2 },
+    {
+      title: 'Supplier Contract Summary',
+      status: 'report_ready',
+      score: 96,
+      pinned: false,
+      days: 2,
+    },
     { title: 'Health & Safety Compliance', status: 'active', score: null, pinned: false, days: 9 },
     { title: 'ISO 9001 Gap Analysis', status: 'draft', score: null, pinned: false, days: 21 },
   ];
@@ -259,11 +267,36 @@ async function main() {
   const auditEntries: Array<[string, string, string, string]> = [
     ['auth.login', 'auth', 'success', 'Dr Sadi Vural signed in.'],
     ['source.upload.requested', 'source', 'success', 'Requested upload tickets for 5 file(s).'],
-    ['source.updated', 'source', 'success', 'Updated source "UAE Fire and Life Safety Code of Practice 2018".'],
-    ['consultation.created', 'consultation', 'success', 'Started consultation "UAE Fire Code Review".'],
-    ['review.completed', 'review', 'success', 'Compliance review finished with 1 non-compliant requirement.'],
-    ['artifact.downloaded', 'artifact', 'success', 'Downloaded "UAE Fire Code Review - compliance report".'],
-    ['member.invited', 'permission', 'success', 'Invited amina.reviewer@uxe.example.com as reviewer.'],
+    [
+      'source.updated',
+      'source',
+      'success',
+      'Updated source "UAE Fire and Life Safety Code of Practice 2018".',
+    ],
+    [
+      'consultation.created',
+      'consultation',
+      'success',
+      'Started consultation "UAE Fire Code Review".',
+    ],
+    [
+      'review.completed',
+      'review',
+      'success',
+      'Compliance review finished with 1 non-compliant requirement.',
+    ],
+    [
+      'artifact.downloaded',
+      'artifact',
+      'success',
+      'Downloaded "UAE Fire Code Review - compliance report".',
+    ],
+    [
+      'member.invited',
+      'permission',
+      'success',
+      'Invited amina.reviewer@uxe.example.com as reviewer.',
+    ],
     ['auth.login.failed', 'auth', 'failure', 'Failed sign-in attempt (1 consecutive).'],
   ];
 
@@ -305,7 +338,14 @@ async function main() {
  * working demonstration rather than a set of hard-coded strings.
  */
 async function runSeedReview(
-  ctx: { organizationId: string; workspaceId: string; userId: string; role: 'owner'; groupIds: string[]; traceId: string },
+  ctx: {
+    organizationId: string;
+    workspaceId: string;
+    userId: string;
+    role: 'owner';
+    groupIds: string[];
+    traceId: string;
+  },
   consultationId: string,
   regulationSourceId: string,
   projectSourceId: string,
@@ -316,7 +356,9 @@ async function runSeedReview(
   const { RetrievalRepository } = await import('./repositories/retrieval.js');
   const { ConsultationRepository } = await import('./repositories/consultations.js');
 
-  const versions = await sql<{ id: string; source_id: string; pages: number | null; version: string }[]>`
+  const versions = await sql<
+    { id: string; source_id: string; pages: number | null; version: string }[]
+  >`
     SELECT id, source_id, pages, version FROM source_versions
     WHERE source_id IN (${regulationSourceId}, ${projectSourceId}) AND is_current = true
   `;
@@ -325,7 +367,10 @@ async function runSeedReview(
     sourceId: v.source_id,
     sourceVersionId: v.id,
     role: (v.source_id === regulationSourceId ? 'governing' : 'project') as 'governing' | 'project',
-    title: v.source_id === regulationSourceId ? 'UAE Fire and Life Safety Code of Practice 2018' : 'Evacuation Plan – Tower A',
+    title:
+      v.source_id === regulationSourceId
+        ? 'UAE Fire and Life Safety Code of Practice 2018'
+        : 'Evacuation Plan – Tower A',
     version: v.version,
     pages: v.pages,
     effectiveDate: v.source_id === regulationSourceId ? new Date('2018-01-01') : null,
@@ -344,7 +389,8 @@ async function runSeedReview(
     `;
   }
 
-  const question = 'Does the uploaded evacuation plan comply with the UAE Fire and Life Safety Code? Give me the key gaps.';
+  const question =
+    'Does the uploaded evacuation plan comply with the UAE Fire and Life Safety Code? Give me the key gaps.';
   const userMessageId = newId();
   const assistantMessageId = newId();
   const reviewId = newId();
@@ -526,7 +572,8 @@ async function recordIngestJob(
   });
 
   const done = stages.filter((s) => s.state === 'complete').length;
-  const jobStatus = status === 'failed' ? 'failed' : status === 'indexing' ? 'running' : 'succeeded';
+  const jobStatus =
+    status === 'failed' ? 'failed' : status === 'indexing' ? 'running' : 'succeeded';
 
   await sql`
     INSERT INTO processing_jobs (id, organization_id, workspace_id, kind, status, idempotency_key, trace_id,
@@ -541,7 +588,8 @@ async function recordIngestJob(
               status === 'failed'
                 ? JSON.stringify({
                     code: 'worker_rejected',
-                    message: 'Upload failed: the file ended before the declared length was received.',
+                    message:
+                      'Upload failed: the file ended before the declared length was received.',
                     retryable: true,
                     traceId: 'seed',
                   })
@@ -561,14 +609,27 @@ async function pingWorker(): Promise<boolean> {
 
 /** Runs the real extraction/indexing path so seeded sources are genuinely searchable. */
 async function ingest(
-  ctx: { organizationId: string; workspaceId: string; userId: string; role: 'owner'; groupIds: string[]; traceId: string },
+  ctx: {
+    organizationId: string;
+    workspaceId: string;
+    userId: string;
+    role: 'owner';
+    groupIds: string[];
+    traceId: string;
+  },
   sourceId: string,
   file: string,
   contentType: string,
   promote: boolean,
 ): Promise<void> {
-  const { detectStructure, chunkSections, chunkSpreadsheet, chunkSlides, embeddingInput, DeterministicEmbeddingProvider } =
-    await import('@uxe/rag');
+  const {
+    detectStructure,
+    chunkSections,
+    chunkSpreadsheet,
+    chunkSlides,
+    embeddingInput,
+    DeterministicEmbeddingProvider,
+  } = await import('@uxe/rag');
   const { RetrievalRepository } = await import('./repositories/retrieval.js');
 
   const bytes = readFileSync(file);
@@ -644,7 +705,11 @@ async function ingest(
     );
   }
 
-  const chunks = isSpreadsheet ? chunkSpreadsheet(pages) : isSlides ? chunkSlides(pages) : chunkSections(sections);
+  const chunks = isSpreadsheet
+    ? chunkSpreadsheet(pages)
+    : isSlides
+      ? chunkSlides(pages)
+      : chunkSections(sections);
   if (chunks.length === 0) return;
 
   const chunkIds = await retrieval.replaceChunks(
@@ -663,7 +728,9 @@ async function ingest(
     chunkIds.map((id, index) => ({ chunkId: id, vector: vectors[index] ?? [] })),
   );
 
-  console.log(`    indexed ${file.split('/').pop()}: ${extraction.pageCount} page(s), ${chunks.length} chunk(s)`);
+  console.log(
+    `    indexed ${file.split('/').pop()}: ${extraction.pageCount} page(s), ${chunks.length} chunk(s)`,
+  );
 }
 
 function mimeFor(type: string): string {
@@ -683,7 +750,11 @@ async function sha256(bytes: Uint8Array): Promise<string> {
 }
 
 function roleTitle(role: string): string {
-  return { owner: 'Compliance Lead', reviewer: 'Senior Reviewer', read_only: 'External Auditor' }[role] ?? '';
+  return (
+    { owner: 'Compliance Lead', reviewer: 'Senior Reviewer', read_only: 'External Auditor' }[
+      role
+    ] ?? ''
+  );
 }
 
 function defaultSettings(): Record<string, unknown> {
@@ -693,7 +764,8 @@ function defaultSettings(): Record<string, unknown> {
       title: 'Compliance Consultant',
       avatarUrl: '/consultantgirl.png',
       greeting: 'Ask Ayumi anything grounded in your approved sources.',
-      behaviorNotes: 'Answer only from approved sources. State uncertainty plainly. Always cite exact clause and page.',
+      behaviorNotes:
+        'Answer only from approved sources. State uncertainty plainly. Always cite exact clause and page.',
       defaultAnswerStyle: 'optimal',
       defaultTaskMode: 'ask',
     },
@@ -705,8 +777,20 @@ function defaultSettings(): Record<string, unknown> {
       minimumEvidenceThreshold: 0.3,
       minimumCitationsPerClaim: 1,
     },
-    security: { mfaPolicy: 'optional', sessionIdleMinutes: 480, sessionAbsoluteHours: 720, allowedEmailDomains: [], ssoEnforced: false },
-    retention: { consultationDays: 365, artifactDays: 365, auditDays: 730, purgeGraceDays: 30, legalHold: false },
+    security: {
+      mfaPolicy: 'optional',
+      sessionIdleMinutes: 480,
+      sessionAbsoluteHours: 720,
+      allowedEmailDomains: [],
+      ssoEnforced: false,
+    },
+    retention: {
+      consultationDays: 365,
+      artifactDays: 365,
+      auditDays: 730,
+      purgeGraceDays: 30,
+      legalHold: false,
+    },
     notifications: { jobCompletion: true, weeklyDigest: false, criticalFindings: true },
   };
 }

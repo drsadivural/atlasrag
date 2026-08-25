@@ -1,0 +1,44 @@
+# ---------------------------------------------------------------------------
+# UXE Consulting AI — web worker
+#
+# Serves the built SPA from Workers Static Assets. There is no server rendering: the
+# bundle is static, and every byte of tenant data comes from the API over a same-site
+# session cookie.
+#
+# Deploy: npx wrangler deploy --config infra/cloudflare/wrangler.web.toml --env production
+# ---------------------------------------------------------------------------
+
+name = "uxe-web"
+compatibility_date = "2026-06-01"
+workers_dev = false
+
+[assets]
+directory = "../../apps/web/dist"
+# A client-routed application: unknown paths are the router's business, not a 404.
+not_found_handling = "single-page-application"
+html_handling = "auto-trailing-slash"
+
+[observability]
+enabled = true
+
+[env.staging]
+name = "uxe-web-staging"
+
+[env.staging.assets]
+directory = "../../apps/web/dist"
+not_found_handling = "single-page-application"
+
+[[env.staging.routes]]
+pattern = "staging.uxe.example"
+custom_domain = true
+
+[env.production]
+name = "uxe-web"
+
+[env.production.assets]
+directory = "../../apps/web/dist"
+not_found_handling = "single-page-application"
+
+[[env.production.routes]]
+pattern = "app.uxe.example"
+custom_domain = true

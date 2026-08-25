@@ -1,0 +1,136 @@
+# ---------------------------------------------------------------------------
+# UXE Consulting AI — API worker
+#
+# The Hono app in apps/api is runtime-agnostic: the same module serves Node in
+# development and this Worker in production. Nothing in the request path reaches for
+# process.env, so the bindings below are the only configuration surface.
+#
+# Deploy:  npx wrangler deploy --config infra/cloudflare/wrangler.api.toml --env production
+# ---------------------------------------------------------------------------
+
+name = "uxe-api"
+main = "../../apps/api/src/worker.ts"
+compatibility_date = "2026-06-01"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = false
+minify = true
+
+# Observability is on by default: an API that cannot be traced cannot be operated.
+[observability]
+enabled = true
+head_sampling_rate = 1.0
+
+[placement]
+mode = "smart"
+
+# --- Shared, non-secret configuration --------------------------------------
+[vars]
+APP_ENV = "production"
+LOG_FORMAT = "json"
+LOG_LEVEL = "info"
+STORAGE_DRIVER = "r2"
+EMAIL_DRIVER = "resend"
+RATE_LIMIT_DRIVER = "durable"
+OTEL_SERVICE_NAME = "uxe-api"
+
+# ---------------------------------------------------------------------------
+# Staging
+# ---------------------------------------------------------------------------
+[env.staging]
+name = "uxe-api-staging"
+
+[env.staging.vars]
+APP_ENV = "staging"
+LOG_LEVEL = "debug"
+PUBLIC_APP_URL = "https://staging.uxe.example"
+PUBLIC_API_URL = "https://api-staging.uxe.example"
+CORS_ALLOWED_ORIGINS = "https://staging.uxe.example"
+DOCUMENT_WORKER_URL = "https://worker-staging.internal.uxe.example"
+
+[[env.staging.r2_buckets]]
+binding = "ORIGINALS"
+bucket_name = "uxe-originals-staging"
+
+[[env.staging.r2_buckets]]
+binding = "ARTIFACTS"
+bucket_name = "uxe-artifacts-staging"
+
+[[env.staging.hyperdrive]]
+binding = "HYPERDRIVE"
+# Created with: wrangler hyperdrive create uxe-staging --connection-string=...
+id = "REPLACE_WITH_STAGING_HYPERDRIVE_ID"
+
+[[env.staging.queues.producers]]
+binding = "JOBS"
+queue = "uxe-jobs-staging"
+
+[[env.staging.queues.consumers]]
+queue = "uxe-jobs-staging"
+max_batch_size = 5
+max_batch_timeout = 10
+max_retries = 3
+dead_letter_queue = "uxe-jobs-staging-dlq"
+
+[[env.staging.durable_objects.bindings]]
+name = "RATE_LIMITER"
+class_name = "RateLimiterDurableObject"
+
+# ---------------------------------------------------------------------------
+# Production
+# ---------------------------------------------------------------------------
+[env.production]
+name = "uxe-api"
+
+[env.production.vars]
+APP_ENV = "production"
+LOG_LEVEL = "info"
+PUBLIC_APP_URL = "https://app.uxe.example"
+PUBLIC_API_URL = "https://api.uxe.example"
+CORS_ALLOWED_ORIGINS = "https://app.uxe.example"
+DOCUMENT_WORKER_URL = "https://worker.internal.uxe.example"
+
+[[env.production.routes]]
+pattern = "api.uxe.example"
+custom_domain = true
+
+[[env.production.r2_buckets]]
+binding = "ORIGINALS"
+bucket_name = "uxe-originals"
+
+[[env.production.r2_buckets]]
+binding = "ARTIFACTS"
+bucket_name = "uxe-artifacts"
+
+[[env.production.hyperdrive]]
+binding = "HYPERDRIVE"
+id = "REPLACE_WITH_PRODUCTION_HYPERDRIVE_ID"
+
+[[env.production.queues.producers]]
+binding = "JOBS"
+queue = "uxe-jobs"
+
+[[env.production.queues.consumers]]
+queue = "uxe-jobs"
+max_batch_size = 5
+max_batch_timeout = 10
+max_retries = 3
+dead_letter_queue = "uxe-jobs-dlq"
+
+[[env.production.durable_objects.bindings]]
+name = "RATE_LIMITER"
+class_name = "RateLimiterDurableObject"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["RateLimiterDurableObject"]
+
+# --- Secrets ---------------------------------------------------------------
+# Never in this file. Set with:
+#   wrangler secret put SESSION_SECRET --env production
+#   wrangler secret put CSRF_SECRET --env production
+#   wrangler secret put ENCRYPTION_KEY --env production
+#   wrangler secret put DOCUMENT_WORKER_TOKEN --env production
+#   wrangler secret put RESEND_API_KEY --env production
+#   wrangler secret put ANTHROPIC_API_KEY --env production      # optional
+#   wrangler secret put OAUTH_GOOGLE_CLIENT_SECRET --env production
+#   wrangler secret put OAUTH_MICROSOFT_CLIENT_SECRET --env production

@@ -1,9 +1,16 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronLeft, ChevronRight, Download, ExternalLink, ShieldCheck, AlertTriangle } from 'lucide-react';
+import {
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  ExternalLink,
+  ShieldCheck,
+  AlertTriangle,
+} from 'lucide-react';
 import { Badge, Button, ErrorState, LoadingRegion, SlideOver, Skeleton, cn } from '@uxe/ui';
 import { formatLocator, type CitationResolution } from '@uxe/contracts';
-import { ApiError, api } from '../lib/api.js';
+import { type ApiError, api } from '../lib/api.js';
 import { useI18n } from '../lib/i18n.js';
 
 export interface CitationViewerProps {
@@ -68,7 +75,9 @@ export function CitationViewer({ citationId, onClose, onNavigate }: CitationView
                 variant="ghost"
                 size="sm"
                 disabled={!query.data.previousCitationId}
-                onClick={() => query.data?.previousCitationId && onNavigate(query.data.previousCitationId)}
+                onClick={() =>
+                  query.data?.previousCitationId && onNavigate(query.data.previousCitationId)
+                }
               >
                 <ChevronLeft className="h-4 w-4" aria-hidden />
                 {t('evidence.previousCitation')}
@@ -131,7 +140,9 @@ export function CitationViewer({ citationId, onClose, onNavigate }: CitationView
                 Page {citation.pageNumber} of {query.data.totalPages}
               </Badge>
             )}
-            {citation.entailment === 'contradicts' && <Badge tone="danger">Contradicts the claim</Badge>}
+            {citation.entailment === 'contradicts' && (
+              <Badge tone="danger">Contradicts the claim</Badge>
+            )}
           </div>
 
           {!citation.verified && (
@@ -153,7 +164,7 @@ export function CitationViewer({ citationId, onClose, onNavigate }: CitationView
                 <mark
                   ref={highlightRef as React.Ref<HTMLElement>}
                   tabIndex={-1}
-                  className="rounded bg-[var(--uxe-warning)]/35 px-0.5 font-semibold text-[var(--uxe-text)] outline-none ring-2 ring-[var(--uxe-warning)] ring-offset-2 ring-offset-[var(--uxe-surface-sunken)]"
+                  className="rounded bg-[var(--uxe-warning)]/35 px-0.5 font-semibold text-[var(--uxe-text)] ring-2 ring-[var(--uxe-warning)] ring-offset-2 ring-offset-[var(--uxe-surface-sunken)] outline-none"
                 >
                   {segments.match}
                 </mark>
@@ -165,7 +176,8 @@ export function CitationViewer({ citationId, onClose, onNavigate }: CitationView
           {citation.boundingBoxes.length > 0 && (
             <p className="text-[12px] text-[var(--uxe-text-secondary)]">
               {citation.boundingBoxes.length} highlight region
-              {citation.boundingBoxes.length === 1 ? '' : 's'} located on page {citation.pageNumber} at{' '}
+              {citation.boundingBoxes.length === 1 ? '' : 's'} located on page {citation.pageNumber}{' '}
+              at{' '}
               {citation.boundingBoxes
                 .map((box) => `${Math.round(box.x * 100)}%, ${Math.round(box.y * 100)}%`)
                 .join(' · ')}

@@ -7,7 +7,7 @@
  * there — the whole primitive layer — were silently never generated. Registering it
  * explicitly is what makes the shared components actually pick up their styles.
  */
-@source "../../../packages/ui/src";
+@source '../../../packages/ui/src';
 
 /**
  * Tailwind theme bridge.
@@ -116,7 +116,10 @@
   }
 
   /* Headings inherit the body font and sit tighter than body copy. */
-  h1, h2, h3, h4 {
+  h1,
+  h2,
+  h3,
+  h4 {
     line-height: 1.25;
     letter-spacing: -0.011em;
   }

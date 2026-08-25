@@ -40,7 +40,7 @@ import {
   formatRelative,
 } from '@uxe/ui';
 import type { DashboardResponse } from '@uxe/contracts';
-import { ApiError, api } from '../lib/api.js';
+import { type ApiError, api } from '../lib/api.js';
 import { useI18n } from '../lib/i18n.js';
 import { Ayumi } from '../components/Brand.js';
 import { PageHeader } from '../components/PageHeader.js';
@@ -108,7 +108,10 @@ export function DashboardPage() {
             </Card>
           ) : (
             <>
-              <section aria-label="Key metrics" className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <section
+                aria-label="Key metrics"
+                className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4"
+              >
                 {data.kpis.map((kpi) => (
                   <KpiCard key={kpi.key} kpi={kpi} days={days} />
                 ))}
@@ -136,17 +139,18 @@ export function DashboardPage() {
                     </div>
                   </CardHeader>
                   <div className="flex min-h-0 flex-1 flex-col justify-center">
-                  <AreaChart
-                    points={data.activity.points.map((point) => ({
-                      label: new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric' }).format(
-                        new Date(point.date),
-                      ),
-                      value: point.consultations,
-                    }))}
-                    ariaLabel={`${t('dashboard.activity')}, last ${days} days`}
-                    valueLabel={t('dashboard.consultations')}
-                    showTable={showTable}
-                  />
+                    <AreaChart
+                      points={data.activity.points.map((point) => ({
+                        label: new Intl.DateTimeFormat(locale, {
+                          month: 'short',
+                          day: 'numeric',
+                        }).format(new Date(point.date)),
+                        value: point.consultations,
+                      }))}
+                      ariaLabel={`${t('dashboard.activity')}, last ${days} days`}
+                      valueLabel={t('dashboard.consultations')}
+                      showTable={showTable}
+                    />
                   </div>
                 </Card>
 
@@ -237,7 +241,7 @@ export function DashboardPage() {
                         header: 'Sources',
                         align: 'right',
                         render: (row) => (
-                          <span className="tabular-nums text-[var(--uxe-cobalt)]">
+                          <span className="text-[var(--uxe-cobalt)] tabular-nums">
                             {formatNumber(row.sourceCount)}
                           </span>
                         ),
@@ -286,7 +290,11 @@ function GreetingBanner({ name, onStart }: { name: string; onStart: () => void }
   const { t } = useI18n();
   const hour = new Date().getHours();
   const key =
-    hour < 12 ? 'dashboard.goodMorning' : hour < 18 ? 'dashboard.goodAfternoon' : 'dashboard.goodEvening';
+    hour < 12
+      ? 'dashboard.goodMorning'
+      : hour < 18
+        ? 'dashboard.goodAfternoon'
+        : 'dashboard.goodEvening';
 
   return (
     <Card
@@ -303,9 +311,16 @@ function GreetingBanner({ name, onStart }: { name: string; onStart: () => void }
           <h2 className="truncate text-[22px] font-bold text-[var(--uxe-text)] sm:text-[26px]">
             {t(key, { name })}
           </h2>
-          <p className="mt-1 text-[14px] text-[var(--uxe-text-secondary)]">{t('dashboard.greetingSub')}</p>
+          <p className="mt-1 text-[14px] text-[var(--uxe-text-secondary)]">
+            {t('dashboard.greetingSub')}
+          </p>
         </div>
-        <Button variant="primary" size="lg" onClick={onStart} className="shrink-0 max-sm:h-11 max-sm:px-4">
+        <Button
+          variant="primary"
+          size="lg"
+          onClick={onStart}
+          className="shrink-0 max-sm:h-11 max-sm:px-4"
+        >
           <Sparkles className="h-4 w-4" aria-hidden />
           <span className="max-sm:sr-only">{t('dashboard.startConsultation')}</span>
         </Button>
@@ -359,10 +374,10 @@ function KpiCard({ kpi, days }: { kpi: DashboardResponse['kpis'][number]; days: 
             <Icon className="h-5 w-5" />
           </span>
           <div className="min-w-0">
-            <p className="truncate text-[12px] font-medium leading-tight text-[var(--uxe-text-secondary)]">
+            <p className="truncate text-[12px] leading-tight font-medium text-[var(--uxe-text-secondary)]">
               {t(labelKey)}
             </p>
-            <p className="mt-1 text-[26px] font-bold leading-none tabular-nums text-[var(--uxe-text)]">
+            <p className="mt-1 text-[26px] leading-none font-bold text-[var(--uxe-text)] tabular-nums">
               {kpi.unit === 'percent' ? `${Math.round(kpi.value)}%` : formatNumber(kpi.value)}
             </p>
           </div>
@@ -387,7 +402,7 @@ function KpiCard({ kpi, days }: { kpi: DashboardResponse['kpis'][number]; days: 
                 {positive ? '+' : ''}
                 {kpi.changePercent}%
               </Badge>
-              <span className="whitespace-nowrap text-[11.5px] text-[var(--uxe-text-secondary)]">
+              <span className="text-[11.5px] whitespace-nowrap text-[var(--uxe-text-secondary)]">
                 {t('dashboard.vsLastDays', { days })}
               </span>
             </>
@@ -423,10 +438,26 @@ function ComplianceDonut({ outcomes }: { outcomes: DashboardResponse['compliance
       centerLabel="Total"
       ariaLabel={t('dashboard.complianceOutcomes')}
       segments={[
-        { label: t('compliance.compliant'), value: outcomes.compliant, color: 'var(--uxe-success)' },
-        { label: t('compliance.needsEvidence'), value: outcomes.needsEvidence, color: 'var(--uxe-warning)' },
-        { label: t('compliance.nonCompliant'), value: outcomes.nonCompliant, color: 'var(--uxe-danger)' },
-        { label: t('compliance.notAssessed'), value: outcomes.notAssessed, color: 'var(--uxe-border-strong)' },
+        {
+          label: t('compliance.compliant'),
+          value: outcomes.compliant,
+          color: 'var(--uxe-success)',
+        },
+        {
+          label: t('compliance.needsEvidence'),
+          value: outcomes.needsEvidence,
+          color: 'var(--uxe-warning)',
+        },
+        {
+          label: t('compliance.nonCompliant'),
+          value: outcomes.nonCompliant,
+          color: 'var(--uxe-danger)',
+        },
+        {
+          label: t('compliance.notAssessed'),
+          value: outcomes.notAssessed,
+          color: 'var(--uxe-border-strong)',
+        },
       ]}
     />
   );
@@ -474,7 +505,10 @@ function NeedsAttentionCard({ items }: { items: DashboardResponse['needsAttentio
           {items.map((item) => {
             const Icon = ATTENTION_ICONS[item.kind];
             return (
-              <li key={`${item.kind}-${item.id}`} className="border-t border-[var(--uxe-border)] first:border-t-0">
+              <li
+                key={`${item.kind}-${item.id}`}
+                className="border-t border-[var(--uxe-border)] first:border-t-0"
+              >
                 <Link
                   to={item.href}
                   className="flex items-start gap-3 px-5 py-3.5 transition-colors hover:bg-[var(--uxe-surface-hover)]"
@@ -505,7 +539,10 @@ function NeedsAttentionCard({ items }: { items: DashboardResponse['needsAttentio
                       {item.detail}
                     </span>
                   </span>
-                  <ChevronRight className="mt-2 h-4 w-4 shrink-0 text-[var(--uxe-text-tertiary)]" aria-hidden />
+                  <ChevronRight
+                    className="mt-2 h-4 w-4 shrink-0 text-[var(--uxe-text-tertiary)]"
+                    aria-hidden
+                  />
                 </Link>
               </li>
             );
@@ -520,12 +557,32 @@ function KnowledgeHealthCard({ health }: { health: DashboardResponse['knowledgeH
   const { t, formatNumber } = useI18n();
 
   const rows = [
-    { label: 'Sources ready', value: health.ready, icon: CheckCircle2, tone: 'text-[var(--uxe-success)]' },
+    {
+      label: 'Sources ready',
+      value: health.ready,
+      icon: CheckCircle2,
+      tone: 'text-[var(--uxe-success)]',
+    },
     { label: 'Processing', value: health.processing, icon: Circle, tone: 'text-[var(--uxe-info)]' },
-    { label: 'Outdated sources', value: health.outdated, icon: AlertTriangle, tone: 'text-[var(--uxe-warning)]' },
+    {
+      label: 'Outdated sources',
+      value: health.outdated,
+      icon: AlertTriangle,
+      tone: 'text-[var(--uxe-warning)]',
+    },
     { label: 'Failed', value: health.failed, icon: XCircle, tone: 'text-[var(--uxe-danger)]' },
-    { label: 'Missing metadata', value: health.missingMetadata, icon: Info, tone: 'text-[var(--uxe-text-secondary)]' },
-    { label: 'Unlinked content', value: health.unlinkedContent, icon: MinusCircle, tone: 'text-[var(--uxe-text-secondary)]' },
+    {
+      label: 'Missing metadata',
+      value: health.missingMetadata,
+      icon: Info,
+      tone: 'text-[var(--uxe-text-secondary)]',
+    },
+    {
+      label: 'Unlinked content',
+      value: health.unlinkedContent,
+      icon: MinusCircle,
+      tone: 'text-[var(--uxe-text-secondary)]',
+    },
   ];
 
   const tone = health.score >= 90 ? 'success' : health.score >= 70 ? 'brand' : 'warning';
@@ -535,7 +592,13 @@ function KnowledgeHealthCard({ health }: { health: DashboardResponse['knowledgeH
       <CardHeader>
         <CardTitle>{t('dashboard.knowledgeHealth')}</CardTitle>
         {/* The formula is exposed rather than left as an unexplained number. */}
-        <Tooltip content={<span className="font-[family-name:var(--uxe-font-mono)] text-[11px]">{health.formula}</span>}>
+        <Tooltip
+          content={
+            <span className="font-[family-name:var(--uxe-font-mono)] text-[11px]">
+              {health.formula}
+            </span>
+          }
+        >
           <button
             type="button"
             aria-label="How knowledge health is calculated"
@@ -555,7 +618,7 @@ function KnowledgeHealthCard({ health }: { health: DashboardResponse['knowledgeH
                 <row.icon className={cn('h-4 w-4 shrink-0', row.tone)} aria-hidden />
                 <span className="truncate text-[var(--uxe-text-secondary)]">{row.label}</span>
               </span>
-              <span className="shrink-0 font-semibold tabular-nums text-[var(--uxe-text)]">
+              <span className="shrink-0 font-semibold text-[var(--uxe-text)] tabular-nums">
                 {formatNumber(row.value)}
               </span>
             </li>
@@ -574,7 +637,14 @@ function KnowledgeHealthCard({ health }: { health: DashboardResponse['knowledgeH
 }
 
 export function StatusBadge({ status }: { status: string }) {
-  const map: Record<string, { tone: 'success' | 'warning' | 'danger' | 'info' | 'neutral' | 'brand'; label: string; icon: typeof CheckCircle2 }> = {
+  const map: Record<
+    string,
+    {
+      tone: 'success' | 'warning' | 'danger' | 'info' | 'neutral' | 'brand';
+      label: string;
+      icon: typeof CheckCircle2;
+    }
+  > = {
     report_ready: { tone: 'success', label: 'Ready', icon: CheckCircle2 },
     action_required: { tone: 'danger', label: 'Action required', icon: AlertTriangle },
     processing: { tone: 'info', label: 'Processing', icon: Circle },

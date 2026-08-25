@@ -42,12 +42,17 @@ export function I18nProvider({ locale, children }: { locale: Locale; children: R
       t,
       formatNumber: (v) => new Intl.NumberFormat(locale).format(v),
       formatPercent: (v, fractionDigits = 0) =>
-        new Intl.NumberFormat(locale, { style: 'percent', maximumFractionDigits: fractionDigits }).format(v),
+        new Intl.NumberFormat(locale, {
+          style: 'percent',
+          maximumFractionDigits: fractionDigits,
+        }).format(v),
       formatDate: (v) =>
         v ? new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(new Date(v)) : '—',
       formatDateTime: (v) =>
         v
-          ? new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(v))
+          ? new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(
+              new Date(v),
+            )
           : '—',
       dir: RTL_LOCALES.has(locale) ? 'rtl' : 'ltr',
     }),

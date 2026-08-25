@@ -67,7 +67,11 @@ export async function runIngestion(
     await sources.setSourceStatus(input.sourceId, {
       status: 'quarantined',
       failureReason: scan.reason,
-      quarantine: { reason: scan.reason ?? 'Rejected by scanner', patterns: scan.signatures, excerpt: '' },
+      quarantine: {
+        reason: scan.reason ?? 'Rejected by scanner',
+        patterns: scan.signatures,
+        excerpt: '',
+      },
     });
     return {
       status: 'quarantined',
@@ -77,7 +81,11 @@ export async function runIngestion(
       extractionCoverage: 0,
       ocrApplied: false,
       ocrConfidence: null,
-      quarantine: { reason: scan.reason ?? 'Rejected by scanner', patterns: scan.signatures, excerpt: '' },
+      quarantine: {
+        reason: scan.reason ?? 'Rejected by scanner',
+        patterns: scan.signatures,
+        excerpt: '',
+      },
       warnings,
     };
   }
@@ -160,7 +168,8 @@ export async function runIngestion(
   const isSpreadsheet = extraction.documentType === 'xlsx' || extraction.documentType === 'csv';
   const isSlides = extraction.documentType === 'pptx';
 
-  const sections = isSpreadsheet || isSlides ? [] : detectStructure(extraction.pages as ExtractedPage[]);
+  const sections =
+    isSpreadsheet || isSlides ? [] : detectStructure(extraction.pages as ExtractedPage[]);
 
   if (sections.length > 0) {
     await retrieval.replaceSections(
@@ -284,7 +293,12 @@ export async function runIngestion(
   // --- 8. Lexical index ---------------------------------------------------
   // Postgres maintains the GIN index on write, so there is nothing to build here; the
   // stage exists so the UI can show that the lexical half of retrieval is ready.
-  await jobs.updateStage(input.jobId, 'lexical_index', 'complete', 'Maintained by PostgreSQL GIN index');
+  await jobs.updateStage(
+    input.jobId,
+    'lexical_index',
+    'complete',
+    'Maintained by PostgreSQL GIN index',
+  );
 
   // --- 9. Citation map ----------------------------------------------------
   await jobs.updateStage(input.jobId, 'citation_map', 'running');
@@ -445,7 +459,10 @@ export function base64ToBytes(value: string): Uint8Array {
 }
 
 async function sha256OfText(text: string): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text) as ArrayBufferView);
+  const digest = await crypto.subtle.digest(
+    'SHA-256',
+    new TextEncoder().encode(text) as ArrayBufferView,
+  );
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 

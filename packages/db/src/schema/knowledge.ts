@@ -81,7 +81,9 @@ export const sourceConnectors = pgTable(
     status: text('status').notNull().default('active'),
     lastError: text('last_error'),
     lastSyncedAt: timestamp('last_synced_at', { withTimezone: true, mode: 'date' }),
-    createdByUserId: text('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+    createdByUserId: text('created_by_user_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
     version: rowVersion(),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -143,7 +145,9 @@ export const sourceVersions = pgTable(
     structure: jsonb('structure').$type<Record<string, number>>().notNull().default({}),
     metadata: jsonb('metadata').$type<Record<string, unknown>>().notNull().default({}),
     notes: text('notes'),
-    createdByUserId: text('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+    createdByUserId: text('created_by_user_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
     createdAt: createdAt(),
     deletedAt: deletedAt(),
   },

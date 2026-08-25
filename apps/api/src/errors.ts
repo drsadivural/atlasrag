@@ -27,7 +27,11 @@ export class ApiError extends Error {
     return new ApiError(401, 'unauthenticated', message);
   }
   static sessionExpired() {
-    return new ApiError(401, 'session_expired', 'Your session has expired. Sign in again to continue.');
+    return new ApiError(
+      401,
+      'session_expired',
+      'Your session has expired. Sign in again to continue.',
+    );
   }
   static forbidden(message = 'You do not have permission to perform this action.') {
     return new ApiError(403, 'forbidden', message);
@@ -61,7 +65,12 @@ export class ApiError extends Error {
 export function toErrorResponse(
   error: unknown,
   traceId: string,
-): { status: number; body: Record<string, unknown>; headers: Record<string, string>; logLevel: 'warn' | 'error' } {
+): {
+  status: number;
+  body: Record<string, unknown>;
+  headers: Record<string, string>;
+  logLevel: 'warn' | 'error';
+} {
   const headers: Record<string, string> = {};
 
   if (error instanceof ApiError) {
@@ -131,7 +140,9 @@ export function toErrorResponse(
           code: 'provider_unavailable',
           message: error.message,
           // The detail is safe to surface: it is what the operator needs to fix the config.
-          details: error.detail ? { detail: error.detail, provider_code: error.code } : { provider_code: error.code },
+          details: error.detail
+            ? { detail: error.detail, provider_code: error.code }
+            : { provider_code: error.code },
           traceId,
           retryable: error.retryable,
         },
@@ -144,7 +155,9 @@ export function toErrorResponse(
       status: 400,
       logLevel: 'warn',
       headers,
-      body: { error: { code: 'validation_failed', message: error.message, traceId, retryable: false } },
+      body: {
+        error: { code: 'validation_failed', message: error.message, traceId, retryable: false },
+      },
     };
   }
 
@@ -155,7 +168,8 @@ export function toErrorResponse(
     body: {
       error: {
         code: 'internal_error',
-        message: 'Something went wrong on our side. Quote the reference below if you contact support.',
+        message:
+          'Something went wrong on our side. Quote the reference below if you contact support.',
         traceId,
         retryable: true,
       },

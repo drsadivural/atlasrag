@@ -50,8 +50,7 @@ export interface DetectedSection {
  * Anchored to the start of a line and deliberately conservative: matching a mid-sentence
  * decimal as a clause number would shred the document structure.
  */
-const NUMBERED_HEADING =
-  /^\s{0,6}((?:\d{1,3})(?:\.\d{1,3}){0,5})\.?\s+([A-Z(À-ɏ][^\n]{2,140})$/;
+const NUMBERED_HEADING = /^\s{0,6}((?:\d{1,3})(?:\.\d{1,3}){0,5})\.?\s+([A-Z(À-ɏ][^\n]{2,140})$/;
 
 /** "CHAPTER 6", "Section 4", "Article 12", "Annex B", "Part III", "Schedule 2". */
 const NAMED_HEADING =
@@ -61,7 +60,8 @@ const NAMED_HEADING =
 const BARE_HEADING = /^\s{0,6}([A-Z][A-Z0-9 &/,'()-]{4,80})\s*$/;
 
 const TABLE_HINT = /^\s*(table|figure|fig\.|exhibit|schedule)\s+[0-9A-Z]/i;
-const DEFINITION_HINT = /^\s*["“]?([A-Z][\w \-/]{2,60})["”]?\s+(means|shall mean|is defined as|refers to)\b/;
+const DEFINITION_HINT =
+  /^\s*["“]?([A-Z][\w \-/]{2,60})["”]?\s+(means|shall mean|is defined as|refers to)\b/;
 const LIST_ITEM = /^\s*(?:[-*•●▪]|\(?[a-z]\)|\(?[ivx]+\)|\d{1,2}\))\s+/i;
 
 /** "Notwithstanding", "Except as provided", "Unless otherwise" introduce exceptions. */

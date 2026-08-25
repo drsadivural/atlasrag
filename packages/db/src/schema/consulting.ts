@@ -185,7 +185,9 @@ export const complianceReviews = pgTable(
     evidenceCoverage: real('evidence_coverage'),
     confidence: real('confidence'),
     riskLevel: text('risk_level').notNull().default('none'),
-    createdByUserId: text('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+    createdByUserId: text('created_by_user_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
     version: rowVersion(),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -286,7 +288,9 @@ export const correctionPlans = pgTable(
     instructions: text('instructions'),
     generatedArtifactId: text('generated_artifact_id'),
     redlineArtifactId: text('redline_artifact_id'),
-    createdByUserId: text('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+    createdByUserId: text('created_by_user_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
     version: rowVersion(),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -325,7 +329,9 @@ export const correctionChanges = pgTable(
     confidence: real('confidence').notNull().default(0),
     /** Only `accepted` and `edited` rows are written into the derivative document. */
     status: text('status').notNull().default('proposed'),
-    decidedByUserId: text('decided_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+    decidedByUserId: text('decided_by_user_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
     decidedAt: timestamp('decided_at', { withTimezone: true, mode: 'date' }),
     createdAt: createdAt(),
   },
@@ -367,7 +373,9 @@ export const generatedArtifacts = pgTable(
     /** e.g. signature invalidation notices, OCR confidence caveats. */
     disclosures: jsonb('disclosures').$type<string[]>().notNull().default([]),
     validation: jsonb('validation').$type<Record<string, unknown>>().notNull().default({}),
-    createdByUserId: text('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+    createdByUserId: text('created_by_user_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
     retainUntil: timestamp('retain_until', { withTimezone: true, mode: 'date' }),
     createdAt: createdAt(),
     deletedAt: deletedAt(),
@@ -397,7 +405,9 @@ export const reports = pgTable(
     title: text('title').notNull(),
     summary: text('summary'),
     sharedWith: jsonb('shared_with').$type<string[]>().notNull().default([]),
-    createdByUserId: text('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+    createdByUserId: text('created_by_user_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
     createdAt: createdAt(),
     deletedAt: deletedAt(),
   },

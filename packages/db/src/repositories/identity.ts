@@ -167,10 +167,7 @@ export class IdentityRepository {
     return row ?? null;
   }
 
-  async updateWorkspace(
-    ctx: TenantContext,
-    patch: Partial<typeof workspaces.$inferInsert>,
-  ) {
+  async updateWorkspace(ctx: TenantContext, patch: Partial<typeof workspaces.$inferInsert>) {
     requirePermission(ctx, 'settings:update');
     const [row] = await this.db
       .update(workspaces)
@@ -413,7 +410,12 @@ export class IdentityRepository {
     const owned = await this.db
       .select({ id: groups.id })
       .from(groups)
-      .where(and(eq(groups.workspaceId, ctx.workspaceId), inArray(groups.id, groupIds.length ? groupIds : ['-'])));
+      .where(
+        and(
+          eq(groups.workspaceId, ctx.workspaceId),
+          inArray(groups.id, groupIds.length ? groupIds : ['-']),
+        ),
+      );
     const allowed = new Set(owned.map((g) => g.id));
 
     await this.db.transaction(async (tx) => {
@@ -556,7 +558,13 @@ export class IdentityRepository {
     return this.db
       .select()
       .from(sessions)
-      .where(and(eq(sessions.userId, userId), isNull(sessions.revokedAt), gt(sessions.expiresAt, new Date())))
+      .where(
+        and(
+          eq(sessions.userId, userId),
+          isNull(sessions.revokedAt),
+          gt(sessions.expiresAt, new Date()),
+        ),
+      )
       .orderBy(desc(sessions.lastSeenAt));
   }
 
@@ -679,7 +687,11 @@ export class IdentityRepository {
   }
 
   async getFactor(factorId: string) {
-    const [row] = await this.db.select().from(authFactors).where(eq(authFactors.id, factorId)).limit(1);
+    const [row] = await this.db
+      .select()
+      .from(authFactors)
+      .where(eq(authFactors.id, factorId))
+      .limit(1);
     return row ?? null;
   }
 
@@ -787,6 +799,41 @@ export class IdentityRepository {
       .where(eq(invitations.id, invitationId));
   }
 
+  /**
+   * Activates the membership an invitation created.
+   *
+   * Deliberately takes no `TenantContext`: the caller is the invited person, who is not yet
+   * a member of anything and therefore cannot hold one. The invitation token is the
+   * authorisation, and it has already been verified against its stored hash.
+   */
+  async activateInvitedMembership(input: {
+    workspaceId: string;
+    userId: string;
+    role: string;
+    groupIds: string[];
+  }) {
+    const [row] = await this.db
+      .update(memberships)
+      .set({ status: 'active', role: input.role, joinedAt: new Date(), updatedAt: new Date() })
+      .where(
+        and(
+          eq(memberships.workspaceId, input.workspaceId),
+          eq(memberships.userId, input.userId),
+          isNull(memberships.deletedAt),
+        ),
+      )
+      .returning();
+
+    for (const groupId of input.groupIds) {
+      await this.db
+        .insert(groupMembers)
+        .values({ id: newId(), groupId, userId: input.userId })
+        .onConflictDoNothing();
+    }
+
+    return row ?? null;
+  }
+
   /* ---------------------------------------------------------------------- */
   /* Preferences                                                            */
   /* ---------------------------------------------------------------------- */
@@ -798,7 +845,9 @@ export class IdentityRepository {
       .where(
         and(
           eq(userPreferences.userId, userId),
-          workspaceId ? eq(userPreferences.workspaceId, workspaceId) : isNull(userPreferences.workspaceId),
+          workspaceId
+            ? eq(userPreferences.workspaceId, workspaceId)
+            : isNull(userPreferences.workspaceId),
         ),
       )
       .limit(1);

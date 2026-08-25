@@ -139,11 +139,15 @@ export class DocumentWorkerClient {
     return this.request<ExtractionResult>('POST', '/extract', input);
   }
 
-  async correct(input: CorrectionRequest & { bytesBase64: string; fileName: string }): Promise<CorrectionResult> {
+  async correct(
+    input: CorrectionRequest & { bytesBase64: string; fileName: string },
+  ): Promise<CorrectionResult> {
     return this.request<CorrectionResult>('POST', '/correct', input);
   }
 
-  async report(input: ReportRequest): Promise<{ documentBase64: string; contentType: string; extension: string }> {
+  async report(
+    input: ReportRequest,
+  ): Promise<{ documentBase64: string; contentType: string; extension: string }> {
     return this.request('POST', '/report', input);
   }
 
@@ -155,12 +159,21 @@ export class DocumentWorkerClient {
   }): Promise<{
     safe: boolean;
     reason: string | null;
-    entries: Array<{ name: string; sizeBytes: number; compressedBytes: number; contentType: string }>;
+    entries: Array<{
+      name: string;
+      sizeBytes: number;
+      compressedBytes: number;
+      contentType: string;
+    }>;
   }> {
     return this.request('POST', '/archive/inspect', input);
   }
 
-  async scan(input: { bytesBase64: string; fileName: string; declaredContentType: string }): Promise<{
+  async scan(input: {
+    bytesBase64: string;
+    fileName: string;
+    declaredContentType: string;
+  }): Promise<{
     clean: boolean;
     detectedContentType: string;
     reason: string | null;
@@ -205,14 +218,28 @@ export class DocumentWorkerClient {
 
       if (!response.ok) {
         const text = await response.text().catch(() => '');
-        // 4xx from the worker means the document itself was rejected; retrying will not help.
+        // The worker's `detail` is written for the end user ("This PDF is password
+        // protected."). Replacing it with a generic sentence would leave somebody staring
+        // at a failed document with no idea what to do about it, so it is carried through
+        // for the 4xx case — the case where the document itself is the problem.
+        let detail: string | null = null;
+        try {
+          const parsed = JSON.parse(text) as { detail?: unknown };
+          if (typeof parsed.detail === 'string' && parsed.detail.trim().length > 0) {
+            detail = parsed.detail.trim().slice(0, 400);
+          }
+        } catch {
+          detail = null;
+        }
+
+        const isServerSide = response.status >= 500;
         throw new DocumentWorkerError(
-          response.status >= 500
+          isServerSide
             ? 'The document worker is temporarily unavailable.'
-            : 'The document worker rejected this file.',
-          response.status >= 500 ? 'unavailable' : 'rejected',
-          response.status >= 500,
-          text.slice(0, 500),
+            : (detail ?? 'This file could not be processed.'),
+          isServerSide ? 'unavailable' : 'rejected',
+          isServerSide,
+          detail ?? text.slice(0, 500),
         );
       }
 

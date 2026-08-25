@@ -23,7 +23,11 @@ import { useI18n } from '../lib/i18n.js';
 export interface AnswerViewProps {
   answer: StructuredAnswer;
   style: AnswerStyle;
-  evidenceDetail: { documentAndPage: boolean; clauseAndLocation: boolean; supportingExcerpt: boolean };
+  evidenceDetail: {
+    documentAndPage: boolean;
+    clauseAndLocation: boolean;
+    supportingExcerpt: boolean;
+  };
   onOpenCitation: (citationId: string) => void;
   onViewAllCitations: () => void;
   actions?: React.ReactNode;
@@ -31,7 +35,11 @@ export interface AnswerViewProps {
 
 const RESULT_META: Record<
   ComplianceResult,
-  { tone: 'success' | 'danger' | 'warning' | 'neutral'; icon: typeof CheckCircle2; labelKey: string }
+  {
+    tone: 'success' | 'danger' | 'warning' | 'neutral';
+    icon: typeof CheckCircle2;
+    labelKey: string;
+  }
 > = {
   compliant: { tone: 'success', icon: CheckCircle2, labelKey: 'compliance.compliant' },
   non_compliant: { tone: 'danger', icon: XCircle, labelKey: 'compliance.nonCompliant' },
@@ -60,12 +68,19 @@ export function AnswerView({
 
   return (
     <div className="flex flex-col gap-4" data-answer-root>
-      {answer.injectionWarnings.length > 0 && <InjectionWarning warnings={answer.injectionWarnings} />}
+      {answer.injectionWarnings.length > 0 && (
+        <InjectionWarning warnings={answer.injectionWarnings} />
+      )}
 
       <DecisionHeader answer={answer} style={style} />
 
       {style === 'yes_no' ? (
-        <YesNoBody answer={answer} citations={decisive} onOpenCitation={onOpenCitation} evidenceDetail={evidenceDetail} />
+        <YesNoBody
+          answer={answer}
+          citations={decisive}
+          onOpenCitation={onOpenCitation}
+          evidenceDetail={evidenceDetail}
+        />
       ) : style === 'optimal' ? (
         <OptimalBody
           answer={answer}
@@ -74,7 +89,11 @@ export function AnswerView({
           evidenceDetail={evidenceDetail}
         />
       ) : (
-        <DetailsBody answer={answer} onOpenCitation={onOpenCitation} evidenceDetail={evidenceDetail} />
+        <DetailsBody
+          answer={answer}
+          onOpenCitation={onOpenCitation}
+          evidenceDetail={evidenceDetail}
+        />
       )}
 
       {answer.followUpQuestion && (
@@ -87,7 +106,8 @@ export function AnswerView({
       {answer.usedGeneralModel && (
         <p className="flex items-center gap-2 text-[12px] font-medium text-[var(--uxe-warning)]">
           <Info className="h-3.5 w-3.5" aria-hidden />
-          Some statements came from the general model rather than your sources and are labelled inline.
+          Some statements came from the general model rather than your sources and are labelled
+          inline.
         </p>
       )}
 
@@ -127,7 +147,13 @@ function DecisionHeader({ answer, style }: { answer: StructuredAnswer; style: An
             : 'brand';
 
   const Icon =
-    tone === 'success' ? CheckCircle2 : tone === 'danger' ? XCircle : tone === 'warning' ? AlertTriangle : Info;
+    tone === 'success'
+      ? CheckCircle2
+      : tone === 'danger'
+        ? XCircle
+        : tone === 'warning'
+          ? AlertTriangle
+          : Info;
 
   // Yes/No must lead with the literal word, so it is rendered as its own line.
   const headline =
@@ -156,16 +182,21 @@ function DecisionHeader({ answer, style }: { answer: StructuredAnswer; style: An
   } as const;
 
   return (
-    <div className={cn('flex items-start gap-3.5 rounded-[var(--uxe-radius-card)] border p-4', toneStyles[tone])}>
+    <div
+      className={cn(
+        'flex items-start gap-3.5 rounded-[var(--uxe-radius-card)] border p-4',
+        toneStyles[tone],
+      )}
+    >
       <Icon className={cn('mt-0.5 h-6 w-6 shrink-0', iconStyles[tone])} aria-hidden />
 
       <div className="min-w-0 flex-1">
         {headline && (
-          <p className={cn('text-[15px] font-bold uppercase tracking-wide', iconStyles[tone])}>
+          <p className={cn('text-[15px] font-bold tracking-wide uppercase', iconStyles[tone])}>
             {headline}
             {/* Partial compliance is shown alongside NO, never instead of it. */}
             {answer.decisionQualifier && (
-              <span className="ml-2 rounded-[var(--uxe-radius-pill)] bg-[var(--uxe-warning)] px-2 py-0.5 text-[11px] font-semibold uppercase text-white">
+              <span className="ml-2 rounded-[var(--uxe-radius-pill)] bg-[var(--uxe-warning)] px-2 py-0.5 text-[11px] font-semibold text-white uppercase">
                 {answer.decisionQualifier}
               </span>
             )}
@@ -176,17 +207,19 @@ function DecisionHeader({ answer, style }: { answer: StructuredAnswer; style: An
         </h3>
         {answer.documentsReviewed.length > 0 && (
           <p className="mt-1 text-[13px] text-[var(--uxe-text-secondary)]">
-            Based on {answer.documentsReviewed.filter((d) => d.role === 'governing').length} regulation
-            {answer.documentsReviewed.filter((d) => d.role === 'governing').length === 1 ? '' : 's'} and{' '}
-            {answer.documentsReviewed.filter((d) => d.role === 'project').length} project document
+            Based on {answer.documentsReviewed.filter((d) => d.role === 'governing').length}{' '}
+            regulation
+            {answer.documentsReviewed.filter((d) => d.role === 'governing').length === 1
+              ? ''
+              : 's'}{' '}
+            and {answer.documentsReviewed.filter((d) => d.role === 'project').length} project
+            document
             {answer.documentsReviewed.filter((d) => d.role === 'project').length === 1 ? '' : 's'}
           </p>
         )}
       </div>
 
-      {style !== 'yes_no' && (
-        <ConfidenceBadge answer={answer} />
-      )}
+      {style !== 'yes_no' && <ConfidenceBadge answer={answer} />}
     </div>
   );
 }
@@ -202,15 +235,20 @@ function ConfidenceBadge({ answer }: { answer: StructuredAnswer }) {
           <span className="block font-semibold">How this is calculated</span>
           <span className="block">Evidence coverage {Math.round(c.evidenceCoverage * 100)}%</span>
           <span className="block">Retrieval quality {Math.round(c.retrievalQuality * 100)}%</span>
-          <span className="block">Citation verification {Math.round(c.citationVerification * 100)}%</span>
+          <span className="block">
+            Citation verification {Math.round(c.citationVerification * 100)}%
+          </span>
           <span className="block">Source authority {Math.round(c.sourceAuthority * 100)}%</span>
           <span className="block">Recency {Math.round(c.recency * 100)}%</span>
-          <span className="block">Contradiction factor {Math.round(c.contradictionPenalty * 100)}%</span>
+          <span className="block">
+            Contradiction factor {Math.round(c.contradictionPenalty * 100)}%
+          </span>
         </span>
       }
     >
-      <span
-        tabIndex={0}
+      {/* A button, not a focusable span: the derivation must be reachable by keyboard. */}
+      <button
+        type="button"
         className={cn(
           'shrink-0 cursor-help rounded-[var(--uxe-radius-pill)] px-2.5 py-1 text-[12px] font-semibold',
           percent >= 80
@@ -221,7 +259,7 @@ function ConfidenceBadge({ answer }: { answer: StructuredAnswer }) {
         )}
       >
         {percent}% confidence
-      </span>
+      </button>
     </Tooltip>
   );
 }
@@ -244,13 +282,19 @@ function YesNoBody({
   return (
     <div className="flex flex-col gap-3">
       {answer.decisiveReason && (
-        <p className="text-[15px] leading-relaxed text-[var(--uxe-text)]">{answer.decisiveReason}</p>
+        <p className="text-[15px] leading-relaxed text-[var(--uxe-text)]">
+          {answer.decisiveReason}
+        </p>
       )}
       {citations.length > 0 && (
         <ul className="flex flex-col gap-2">
           {citations.map((citation) => (
             <li key={citation.citationId}>
-              <CitationChip citation={citation} onOpen={onOpenCitation} evidenceDetail={evidenceDetail} />
+              <CitationChip
+                citation={citation}
+                onOpen={onOpenCitation}
+                evidenceDetail={evidenceDetail}
+              />
             </li>
           ))}
         </ul>
@@ -288,13 +332,17 @@ function OptimalBody({
               {answer.findings.slice(0, 8).map((finding) => {
                 const meta = RESULT_META[finding.result];
                 const ResultIcon = meta.icon;
-                const citationId = finding.governingCitationIds[0] ?? finding.projectEvidenceCitationIds[0] ?? null;
+                const citationId =
+                  finding.governingCitationIds[0] ?? finding.projectEvidenceCitationIds[0] ?? null;
                 const citation = citationId
                   ? (answer.citations.find((c) => c.citationId === citationId) ?? null)
                   : null;
 
                 return (
-                  <tr key={finding.findingId} className="border-b border-[var(--uxe-border)] last:border-0">
+                  <tr
+                    key={finding.findingId}
+                    className="border-b border-[var(--uxe-border)] last:border-0"
+                  >
                     <td className="w-8 py-2.5 pl-3">
                       <ResultIcon
                         className={cn(
@@ -328,7 +376,9 @@ function OptimalBody({
                           {citation.documentTitle} · {formatLocator(citation)}
                         </button>
                       ) : (
-                        <span className="text-[12px] text-[var(--uxe-text-tertiary)]">No located evidence</span>
+                        <span className="text-[12px] text-[var(--uxe-text-tertiary)]">
+                          No located evidence
+                        </span>
                       )}
                     </td>
                   </tr>
@@ -343,7 +393,10 @@ function OptimalBody({
         <ul className="flex flex-col gap-1.5">
           {answer.keyFindings.map((finding, index) => (
             <li key={index} className="flex items-start gap-2 text-[14px] text-[var(--uxe-text)]">
-              <span aria-hidden className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--uxe-cobalt)]" />
+              <span
+                aria-hidden
+                className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--uxe-cobalt)]"
+              />
               {finding}
             </li>
           ))}
@@ -351,19 +404,30 @@ function OptimalBody({
       )}
 
       {citations[0] && (
-        <CitationChip citation={citations[0]} onOpen={onOpenCitation} evidenceDetail={evidenceDetail} featured />
+        <CitationChip
+          citation={citations[0]}
+          onOpen={onOpenCitation}
+          evidenceDetail={evidenceDetail}
+          featured
+        />
       )}
 
       {answer.recommendedActions.length > 0 && (
         <section>
-          <h4 className="text-[13px] font-semibold uppercase tracking-wide text-[var(--uxe-text-secondary)]">
+          <h4 className="text-[13px] font-semibold tracking-wide text-[var(--uxe-text-secondary)] uppercase">
             {t('evidence.recommendedActions')}
           </h4>
           <ul className="mt-2 flex flex-col gap-1.5">
             {answer.recommendedActions.map((action, index) => (
               <li key={index} className="flex items-start gap-2 text-[14px] text-[var(--uxe-text)]">
                 <Badge
-                  tone={action.priority === 'critical' ? 'danger' : action.priority === 'high' ? 'warning' : 'neutral'}
+                  tone={
+                    action.priority === 'critical'
+                      ? 'danger'
+                      : action.priority === 'high'
+                        ? 'warning'
+                        : 'neutral'
+                  }
                   size="sm"
                 >
                   {action.priority}
@@ -407,7 +471,10 @@ function DetailsBody({
         <Section title={t('evidence.documentsReviewed')}>
           <ul className="flex flex-col gap-1.5">
             {answer.documentsReviewed.map((doc) => (
-              <li key={doc.sourceVersionId} className="flex flex-wrap items-center gap-2 text-[13px]">
+              <li
+                key={doc.sourceVersionId}
+                className="flex flex-wrap items-center gap-2 text-[13px]"
+              >
                 <Badge tone={doc.role === 'governing' ? 'brand' : 'teal'} size="sm">
                   {doc.role === 'governing' ? 'Regulation' : 'Project'}
                 </Badge>
@@ -444,7 +511,11 @@ function DetailsBody({
                     t('evidence.excerpt'),
                     'Confidence',
                   ].map((header) => (
-                    <th key={header} scope="col" className="px-3 py-2.5 font-semibold text-[var(--uxe-text-secondary)]">
+                    <th
+                      key={header}
+                      scope="col"
+                      className="px-3 py-2.5 font-semibold text-[var(--uxe-text-secondary)]"
+                    >
                       {header}
                     </th>
                   ))}
@@ -454,12 +525,20 @@ function DetailsBody({
                 {answer.findings.map((finding) => {
                   const meta = RESULT_META[finding.result];
                   const citationId =
-                    finding.projectEvidenceCitationIds[0] ?? finding.governingCitationIds[0] ?? null;
+                    finding.projectEvidenceCitationIds[0] ??
+                    finding.governingCitationIds[0] ??
+                    null;
                   const citation = citationId ? (byId.get(citationId) ?? null) : null;
 
                   return (
-                    <tr key={finding.findingId} className="border-b border-[var(--uxe-border)] align-top last:border-0">
-                      <th scope="row" className="px-3 py-3 text-left font-semibold text-[var(--uxe-text)]">
+                    <tr
+                      key={finding.findingId}
+                      className="border-b border-[var(--uxe-border)] align-top last:border-0"
+                    >
+                      <th
+                        scope="row"
+                        className="px-3 py-3 text-left font-semibold text-[var(--uxe-text)]"
+                      >
                         <span className="block">{finding.requirementReference}</span>
                         <span className="block font-normal text-[var(--uxe-text-secondary)]">
                           {finding.requirementTitle}
@@ -470,7 +549,9 @@ function DetailsBody({
                           {t(meta.labelKey as 'compliance.compliant')}
                         </Badge>
                       </td>
-                      <td className="max-w-xs px-3 py-3 text-[var(--uxe-text)]">{finding.finding}</td>
+                      <td className="max-w-xs px-3 py-3 text-[var(--uxe-text)]">
+                        {finding.finding}
+                      </td>
                       <td className="px-3 py-3 text-[var(--uxe-text-secondary)]">
                         {citation?.documentTitle ?? '—'}
                       </td>
@@ -489,14 +570,14 @@ function DetailsBody({
                       </td>
                       <td className="max-w-sm px-3 py-3">
                         {citation && evidenceDetail.supportingExcerpt ? (
-                          <span className="block italic text-[var(--uxe-text-secondary)]">
+                          <span className="block text-[var(--uxe-text-secondary)] italic">
                             &ldquo;{citation.supportingExcerpt}&rdquo;
                           </span>
                         ) : (
                           <span className="text-[var(--uxe-text-tertiary)]">—</span>
                         )}
                       </td>
-                      <td className="px-3 py-3 text-right tabular-nums text-[var(--uxe-text-secondary)]">
+                      <td className="px-3 py-3 text-right text-[var(--uxe-text-secondary)] tabular-nums">
                         {Math.round(finding.confidence * 100)}%
                         {citation && !citation.verified && (
                           <Badge tone="warning" size="sm" className="ml-1">
@@ -517,7 +598,10 @@ function DetailsBody({
         <Section title={t('evidence.calculations')}>
           <ul className="flex flex-col gap-2">
             {answer.calculations.map((calc, index) => (
-              <li key={index} className="rounded-[var(--uxe-radius-control)] bg-[var(--uxe-surface-sunken)] p-3 text-[13px]">
+              <li
+                key={index}
+                className="rounded-[var(--uxe-radius-control)] bg-[var(--uxe-surface-sunken)] p-3 text-[13px]"
+              >
                 <span className="font-semibold text-[var(--uxe-text)]">{calc.label}</span>
                 <span className="mt-1 block font-[family-name:var(--uxe-font-mono)] text-[var(--uxe-text-secondary)]">
                   {calc.expression} = {calc.value}
@@ -552,7 +636,13 @@ function DetailsBody({
             {answer.recommendedActions.map((action, index) => (
               <li key={index} className="flex items-start gap-2 text-[14px]">
                 <Badge
-                  tone={action.priority === 'critical' ? 'danger' : action.priority === 'high' ? 'warning' : 'neutral'}
+                  tone={
+                    action.priority === 'critical'
+                      ? 'danger'
+                      : action.priority === 'high'
+                        ? 'warning'
+                        : 'neutral'
+                  }
                   size="sm"
                 >
                   {action.priority}
@@ -580,7 +670,7 @@ function Section({
     <section>
       <h4
         className={cn(
-          'mb-2 text-[13px] font-semibold uppercase tracking-wide',
+          'mb-2 text-[13px] font-semibold tracking-wide uppercase',
           tone === 'warning' ? 'text-[var(--uxe-warning)]' : 'text-[var(--uxe-text-secondary)]',
         )}
       >
@@ -596,7 +686,10 @@ function BulletList({ items }: { items: string[] }) {
     <ul className="flex flex-col gap-1.5">
       {items.map((item, index) => (
         <li key={index} className="flex items-start gap-2 text-[14px] text-[var(--uxe-text)]">
-          <span aria-hidden className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--uxe-text-tertiary)]" />
+          <span
+            aria-hidden
+            className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--uxe-text-tertiary)]"
+          />
           {item}
         </li>
       ))}
@@ -628,13 +721,21 @@ export function CitationChip({
     <div
       className={cn(
         'rounded-[var(--uxe-radius-card)] border p-3',
+        // A verified quotation gets the highlighter treatment. One that could not be
+        // re-located gets the failure treatment: it must never be the quieter of the two.
         citation.verified
           ? 'border-[var(--uxe-warning-border)] bg-[var(--uxe-warning-bg)]/40'
-          : 'border-[var(--uxe-border)] bg-[var(--uxe-surface-sunken)]',
+          : 'border-[var(--uxe-danger-border)] bg-[var(--uxe-danger-bg)]/40',
       )}
     >
       <div className="flex items-start gap-3">
-        <Quote className="mt-0.5 h-4 w-4 shrink-0 text-[var(--uxe-warning)]" aria-hidden />
+        <Quote
+          className={cn(
+            'mt-0.5 h-4 w-4 shrink-0',
+            citation.verified ? 'text-[var(--uxe-warning)]' : 'text-[var(--uxe-danger)]',
+          )}
+          aria-hidden
+        />
 
         <div className="min-w-0 flex-1">
           {evidenceDetail.supportingExcerpt && (
@@ -646,7 +747,7 @@ export function CitationChip({
             >
               <span
                 className={cn(
-                  'text-[14px] italic leading-relaxed text-[var(--uxe-text)]',
+                  'text-[14px] leading-relaxed text-[var(--uxe-text)] italic',
                   !expanded && 'line-clamp-2',
                 )}
               >
@@ -662,11 +763,15 @@ export function CitationChip({
             {evidenceDetail.clauseAndLocation && locator && <span>· {locator}</span>}
             {!citation.verified && (
               <Tooltip content={t('evidence.unverifiedHint')}>
-                <span tabIndex={0}>
-                  <Badge tone="warning" size="sm" icon={<AlertTriangle className="h-3 w-3" aria-hidden />}>
+                <button type="button" className="cursor-help">
+                  <Badge
+                    tone="warning"
+                    size="sm"
+                    icon={<AlertTriangle className="h-3 w-3" aria-hidden />}
+                  >
                     {t('evidence.unverified')}
                   </Badge>
-                </span>
+                </button>
               </Tooltip>
             )}
             {citation.entailment === 'contradicts' && (
@@ -702,8 +807,8 @@ function InjectionWarning({ warnings }: { warnings: StructuredAnswer['injectionW
         <ul className="mt-1 space-y-1">
           {warnings.map((warning, index) => (
             <li key={index} className="text-[13px] text-[var(--uxe-text)]">
-              <span className="font-medium">{warning.sourceTitle}</span> attempted to influence this answer
-              ({warning.pattern}). It has been quarantined and excluded.
+              <span className="font-medium">{warning.sourceTitle}</span> attempted to influence this
+              answer ({warning.pattern}). It has been quarantined and excluded.
             </li>
           ))}
         </ul>

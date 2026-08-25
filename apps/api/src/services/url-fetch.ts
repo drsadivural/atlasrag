@@ -35,27 +35,28 @@ export class SsrfError extends Error {
  */
 function isPrivateIPv4(ip: string): boolean {
   const parts = ip.split('.').map(Number);
-  if (parts.length !== 4 || parts.some((p) => !Number.isInteger(p) || p < 0 || p > 255)) return true;
+  if (parts.length !== 4 || parts.some((p) => !Number.isInteger(p) || p < 0 || p > 255))
+    return true;
   const [a = 0, b = 0] = parts;
-  if (a === 0) return true;                          // "this network"
-  if (a === 10) return true;                         // RFC1918
-  if (a === 127) return true;                        // loopback
-  if (a === 169 && b === 254) return true;           // link-local, incl. cloud metadata
-  if (a === 172 && b >= 16 && b <= 31) return true;  // RFC1918
-  if (a === 192 && b === 168) return true;           // RFC1918
-  if (a === 192 && b === 0) return true;             // IETF protocol assignments
+  if (a === 0) return true; // "this network"
+  if (a === 10) return true; // RFC1918
+  if (a === 127) return true; // loopback
+  if (a === 169 && b === 254) return true; // link-local, incl. cloud metadata
+  if (a === 172 && b >= 16 && b <= 31) return true; // RFC1918
+  if (a === 192 && b === 168) return true; // RFC1918
+  if (a === 192 && b === 0) return true; // IETF protocol assignments
   if (a === 100 && b >= 64 && b <= 127) return true; // CGNAT
   if (a === 198 && (b === 18 || b === 19)) return true; // benchmarking
-  if (a >= 224) return true;                         // multicast + reserved
+  if (a >= 224) return true; // multicast + reserved
   return false;
 }
 
 function isPrivateIPv6(ip: string): boolean {
   const lower = ip.toLowerCase();
   if (lower === '::' || lower === '::1') return true;
-  if (lower.startsWith('fe80')) return true;                 // link-local
+  if (lower.startsWith('fe80')) return true; // link-local
   if (lower.startsWith('fc') || lower.startsWith('fd')) return true; // unique local
-  if (lower.startsWith('ff')) return true;                   // multicast
+  if (lower.startsWith('ff')) return true; // multicast
   // IPv4-mapped addresses (::ffff:169.254.169.254) must be checked as IPv4.
   const mapped = lower.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
   if (mapped?.[1]) return isPrivateIPv4(mapped[1]);
@@ -172,7 +173,8 @@ export async function safeFetch(
 
     if (response.status >= 300 && response.status < 400) {
       const location = response.headers.get('location');
-      if (!location) throw new SsrfError('That URL redirected without a destination.', 'unreachable');
+      if (!location)
+        throw new SsrfError('That URL redirected without a destination.', 'unreachable');
       current = new URL(location, url).toString();
       continue;
     }
@@ -226,7 +228,11 @@ async function readCapped(response: Response, maxBytes: number): Promise<Uint8Ar
 }
 
 /** Minimal robots.txt evaluation for the user-agent this crawler presents. */
-export function isAllowedByRobots(robotsTxt: string, path: string, userAgent = 'UXE-Consulting-AI'): boolean {
+export function isAllowedByRobots(
+  robotsTxt: string,
+  path: string,
+  userAgent = 'UXE-Consulting-AI',
+): boolean {
   const lines = robotsTxt.split(/\r?\n/).map((l) => l.replace(/#.*$/, '').trim());
   let applies = false;
   let sawSpecificGroup = false;
@@ -268,12 +274,17 @@ export function canonicalizeUrl(rawUrl: string): string {
   const url = new URL(rawUrl);
   url.hash = '';
   url.hostname = url.hostname.toLowerCase();
-  if ((url.protocol === 'https:' && url.port === '443') || (url.protocol === 'http:' && url.port === '80')) {
+  if (
+    (url.protocol === 'https:' && url.port === '443') ||
+    (url.protocol === 'http:' && url.port === '80')
+  ) {
     url.port = '';
   }
   // Drop tracking parameters that create duplicate copies of the same document.
   for (const key of [...url.searchParams.keys()]) {
-    if (/^(utm_|fbclid|gclid|msclkid|ref|source)$/i.test(key)) url.searchParams.delete(key);
+    if (/^(?:utm_[a-z0-9_]*|fbclid|gclid|msclkid|mc_[ce]id|ref|source)$/i.test(key)) {
+      url.searchParams.delete(key);
+    }
   }
   url.searchParams.sort();
   if (url.pathname.length > 1 && url.pathname.endsWith('/')) {

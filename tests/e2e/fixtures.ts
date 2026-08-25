@@ -10,7 +10,11 @@ export const SEED_PASSWORD = process.env.SEED_PASSWORD ?? 'Tr0ubad0ur-Nimbus-42'
  * scenarios, so exercising it on every test keeps it covered continuously rather than in
  * one isolated case.
  */
-export async function signIn(page: Page, email = SEED_EMAIL, password = SEED_PASSWORD): Promise<void> {
+export async function signIn(
+  page: Page,
+  email = SEED_EMAIL,
+  password = SEED_PASSWORD,
+): Promise<void> {
   await page.goto('/login');
   await page.getByLabel('Work email').fill(email);
   await page.getByLabel('Password', { exact: true }).fill(password);

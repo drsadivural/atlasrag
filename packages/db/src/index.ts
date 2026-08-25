@@ -2,7 +2,11 @@ export * from './client.js';
 export * from './ids.js';
 export * from './tenant.js';
 export * as schema from './schema/index.js';
-export { SourceRepository, visibleSourcePredicate, type ListSourcesParams } from './repositories/sources.js';
+export {
+  SourceRepository,
+  visibleSourcePredicate,
+  type ListSourcesParams,
+} from './repositories/sources.js';
 export { ConsultationRepository } from './repositories/consultations.js';
 export {
   JobRepository,

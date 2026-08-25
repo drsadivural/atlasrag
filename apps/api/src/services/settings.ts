@@ -6,7 +6,10 @@ import type { MfaPolicy } from '@uxe/auth';
  * migration, but they are read back through this normaliser so every consumer sees a
  * complete, typed object even when the stored blob predates a field.
  */
-export function defaultWorkspaceSettings(ownerName: string, locale: string): Record<string, unknown> {
+export function defaultWorkspaceSettings(
+  ownerName: string,
+  locale: string,
+): Record<string, unknown> {
   return {
     consultant: {
       name: 'Ayumi',
@@ -58,7 +61,13 @@ interface RawSettings {
 export function workspaceSettingsFrom(
   stored: Record<string, unknown>,
   workspaceName: string,
-  overrides: Partial<{ slug: string; locale: string; timezone: string; brandColor: string; logoUrl: string | null }> = {},
+  overrides: Partial<{
+    slug: string;
+    locale: string;
+    timezone: string;
+    brandColor: string;
+    logoUrl: string | null;
+  }> = {},
 ): WorkspaceSettings {
   const raw = stored as RawSettings;
   const defaults = defaultWorkspaceSettings('', overrides.locale ?? 'en') as unknown as RawSettings;

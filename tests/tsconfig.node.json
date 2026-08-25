@@ -1,0 +1,17 @@
+{
+  "extends": "@uxe/config/tsconfig/base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node"],
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "lib": ["ES2023", "DOM.AsyncIterable"]
+  },
+  "include": [
+    "unit/**/*.ts",
+    "integration/**/*.ts",
+    "security/**/*.ts",
+    "rag-evals/**/*.ts",
+    "fixtures/**/*.ts"
+  ]
+}

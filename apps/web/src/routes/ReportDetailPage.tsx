@@ -1,8 +1,20 @@
 import { useParams, Link } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { ArrowLeft, Download, FileText, Info, ShieldCheck } from 'lucide-react';
-import { Badge, Button, Card, CardHeader, CardTitle, ErrorState, LoadingRegion, Skeleton, formatBytes, formatDateTime, useToast } from '@uxe/ui';
-import { ApiError, api } from '../lib/api.js';
+import {
+  Badge,
+  Button,
+  Card,
+  CardHeader,
+  CardTitle,
+  ErrorState,
+  LoadingRegion,
+  Skeleton,
+  formatBytes,
+  formatDateTime,
+  useToast,
+} from '@uxe/ui';
+import { type ApiError, api } from '../lib/api.js';
 import { useI18n } from '../lib/i18n.js';
 import { PageHeader } from '../components/PageHeader.js';
 
@@ -49,7 +61,8 @@ export function ReportDetailPage() {
       anchor.click();
       anchor.remove();
     },
-    onError: (error: ApiError) => push({ tone: 'error', title: 'Download failed', description: error.message }),
+    onError: (error: ApiError) =>
+      push({ tone: 'error', title: 'Download failed', description: error.message }),
   });
 
   if (query.isLoading) {
@@ -66,7 +79,11 @@ export function ReportDetailPage() {
   if (query.error) {
     return (
       <div className="p-6">
-        <ErrorState message={query.error.message} traceId={query.error.traceId} onRetry={() => void query.refetch()} />
+        <ErrorState
+          message={query.error.message}
+          traceId={query.error.traceId}
+          onRetry={() => void query.refetch()}
+        />
       </div>
     );
   }
@@ -88,7 +105,12 @@ export function ReportDetailPage() {
         title={artifact.title}
         subtitle={`${artifact.documentType.toUpperCase()} · ${formatBytes(artifact.sizeBytes)} · ${formatDateTime(artifact.createdAt)}`}
         actions={
-          <Button variant="primary" onClick={() => download.mutate()} loading={download.isPending} disabled={artifact.status !== 'ready'}>
+          <Button
+            variant="primary"
+            onClick={() => download.mutate()}
+            loading={download.isPending}
+            disabled={artifact.status !== 'ready'}
+          >
             <Download className="h-4 w-4" aria-hidden />
             {t('reports.download')}
           </Button>
@@ -103,7 +125,9 @@ export function ReportDetailPage() {
           <dl className="grid grid-cols-1 gap-x-6 gap-y-2 text-[13px] sm:grid-cols-2">
             <Row label="Generator">{artifact.generatorDescriptor}</Row>
             <Row label="Checksum">
-              <span className="font-[family-name:var(--uxe-font-mono)] text-[11px]">{artifact.sha256.slice(0, 24)}…</span>
+              <span className="font-[family-name:var(--uxe-font-mono)] text-[11px]">
+                {artifact.sha256.slice(0, 24)}…
+              </span>
             </Row>
             <Row label="Status">
               <Badge tone={artifact.status === 'ready' ? 'success' : 'neutral'} size="sm">
@@ -126,7 +150,9 @@ export function ReportDetailPage() {
                     aria-hidden
                   />
                   <span>
-                    <span className="font-medium text-[var(--uxe-text)]">{check.name.replace(/_/g, ' ')}</span>
+                    <span className="font-medium text-[var(--uxe-text)]">
+                      {check.name.replace(/_/g, ' ')}
+                    </span>
                     <span className="ml-2 text-[var(--uxe-text-secondary)]">{check.detail}</span>
                   </span>
                 </li>
@@ -138,11 +164,16 @@ export function ReportDetailPage() {
         {artifact.disclosures.length > 0 && (
           <Card className="border-[var(--uxe-warning-border)] bg-[var(--uxe-warning-bg)]">
             <CardHeader>
-              <CardTitle className="text-[var(--uxe-warning)]">{t('reports.disclosures')}</CardTitle>
+              <CardTitle className="text-[var(--uxe-warning)]">
+                {t('reports.disclosures')}
+              </CardTitle>
             </CardHeader>
             <ul className="flex flex-col gap-2">
               {artifact.disclosures.map((note, index) => (
-                <li key={index} className="flex items-start gap-2 text-[13px] text-[var(--uxe-text)]">
+                <li
+                  key={index}
+                  className="flex items-start gap-2 text-[13px] text-[var(--uxe-text)]"
+                >
                   <Info className="mt-0.5 h-4 w-4 shrink-0 text-[var(--uxe-warning)]" aria-hidden />
                   {note}
                 </li>
@@ -158,23 +189,36 @@ export function ReportDetailPage() {
             </CardHeader>
             <ol className="flex flex-col gap-4">
               {artifact.changeLog.map((entry) => (
-                <li key={entry.ordinal} className="rounded-[var(--uxe-radius-card)] border border-[var(--uxe-border)] p-3.5">
+                <li
+                  key={entry.ordinal}
+                  className="rounded-[var(--uxe-radius-card)] border border-[var(--uxe-border)] p-3.5"
+                >
                   <p className="text-[13px] font-semibold text-[var(--uxe-text)]">
                     {entry.ordinal}. {entry.locator}
                   </p>
                   <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
                     <div className="rounded-[var(--uxe-radius-control)] border border-[var(--uxe-danger-border)] bg-[var(--uxe-danger-bg)] p-2.5">
-                      <p className="text-[11px] font-semibold uppercase text-[var(--uxe-danger)]">Before</p>
-                      <p className="mt-1 text-[13px] text-[var(--uxe-text)]">{entry.before || '(nothing at this location)'}</p>
+                      <p className="text-[11px] font-semibold text-[var(--uxe-danger)] uppercase">
+                        Before
+                      </p>
+                      <p className="mt-1 text-[13px] text-[var(--uxe-text)]">
+                        {entry.before || '(nothing at this location)'}
+                      </p>
                     </div>
                     <div className="rounded-[var(--uxe-radius-control)] border border-[var(--uxe-success-border)] bg-[var(--uxe-success-bg)] p-2.5">
-                      <p className="text-[11px] font-semibold uppercase text-[var(--uxe-success)]">After</p>
+                      <p className="text-[11px] font-semibold text-[var(--uxe-success)] uppercase">
+                        After
+                      </p>
                       <p className="mt-1 text-[13px] text-[var(--uxe-text)]">{entry.after}</p>
                     </div>
                   </div>
-                  <p className="mt-2 text-[12px] text-[var(--uxe-text-secondary)]">{entry.reason}</p>
+                  <p className="mt-2 text-[12px] text-[var(--uxe-text-secondary)]">
+                    {entry.reason}
+                  </p>
                   {entry.governingCitation && (
-                    <p className="mt-1 text-[12px] font-medium text-[var(--uxe-cobalt)]">{entry.governingCitation}</p>
+                    <p className="mt-1 text-[12px] font-medium text-[var(--uxe-cobalt)]">
+                      {entry.governingCitation}
+                    </p>
                   )}
                 </li>
               ))}

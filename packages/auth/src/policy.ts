@@ -64,10 +64,13 @@ export interface LockoutState {
   message: string | null;
 }
 
-export function evaluateLockout(user: {
-  failedLoginCount: number;
-  lockedUntil: Date | null;
-}, now = new Date()): LockoutState {
+export function evaluateLockout(
+  user: {
+    failedLoginCount: number;
+    lockedUntil: Date | null;
+  },
+  now = new Date(),
+): LockoutState {
   if (user.lockedUntil && user.lockedUntil > now) {
     const retryAfterSeconds = Math.ceil((user.lockedUntil.getTime() - now.getTime()) / 1000);
     return {
@@ -85,10 +88,34 @@ export function evaluateLockout(user: {
  * catches the cases that would otherwise be trivially guessable on day one.
  */
 const WEAK_PASSWORDS = new Set([
-  'password', 'password1', 'password123', 'passw0rd', '123456', '12345678', '123456789',
-  '1234567890', 'qwerty', 'qwerty123', 'letmein', 'welcome', 'welcome1', 'admin', 'admin123',
-  'iloveyou', 'monkey', 'dragon', 'sunshine', 'princess', 'football', 'baseball', 'abc123',
-  'changeme', 'trustno1', 'uxeconsulting', 'consulting', 'uxeconsultingai',
+  'password',
+  'password1',
+  'password123',
+  'passw0rd',
+  '123456',
+  '12345678',
+  '123456789',
+  '1234567890',
+  'qwerty',
+  'qwerty123',
+  'letmein',
+  'welcome',
+  'welcome1',
+  'admin',
+  'admin123',
+  'iloveyou',
+  'monkey',
+  'dragon',
+  'sunshine',
+  'princess',
+  'football',
+  'baseball',
+  'abc123',
+  'changeme',
+  'trustno1',
+  'uxeconsulting',
+  'consulting',
+  'uxeconsultingai',
 ]);
 
 export interface PasswordCheck {
@@ -122,12 +149,17 @@ export function checkPasswordStrength(
       break;
     }
   }
-  if (context.workspaceName && context.workspaceName.length >= 4 && lower.includes(context.workspaceName.toLowerCase())) {
+  if (
+    context.workspaceName &&
+    context.workspaceName.length >= 4 &&
+    lower.includes(context.workspaceName.toLowerCase())
+  ) {
     reasons.push('Do not use your workspace name in your password.');
   }
 
   // Runs like "aaaa" or "1234" defeat length requirements without adding entropy.
-  if (/(.)\1{3,}/.test(password)) reasons.push('Avoid repeating the same character four or more times.');
+  if (/(.)\1{3,}/.test(password))
+    reasons.push('Avoid repeating the same character four or more times.');
   if (/(?:0123|1234|2345|3456|4567|5678|6789|abcd|bcde|cdef|qwer|asdf)/i.test(password)) {
     reasons.push('Avoid sequential characters.');
   }

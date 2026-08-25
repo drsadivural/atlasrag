@@ -1,0 +1,105 @@
+# ---------------------------------------------------------------------------
+# UXE Consulting AI — local stack
+#
+# Brings up everything the application needs to run end to end on one machine:
+# PostgreSQL with pgvector, the document worker, and MinIO standing in for R2.
+#
+# Run from the repository root:
+#   docker compose -f infra/docker-compose.yml up -d
+# ---------------------------------------------------------------------------
+
+name: uxe
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: uxe-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-uxe}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-uxe_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-uxe_dev}
+      # Deterministic collation: index behaviour must not depend on the host locale.
+      POSTGRES_INITDB_ARGS: '--encoding=UTF8 --locale=C'
+    ports:
+      - '${POSTGRES_PORT:-55432}:5432'
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-uxe} -d ${POSTGRES_DB:-uxe_dev}']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    command:
+      - postgres
+      # A vector index build is memory-hungry; the defaults are too small for HNSW.
+      - -c
+      - maintenance_work_mem=512MB
+      - -c
+      - max_parallel_maintenance_workers=2
+      - -c
+      - shared_buffers=256MB
+
+  document-worker:
+    build:
+      context: ..
+      dockerfile: infra/document-worker/Dockerfile
+    image: uxe-document-worker:1.0.0
+    container_name: uxe-document-worker
+    restart: unless-stopped
+    environment:
+      DOCUMENT_WORKER_TOKEN: ${DOCUMENT_WORKER_TOKEN:-dev-worker-token}
+      MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-524288000}
+      OCR_ENABLED: 'true'
+      OCR_LANGUAGE: ${OCR_LANGUAGE:-eng}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    ports:
+      - '${DOCUMENT_WORKER_PORT:-8000}:8000'
+    # No outbound network need: the worker only ever answers requests.
+    healthcheck:
+      test: ['CMD', 'curl', '--fail', '--silent', 'http://127.0.0.1:8000/health']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  # Stands in for Cloudflare R2. The S3 driver in the API speaks to both unchanged.
+  storage:
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    container_name: uxe-storage
+    restart: unless-stopped
+    command: server /data --console-address ':9001'
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY_ID:-uxe-local-access-key}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_ACCESS_KEY:-uxe-local-secret-key}
+    ports:
+      - '${S3_PORT:-9000}:9000'
+      - '${S3_CONSOLE_PORT:-9001}:9001'
+    volumes:
+      - storage-data:/data
+    healthcheck:
+      test: ['CMD', 'mc', 'ready', 'local']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # One-shot: creates the two buckets the application expects, then exits.
+  storage-init:
+    image: minio/mc:RELEASE.2025-04-16T18-13-26Z
+    depends_on:
+      storage:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://storage:9000 ${S3_ACCESS_KEY_ID:-uxe-local-access-key} ${S3_SECRET_ACCESS_KEY:-uxe-local-secret-key} &&
+      mc mb --ignore-existing local/${S3_BUCKET_ORIGINALS:-uxe-originals} &&
+      mc mb --ignore-existing local/${S3_BUCKET_ARTIFACTS:-uxe-artifacts} &&
+      mc anonymous set none local/${S3_BUCKET_ORIGINALS:-uxe-originals} &&
+      mc anonymous set none local/${S3_BUCKET_ARTIFACTS:-uxe-artifacts}
+      "
+    restart: 'no'
+
+volumes:
+  postgres-data:
+  storage-data:

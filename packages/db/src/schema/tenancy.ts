@@ -153,7 +153,9 @@ export const invitations = pgTable(
     role: text('role').notNull().default('member'),
     /** SHA-256 of the invite token; the raw token only ever exists in the email. */
     tokenHash: text('token_hash').notNull(),
-    invitedByUserId: text('invited_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+    invitedByUserId: text('invited_by_user_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
     groupIds: jsonb('group_ids').$type<string[]>().notNull().default([]),
     message: text('message'),
     status: text('status').notNull().default('pending'),

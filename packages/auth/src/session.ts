@@ -41,7 +41,10 @@ export function serializeCsrfCookie(token: string, options: CookieOptions): stri
   });
 }
 
-export function clearCookie(name: string, options: Pick<CookieOptions, 'secure' | 'domain'>): string {
+export function clearCookie(
+  name: string,
+  options: Pick<CookieOptions, 'secure' | 'domain'>,
+): string {
   return serializeCookie(name, '', {
     ...options,
     httpOnly: true,

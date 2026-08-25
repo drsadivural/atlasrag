@@ -138,7 +138,11 @@ export function KnowledgePage() {
     mutationFn: (sourceId: string) =>
       api.post(`/sources/${sourceId}/reprocess`, undefined, newIdempotencyKey()),
     onSuccess: () => {
-      push({ tone: 'info', title: 'Reprocessing started', description: 'Progress appears in the indexing pipeline.' });
+      push({
+        tone: 'info',
+        title: 'Reprocessing started',
+        description: 'Progress appears in the indexing pipeline.',
+      });
       void queryClient.invalidateQueries({ queryKey: ['sources'] });
     },
     onError: (error: ApiError) =>
@@ -230,7 +234,11 @@ export function KnowledgePage() {
         setUploads((current) =>
           current.map((u) =>
             entries.some((e) => e.id === u.id)
-              ? { ...u, status: 'failed', message: error instanceof ApiError ? error.message : 'Upload failed.' }
+              ? {
+                  ...u,
+                  status: 'failed',
+                  message: error instanceof ApiError ? error.message : 'Upload failed.',
+                }
               : u,
           ),
         );
@@ -245,11 +253,36 @@ export function KnowledgePage() {
   const filters = useMemo(
     () => [
       { key: 'all', label: t('knowledge.allSources'), count: counts?.all, color: undefined },
-      { key: 'ready', label: t('knowledge.ready'), count: counts?.ready, color: 'var(--uxe-success)' },
-      { key: 'processing', label: t('knowledge.processing'), count: counts?.processing, color: 'var(--uxe-info)' },
-      { key: 'needs_review', label: t('knowledge.needsReview'), count: counts?.needs_review, color: 'var(--uxe-warning)' },
-      { key: 'failed', label: t('knowledge.failed'), count: counts?.failed, color: 'var(--uxe-danger)' },
-      { key: 'archived', label: t('knowledge.archived'), count: counts?.archived, color: 'var(--uxe-text-tertiary)' },
+      {
+        key: 'ready',
+        label: t('knowledge.ready'),
+        count: counts?.ready,
+        color: 'var(--uxe-success)',
+      },
+      {
+        key: 'processing',
+        label: t('knowledge.processing'),
+        count: counts?.processing,
+        color: 'var(--uxe-info)',
+      },
+      {
+        key: 'needs_review',
+        label: t('knowledge.needsReview'),
+        count: counts?.needs_review,
+        color: 'var(--uxe-warning)',
+      },
+      {
+        key: 'failed',
+        label: t('knowledge.failed'),
+        count: counts?.failed,
+        color: 'var(--uxe-danger)',
+      },
+      {
+        key: 'archived',
+        label: t('knowledge.archived'),
+        count: counts?.archived,
+        color: 'var(--uxe-text-tertiary)',
+      },
     ],
     [counts, t],
   );
@@ -277,7 +310,10 @@ export function KnowledgePage() {
           )}
 
           {uploads.length > 0 && (
-            <UploadList uploads={uploads} onDismiss={(id) => setUploads((c) => c.filter((u) => u.id !== id))} />
+            <UploadList
+              uploads={uploads}
+              onDismiss={(id) => setUploads((c) => c.filter((u) => u.id !== id))}
+            />
           )}
 
           <div className="flex flex-wrap items-center gap-2">
@@ -331,8 +367,16 @@ export function KnowledgePage() {
                       </Button>
                     }
                     items={[
-                      { label: 'Reprocess', icon: <RefreshCw className="h-4 w-4" aria-hidden />, onSelect: () => bulk.mutate('reprocess') },
-                      { label: 'Archive', icon: <Database className="h-4 w-4" aria-hidden />, onSelect: () => bulk.mutate('archive') },
+                      {
+                        label: 'Reprocess',
+                        icon: <RefreshCw className="h-4 w-4" aria-hidden />,
+                        onSelect: () => bulk.mutate('reprocess'),
+                      },
+                      {
+                        label: 'Archive',
+                        icon: <Database className="h-4 w-4" aria-hidden />,
+                        onSelect: () => bulk.mutate('archive'),
+                      },
                       {
                         label: 'Delete',
                         icon: <X className="h-4 w-4" aria-hidden />,
@@ -408,8 +452,13 @@ export function KnowledgePage() {
                                   ? new Set()
                                   : new Set((data?.items ?? []).map((s) => s.id)),
                               ),
+                            rowLabel: (row) => row.title,
                             renderCheckbox: (checked, onChange, label) => (
-                              <Checkbox checked={checked} onCheckedChange={onChange} ariaLabel={label} />
+                              <Checkbox
+                                checked={checked}
+                                onCheckedChange={onChange}
+                                ariaLabel={label}
+                              />
                             ),
                           }
                         : undefined
@@ -417,7 +466,11 @@ export function KnowledgePage() {
                     empty={
                       <EmptyState
                         icon={<Database className="h-6 w-6" aria-hidden />}
-                        title={q || status !== 'all' ? 'No sources match these filters' : t('knowledge.emptyTitle')}
+                        title={
+                          q || status !== 'all'
+                            ? 'No sources match these filters'
+                            : t('knowledge.emptyTitle')
+                        }
                         description={
                           q || status !== 'all'
                             ? 'Try clearing the search or choosing a different status.'
@@ -425,7 +478,11 @@ export function KnowledgePage() {
                         }
                         action={
                           q || status !== 'all' ? (
-                            <Button variant="secondary" size="sm" onClick={() => setSearchParams({}, { replace: true })}>
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => setSearchParams({}, { replace: true })}
+                            >
                               {t('common.clearFilters')}
                             </Button>
                           ) : undefined
@@ -445,7 +502,9 @@ export function KnowledgePage() {
                         width: '9%',
                         header: t('knowledge.type'),
                         render: (row) => (
-                          <span className="uppercase text-[var(--uxe-text-secondary)]">{row.documentType}</span>
+                          <span className="text-[var(--uxe-text-secondary)] uppercase">
+                            {row.documentType}
+                          </span>
                         ),
                       },
                       {
@@ -454,7 +513,7 @@ export function KnowledgePage() {
                         header: t('knowledge.pages'),
                         align: 'right',
                         render: (row) => (
-                          <span className="tabular-nums text-[var(--uxe-text-secondary)]">
+                          <span className="text-[var(--uxe-text-secondary)] tabular-nums">
                             {row.pages === null ? '—' : formatNumber(row.pages)}
                           </span>
                         ),
@@ -464,7 +523,9 @@ export function KnowledgePage() {
                         width: '9%',
                         header: t('knowledge.version'),
                         render: (row) => (
-                          <span className="tabular-nums text-[var(--uxe-text-secondary)]">{row.currentVersion}</span>
+                          <span className="text-[var(--uxe-text-secondary)] tabular-nums">
+                            {row.currentVersion}
+                          </span>
                         ),
                       },
                       {
@@ -545,7 +606,7 @@ export function KnowledgePage() {
 /* Upload                                                                     */
 /* -------------------------------------------------------------------------- */
 
-interface UploadState {
+export interface UploadState {
   id: string;
   fileName: string;
   sizeBytes: number;
@@ -554,7 +615,13 @@ interface UploadState {
   message: string | null;
 }
 
-function UploadZone({ onFiles, onUrlClick }: { onFiles: (files: File[]) => void; onUrlClick: () => void }) {
+export function UploadZone({
+  onFiles,
+  onUrlClick,
+}: {
+  onFiles: (files: File[]) => void;
+  onUrlClick: () => void;
+}) {
   const { t } = useI18n();
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
@@ -587,7 +654,7 @@ function UploadZone({ onFiles, onUrlClick }: { onFiles: (files: File[]) => void;
       >
         <span
           aria-hidden
-          className="mb-3 flex h-12 w-12 items-center justify-center rounded-full gradient-surface text-white shadow-[var(--uxe-shadow-brand)]"
+          className="gradient-surface mb-3 flex h-12 w-12 items-center justify-center rounded-full text-white shadow-[var(--uxe-shadow-brand)]"
         >
           <CloudUpload className="h-6 w-6" />
         </span>
@@ -601,7 +668,9 @@ function UploadZone({ onFiles, onUrlClick }: { onFiles: (files: File[]) => void;
             {t('knowledge.browse')}
           </button>
         </p>
-        <p className="mt-1 text-[13px] text-[var(--uxe-text-secondary)]">{t('knowledge.acceptedTypes')}</p>
+        <p className="mt-1 text-[13px] text-[var(--uxe-text-secondary)]">
+          {t('knowledge.acceptedTypes')}
+        </p>
         <input
           ref={inputRef}
           type="file"
@@ -617,9 +686,21 @@ function UploadZone({ onFiles, onUrlClick }: { onFiles: (files: File[]) => void;
       </div>
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
-        <ConnectorButton icon={<GoogleDriveIcon />} label={t('knowledge.googleDrive')} connector="google_drive" />
-        <ConnectorButton icon={<OneDriveIcon />} label={t('knowledge.oneDrive')} connector="onedrive" />
-        <ConnectorButton icon={<SharePointIcon />} label={t('knowledge.sharePoint')} connector="sharepoint" />
+        <ConnectorButton
+          icon={<GoogleDriveIcon />}
+          label={t('knowledge.googleDrive')}
+          connector="google_drive"
+        />
+        <ConnectorButton
+          icon={<OneDriveIcon />}
+          label={t('knowledge.oneDrive')}
+          connector="onedrive"
+        />
+        <ConnectorButton
+          icon={<SharePointIcon />}
+          label={t('knowledge.sharePoint')}
+          connector="sharepoint"
+        />
         <Button variant="secondary" size="md" onClick={onUrlClick}>
           <Link2 className="h-4 w-4" aria-hidden />
           {t('knowledge.websiteUrl')}
@@ -652,7 +733,8 @@ function AutoSyncToggle() {
   });
 
   const update = useMutation({
-    mutationFn: (enabled: boolean) => api.patch('/settings', { notifications: { weeklyDigest: enabled } }),
+    mutationFn: (enabled: boolean) =>
+      api.patch('/settings', { notifications: { weeklyDigest: enabled } }),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['settings'] }),
     onError: (error: ApiError) =>
       push({ tone: 'error', title: 'Could not change auto-sync', description: error.message }),
@@ -694,13 +776,18 @@ function ConnectorButton({
   const connect = async () => {
     setPending(true);
     try {
-      await api.post('/sources/connectors', { kind: connector, accountEmail: 'me@example.com' }, newIdempotencyKey());
+      await api.post(
+        '/sources/connectors',
+        { kind: connector, accountEmail: 'me@example.com' },
+        newIdempotencyKey(),
+      );
       push({ tone: 'success', title: `${label} connected` });
     } catch (error) {
       push({
         tone: 'error',
         title: `${label} is not available`,
-        description: error instanceof ApiError ? error.message : 'The connector could not be started.',
+        description:
+          error instanceof ApiError ? error.message : 'The connector could not be started.',
       });
     } finally {
       setPending(false);
@@ -715,7 +802,13 @@ function ConnectorButton({
   );
 }
 
-function UploadList({ uploads, onDismiss }: { uploads: UploadState[]; onDismiss: (id: string) => void }) {
+export function UploadList({
+  uploads,
+  onDismiss,
+}: {
+  uploads: UploadState[];
+  onDismiss: (id: string) => void;
+}) {
   return (
     <Card flush className="overflow-hidden">
       <ul aria-live="polite" className="divide-y divide-[var(--uxe-border)]">
@@ -747,18 +840,26 @@ function UploadList({ uploads, onDismiss }: { uploads: UploadState[]; onDismiss:
 
             <div className="min-w-0 flex-1">
               <div className="flex items-baseline justify-between gap-3">
-                <p className="truncate text-[14px] font-medium text-[var(--uxe-text)]">{upload.fileName}</p>
+                <p className="truncate text-[14px] font-medium text-[var(--uxe-text)]">
+                  {upload.fileName}
+                </p>
                 <p className="shrink-0 text-[12px] text-[var(--uxe-text-secondary)]">
                   {formatBytes(upload.sizeBytes)}
                 </p>
               </div>
               {upload.status === 'uploading' ? (
-                <ProgressBar value={upload.percent} label={`Uploading ${upload.fileName}`} className="mt-2" />
+                <ProgressBar
+                  value={upload.percent}
+                  label={`Uploading ${upload.fileName}`}
+                  className="mt-2"
+                />
               ) : (
                 <p
                   className={cn(
                     'mt-0.5 text-[12px]',
-                    upload.status === 'failed' ? 'text-[var(--uxe-danger)]' : 'text-[var(--uxe-text-secondary)]',
+                    upload.status === 'failed'
+                      ? 'text-[var(--uxe-danger)]'
+                      : 'text-[var(--uxe-text-secondary)]',
                   )}
                 >
                   {upload.message ??
@@ -767,7 +868,12 @@ function UploadList({ uploads, onDismiss }: { uploads: UploadState[]; onDismiss:
               )}
             </div>
 
-            <Button variant="ghost" size="icon-sm" onClick={() => onDismiss(upload.id)} aria-label={`Dismiss ${upload.fileName}`}>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => onDismiss(upload.id)}
+              aria-label={`Dismiss ${upload.fileName}`}
+            >
               <X className="h-4 w-4" aria-hidden />
             </Button>
           </li>
@@ -789,7 +895,8 @@ function SourceTitleCell({ source }: { source: SourceSummary }) {
         aria-hidden
         className={cn(
           'flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--uxe-radius-control)]',
-          TYPE_COLORS[source.documentType] ?? 'bg-[var(--uxe-neutral-bg)] text-[var(--uxe-text-secondary)]',
+          TYPE_COLORS[source.documentType] ??
+            'bg-[var(--uxe-neutral-bg)] text-[var(--uxe-text-secondary)]',
         )}
       >
         <Icon className="h-4 w-4" />
@@ -812,7 +919,7 @@ function SourceTitleCell({ source }: { source: SourceSummary }) {
   );
 }
 
-function SourceStatusCell({
+export function SourceStatusCell({
   source,
   onRetry,
   retrying,
@@ -857,7 +964,15 @@ function SourceStatusCell({
           </Tooltip>
         )}
         {canRetry && source.status === 'failed' && (
-          <Button variant="link" size="xs" onClick={(e) => { e.stopPropagation(); onRetry(); }} loading={retrying}>
+          <Button
+            variant="link"
+            size="xs"
+            onClick={(e) => {
+              e.stopPropagation();
+              onRetry();
+            }}
+            loading={retrying}
+          >
             {t('knowledge.retry')}
           </Button>
         )}
@@ -875,7 +990,16 @@ function SourceStatusCell({
 
   return (
     <span className="flex items-center gap-2">
-      <Badge tone="info" size="sm" icon={<Circle className="h-3 w-3 animate-[uxe-pulse-dot_1.4s_ease-in-out_infinite]" aria-hidden />}>
+      <Badge
+        tone="info"
+        size="sm"
+        icon={
+          <Circle
+            className="h-3 w-3 animate-[uxe-pulse-dot_1.4s_ease-in-out_infinite]"
+            aria-hidden
+          />
+        }
+      >
         {t('knowledge.processing')}
       </Badge>
     </span>
@@ -914,25 +1038,40 @@ function PipelineCard({ pipeline }: { pipeline: SourcesResponse['pipeline'] }) {
               <div className="flex items-center justify-between gap-3">
                 <span className="flex min-w-0 items-center gap-2">
                   {stage.state === 'complete' ? (
-                    <CheckCircle2 className="h-4 w-4 shrink-0 text-[var(--uxe-success)]" aria-hidden />
+                    <CheckCircle2
+                      className="h-4 w-4 shrink-0 text-[var(--uxe-success)]"
+                      aria-hidden
+                    />
                   ) : stage.state === 'blocked' ? (
                     <XCircle className="h-4 w-4 shrink-0 text-[var(--uxe-danger)]" aria-hidden />
                   ) : stage.state === 'running' ? (
-                    <Loader2 className="h-4 w-4 shrink-0 animate-[uxe-spin_1s_linear_infinite] text-[var(--uxe-info)]" aria-hidden />
+                    <Loader2
+                      className="h-4 w-4 shrink-0 animate-[uxe-spin_1s_linear_infinite] text-[var(--uxe-info)]"
+                      aria-hidden
+                    />
                   ) : (
-                    <Circle className="h-4 w-4 shrink-0 text-[var(--uxe-text-tertiary)]" aria-hidden />
+                    <Circle
+                      className="h-4 w-4 shrink-0 text-[var(--uxe-text-tertiary)]"
+                      aria-hidden
+                    />
                   )}
                   <span className="truncate text-[13px] font-medium text-[var(--uxe-text)]">
                     {STAGE_LABELS[stage.stage] ?? stage.stage}
                   </span>
                 </span>
-                <span className="shrink-0 text-[12px] tabular-nums text-[var(--uxe-text-secondary)]">
+                <span className="shrink-0 text-[12px] text-[var(--uxe-text-secondary)] tabular-nums">
                   {stage.completed} / {stage.total}
                 </span>
               </div>
               <ProgressBar
                 value={percent}
-                tone={stage.state === 'blocked' ? 'danger' : stage.state === 'complete' ? 'success' : 'brand'}
+                tone={
+                  stage.state === 'blocked'
+                    ? 'danger'
+                    : stage.state === 'complete'
+                      ? 'success'
+                      : 'brand'
+                }
                 label={`${STAGE_LABELS[stage.stage]}: ${stage.completed} of ${stage.total}`}
                 className="mt-1.5"
               />
@@ -963,8 +1102,18 @@ function HealthCard({
     <Card>
       <CardHeader>
         <CardTitle>{t('dashboard.knowledgeHealth')}</CardTitle>
-        <Tooltip content={<span className="font-[family-name:var(--uxe-font-mono)] text-[11px]">{health.formula}</span>}>
-          <button type="button" aria-label="How knowledge health is calculated" className="rounded p-1 text-[var(--uxe-text-tertiary)]">
+        <Tooltip
+          content={
+            <span className="font-[family-name:var(--uxe-font-mono)] text-[11px]">
+              {health.formula}
+            </span>
+          }
+        >
+          <button
+            type="button"
+            aria-label="How knowledge health is calculated"
+            className="rounded p-1 text-[var(--uxe-text-tertiary)]"
+          >
             <Info className="h-4 w-4" aria-hidden />
           </button>
         </Tooltip>
@@ -981,7 +1130,11 @@ function HealthCard({
           {rows.map((row) => (
             <li key={row.label} className="flex items-center justify-between gap-2 text-[13px]">
               <span className="flex min-w-0 items-center gap-2">
-                <span aria-hidden className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: row.color }} />
+                <span
+                  aria-hidden
+                  className="h-2.5 w-2.5 shrink-0 rounded-full"
+                  style={{ background: row.color }}
+                />
                 <span className="truncate text-[var(--uxe-text-secondary)]">{row.label}</span>
               </span>
               <span className="shrink-0 font-semibold tabular-nums">{row.value}</span>
@@ -1004,7 +1157,9 @@ function AskAyumiCard() {
     >
       <div className="relative flex items-end gap-2 p-5">
         <div className="min-w-0 flex-1">
-          <h3 className="text-[16px] font-semibold text-[var(--uxe-text)]">{t('knowledge.askAyumi')}</h3>
+          <h3 className="text-[16px] font-semibold text-[var(--uxe-text)]">
+            {t('knowledge.askAyumi')}
+          </h3>
           <p className="mt-1.5 text-[13px] leading-snug text-[var(--uxe-text-secondary)]">
             {t('knowledge.askAyumiBody')}
           </p>
@@ -1025,7 +1180,13 @@ function AskAyumiCard() {
 /* Add URL                                                                    */
 /* -------------------------------------------------------------------------- */
 
-function AddUrlDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+function AddUrlDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
   const { t } = useI18n();
   const queryClient = useQueryClient();
   const { push } = useToast();
@@ -1034,9 +1195,17 @@ function AddUrlDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (op
 
   const mutation = useMutation({
     mutationFn: () =>
-      api.post('/sources/connectors', { kind: 'website', url, maxDepth: 1, maxPages: 25, respectRobots: true }, newIdempotencyKey()),
+      api.post(
+        '/sources/connectors',
+        { kind: 'website', url, maxDepth: 1, maxPages: 25, respectRobots: true },
+        newIdempotencyKey(),
+      ),
     onSuccess: () => {
-      push({ tone: 'success', title: 'Website queued', description: 'Indexing starts immediately.' });
+      push({
+        tone: 'success',
+        title: 'Website queued',
+        description: 'Indexing starts immediately.',
+      });
       void queryClient.invalidateQueries({ queryKey: ['sources'] });
       setUrl('');
       onOpenChange(false);
@@ -1056,7 +1225,12 @@ function AddUrlDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (op
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
             {t('common.cancel')}
           </Button>
-          <Button variant="primary" onClick={() => mutation.mutate()} loading={mutation.isPending} disabled={!url.trim()}>
+          <Button
+            variant="primary"
+            onClick={() => mutation.mutate()}
+            loading={mutation.isPending}
+            disabled={!url.trim()}
+          >
             {t('knowledge.addSources')}
           </Button>
         </>
@@ -1088,12 +1262,27 @@ function AddUrlDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (op
 function GoogleDriveIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden>
-      <path fill="#0066DA" d="M1.6 17.3l1.4 2.4c.3.5.7.9 1.2 1.2l4.9-8.5H0c0 .6.1 1.1.4 1.6l1.2 3.3z" />
-      <path fill="#00AC47" d="M12 7.6L7.1 0h-.2c-.5.3-.9.7-1.2 1.2L.4 10.6c-.3.5-.4 1-.4 1.6h9.1L12 7.6z" />
-      <path fill="#EA4335" d="M16.9 24c.5-.3.9-.7 1.2-1.2l.6-1 2.8-4.8c.3-.5.4-1 .4-1.6h-9.1l1.9 3.4L16.9 24z" />
+      <path
+        fill="#0066DA"
+        d="M1.6 17.3l1.4 2.4c.3.5.7.9 1.2 1.2l4.9-8.5H0c0 .6.1 1.1.4 1.6l1.2 3.3z"
+      />
+      <path
+        fill="#00AC47"
+        d="M12 7.6L7.1 0h-.2c-.5.3-.9.7-1.2 1.2L.4 10.6c-.3.5-.4 1-.4 1.6h9.1L12 7.6z"
+      />
+      <path
+        fill="#EA4335"
+        d="M16.9 24c.5-.3.9-.7 1.2-1.2l.6-1 2.8-4.8c.3-.5.4-1 .4-1.6h-9.1l1.9 3.4L16.9 24z"
+      />
       <path fill="#00832D" d="M12 7.6L16.9 0H7.1L12 7.6z" />
-      <path fill="#2684FC" d="M19.1 12.4H24c0-.6-.1-1.1-.4-1.6L18.3 1.2c-.3-.5-.7-.9-1.2-1.2l-4.9 8.5 6.9 3.9z" />
-      <path fill="#FFBA00" d="M9.1 12.4H0l4.9 8.5c.5.3 1 .4 1.6.4h11c.6 0 1.1-.1 1.6-.4l-4.9-8.5H9.1z" />
+      <path
+        fill="#2684FC"
+        d="M19.1 12.4H24c0-.6-.1-1.1-.4-1.6L18.3 1.2c-.3-.5-.7-.9-1.2-1.2l-4.9 8.5 6.9 3.9z"
+      />
+      <path
+        fill="#FFBA00"
+        d="M9.1 12.4H0l4.9 8.5c.5.3 1 .4 1.6.4h11c.6 0 1.1-.1 1.6-.4l-4.9-8.5H9.1z"
+      />
     </svg>
   );
 }
@@ -1101,10 +1290,22 @@ function GoogleDriveIcon() {
 function OneDriveIcon() {
   return (
     <svg width="18" height="14" viewBox="0 0 24 16" aria-hidden>
-      <path fill="#0364B8" d="M9.6 5.3l4.3 2.6 2.6-1.1a4 4 0 0 1 1.6-.3A6 6 0 0 0 7.7 3.4a4.7 4.7 0 0 1 1.9 1.9z" />
-      <path fill="#0078D4" d="M7.7 3.4a4.8 4.8 0 0 0-2.6 1.2 4.8 4.8 0 0 0-1.5 2.6 4.4 4.4 0 0 0-2.4 1.2L8.6 12l5.3-4.1-4.3-2.6a4.7 4.7 0 0 0-1.9-1.9z" />
-      <path fill="#1490DF" d="M3.6 7.2a4.4 4.4 0 0 0-2.4 1.2A4.3 4.3 0 0 0 0 11.5c0 .3 0 .6.1.9l8.5-.4-5-4.8z" />
-      <path fill="#28A8EA" d="M18.1 6.5a4 4 0 0 0-1.6.3l-2.6 1.1L18.6 16h3.1A4.3 4.3 0 0 0 24 12.2a4.3 4.3 0 0 0-4.3-4.3c-.5 0-1 .1-1.5.2v-1.6z" />
+      <path
+        fill="#0364B8"
+        d="M9.6 5.3l4.3 2.6 2.6-1.1a4 4 0 0 1 1.6-.3A6 6 0 0 0 7.7 3.4a4.7 4.7 0 0 1 1.9 1.9z"
+      />
+      <path
+        fill="#0078D4"
+        d="M7.7 3.4a4.8 4.8 0 0 0-2.6 1.2 4.8 4.8 0 0 0-1.5 2.6 4.4 4.4 0 0 0-2.4 1.2L8.6 12l5.3-4.1-4.3-2.6a4.7 4.7 0 0 0-1.9-1.9z"
+      />
+      <path
+        fill="#1490DF"
+        d="M3.6 7.2a4.4 4.4 0 0 0-2.4 1.2A4.3 4.3 0 0 0 0 11.5c0 .3 0 .6.1.9l8.5-.4-5-4.8z"
+      />
+      <path
+        fill="#28A8EA"
+        d="M18.1 6.5a4 4 0 0 0-1.6.3l-2.6 1.1L18.6 16h3.1A4.3 4.3 0 0 0 24 12.2a4.3 4.3 0 0 0-4.3-4.3c-.5 0-1 .1-1.5.2v-1.6z"
+      />
       <path fill="#0078D4" d="M.1 12.4A4.3 4.3 0 0 0 4.3 16h14.3l-4.7-8.1L8.6 12 .1 12.4z" />
     </svg>
   );
@@ -1117,7 +1318,17 @@ function SharePointIcon() {
       <circle cx="15.5" cy="12" r="5.5" fill="#1A9BA1" />
       <circle cx="12.5" cy="18" r="4.5" fill="#37C6D0" />
       <rect x="2" y="8" width="11" height="11" rx="1" fill="#03787C" />
-      <text x="7.5" y="16.2" fontSize="8" fill="#fff" textAnchor="middle" fontFamily="Inter, sans-serif" fontWeight="700">S</text>
+      <text
+        x="7.5"
+        y="16.2"
+        fontSize="8"
+        fill="#fff"
+        textAnchor="middle"
+        fontFamily="Inter, sans-serif"
+        fontWeight="700"
+      >
+        S
+      </text>
     </svg>
   );
 }

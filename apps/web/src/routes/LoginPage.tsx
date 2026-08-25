@@ -1,6 +1,15 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { CheckCircle2, Eye, EyeOff, Lock, Mail, ShieldCheck, FileText, PenLine } from 'lucide-react';
+import {
+  CheckCircle2,
+  Eye,
+  EyeOff,
+  Lock,
+  Mail,
+  ShieldCheck,
+  FileText,
+  PenLine,
+} from 'lucide-react';
 import { Badge, Button, Card, Checkbox, Field, Input, cn } from '@uxe/ui';
 import type { LoginResponse } from '@uxe/contracts';
 import { ApiError, api, setCsrfToken } from '../lib/api.js';
@@ -33,23 +42,27 @@ export function LoginPage() {
   const [challenge, setChallenge] = useState<{ id: string; token: string } | null>(null);
 
   const [submitting, setSubmitting] = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
+  // A redirect carrying `?expired` means the previous session died mid-session; say so
+  // rather than presenting a bare login form as if nothing happened. Seeded as the initial
+  // value so the message is on screen from the first paint.
+  const [formError, setFormError] = useState<string | null>(() =>
+    searchParams.get('sso') === 'failed' ? t('auth.ssoFailed') : null,
+  );
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
   const [retryAfter, setRetryAfter] = useState<number | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
-
-  // A redirect carrying `?expired` means the previous session died mid-session; say so
-  // rather than presenting a bare login form as if nothing happened.
-  useEffect(() => {
-    if (searchParams.get('expired')) setNotice(t('auth.sessionExpired'));
-    if (searchParams.get('sso') === 'failed') setFormError(t('auth.ssoFailed'));
-    if (searchParams.get('verified')) setNotice('Your email is confirmed. Sign in to continue.');
-  }, [searchParams, t]);
+  const [notice] = useState<string | null>(() => {
+    if (searchParams.get('expired')) return t('auth.sessionExpired');
+    if (searchParams.get('verified')) return 'Your email is confirmed. Sign in to continue.';
+    return null;
+  });
 
   // Count the rate-limit window down so the user can see when to try again.
   useEffect(() => {
     if (retryAfter === null || retryAfter <= 0) return;
-    const timer = setTimeout(() => setRetryAfter((value) => (value === null ? null : value - 1)), 1000);
+    const timer = setTimeout(
+      () => setRetryAfter((value) => (value === null ? null : value - 1)),
+      1000,
+    );
     return () => clearTimeout(timer);
   }, [retryAfter]);
 
@@ -73,7 +86,7 @@ export function LoginPage() {
     setFieldErrors({});
 
     try {
-      const result = await api.post<LoginResponse & { challengeToken?: string }>('/auth/login', {
+      const result = await api.post<LoginResponse>('/auth/login', {
         email,
         password,
         rememberMe,
@@ -87,7 +100,7 @@ export function LoginPage() {
       }
 
       if (result.status === 'mfa_required') {
-        setChallenge({ id: result.challengeId, token: result.challengeToken ?? '' });
+        setChallenge({ id: result.challengeId, token: result.challengeToken });
         setStage('mfa');
         return;
       }
@@ -131,10 +144,7 @@ export function LoginPage() {
       <div className="mx-auto grid min-h-dvh w-full max-w-[1600px] grid-cols-1 lg:grid-cols-[55fr_45fr]">
         <BrandPanel />
 
-        <main
-          id="main"
-          className="flex items-center justify-center px-4 py-10 sm:px-8 lg:px-12"
-        >
+        <main id="main" className="flex items-center justify-center px-4 py-10 sm:px-8 lg:px-12">
           <Card className="w-full max-w-[440px] p-6 sm:p-8" flush>
             <div className="p-6 sm:p-8">
               {stage === 'verify_email' ? (
@@ -173,7 +183,9 @@ export function LoginPage() {
 
                       <div className="my-6 flex items-center gap-4" aria-hidden>
                         <span className="h-px flex-1 bg-[var(--uxe-border)]" />
-                        <span className="text-[13px] text-[var(--uxe-text-secondary)]">{t('auth.or')}</span>
+                        <span className="text-[13px] text-[var(--uxe-text-secondary)]">
+                          {t('auth.or')}
+                        </span>
                         <span className="h-px flex-1 bg-[var(--uxe-border)]" />
                       </div>
 
@@ -219,7 +231,9 @@ export function LoginPage() {
                                 variant="ghost"
                                 size="icon-sm"
                                 onClick={() => setShowPassword((v) => !v)}
-                                aria-label={showPassword ? t('auth.hidePassword') : t('auth.showPassword')}
+                                aria-label={
+                                  showPassword ? t('auth.hidePassword') : t('auth.showPassword')
+                                }
                                 aria-pressed={showPassword}
                               >
                                 {showPassword ? (
@@ -262,7 +276,10 @@ export function LoginPage() {
 
                       <p className="mt-6 text-center text-[14px] text-[var(--uxe-text-secondary)]">
                         {t('auth.noAccount')}{' '}
-                        <Link to="/register" className="font-semibold text-[var(--uxe-cobalt)] hover:underline">
+                        <Link
+                          to="/register"
+                          className="font-semibold text-[var(--uxe-cobalt)] hover:underline"
+                        >
                           {t('auth.createAccount')}
                         </Link>
                       </p>
@@ -272,7 +289,11 @@ export function LoginPage() {
                       <p className="text-[14px] text-[var(--uxe-text-secondary)]">
                         {t('auth.mfaDescription')}
                       </p>
-                      <Field label={t('auth.mfaCode')} htmlFor="mfa-code" hint={t('auth.mfaRecoveryHint')}>
+                      <Field
+                        label={t('auth.mfaCode')}
+                        htmlFor="mfa-code"
+                        hint={t('auth.mfaRecoveryHint')}
+                      >
                         <Input
                           id="mfa-code"
                           name="one-time-code"
@@ -321,11 +342,11 @@ function BrandPanel() {
       {/* Decorative ground: soft brand glow, kept behind everything and hidden from AT. */}
       <div
         aria-hidden
-        className="pointer-events-none absolute -left-24 top-1/3 h-[420px] w-[420px] rounded-full bg-[var(--uxe-cobalt)]/[0.07] blur-3xl"
+        className="pointer-events-none absolute top-1/3 -left-24 h-[420px] w-[420px] rounded-full bg-[var(--uxe-cobalt)]/[0.07] blur-3xl"
       />
       <div
         aria-hidden
-        className="pointer-events-none absolute right-0 top-0 h-[360px] w-[360px] rounded-full bg-[var(--uxe-violet)]/[0.07] blur-3xl"
+        className="pointer-events-none absolute top-0 right-0 h-[360px] w-[360px] rounded-full bg-[var(--uxe-violet)]/[0.07] blur-3xl"
       />
 
       <div className="relative flex h-full flex-col">
@@ -367,13 +388,13 @@ function BrandPanel() {
           </div>
 
           <FloatingCard
-            className="absolute left-0 top-[34%] w-[232px]"
+            className="absolute top-[34%] left-0 w-[232px]"
             icon={<ShieldCheck className="h-5 w-5 text-[var(--uxe-cobalt)]" aria-hidden />}
             title={t('auth.complianceCheck')}
             badge={{ label: t('auth.compliant'), tone: 'success' }}
           />
           <FloatingCard
-            className="absolute right-[8%] top-[24%] w-[248px]"
+            className="absolute top-[24%] right-[8%] w-[248px]"
             icon={<FileText className="h-5 w-5 text-[var(--uxe-violet)]" aria-hidden />}
             title={t('auth.evidenceMatch')}
             badge={{ label: t('auth.verified'), tone: 'success' }}
@@ -411,13 +432,20 @@ function TrustCue({
     <li className="flex items-start gap-3">
       <span
         aria-hidden
-        className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--uxe-radius-control-lg)]', tones[tone])}
+        className={cn(
+          'flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--uxe-radius-control-lg)]',
+          tones[tone],
+        )}
       >
         {icon}
       </span>
       <span className="min-w-0">
-        <span className="block text-[14px] font-semibold leading-snug text-[var(--uxe-text)]">{title}</span>
-        <span className="mt-0.5 block text-[13px] leading-snug text-[var(--uxe-text-secondary)]">{detail}</span>
+        <span className="block text-[14px] leading-snug font-semibold text-[var(--uxe-text)]">
+          {title}
+        </span>
+        <span className="mt-0.5 block text-[13px] leading-snug text-[var(--uxe-text-secondary)]">
+          {detail}
+        </span>
       </span>
     </li>
   );
@@ -515,10 +543,22 @@ function SsoButton({ provider, label }: { provider: 'google' | 'microsoft'; labe
 function GoogleIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden>
-      <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62z" />
-      <path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.8.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.03-3.7H.96v2.33A9 9 0 0 0 9 18z" />
-      <path fill="#FBBC05" d="M3.97 10.72a5.4 5.4 0 0 1 0-3.44V4.95H.96a9 9 0 0 0 0 8.1l3.01-2.33z" />
-      <path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58C13.46.89 11.43 0 9 0A9 9 0 0 0 .96 4.95l3.01 2.33C4.68 5.16 6.66 3.58 9 3.58z" />
+      <path
+        fill="#4285F4"
+        d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62z"
+      />
+      <path
+        fill="#34A853"
+        d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.8.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.03-3.7H.96v2.33A9 9 0 0 0 9 18z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M3.97 10.72a5.4 5.4 0 0 1 0-3.44V4.95H.96a9 9 0 0 0 0 8.1l3.01-2.33z"
+      />
+      <path
+        fill="#EA4335"
+        d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58C13.46.89 11.43 0 9 0A9 9 0 0 0 .96 4.95l3.01 2.33C4.68 5.16 6.66 3.58 9 3.58z"
+      />
     </svg>
   );
 }

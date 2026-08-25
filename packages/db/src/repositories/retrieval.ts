@@ -1,6 +1,12 @@
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import type { Database } from '../client.js';
-import { sourceChunks, sourcePages, sourceSections, sourceVersions, sources } from '../schema/index.js';
+import {
+  sourceChunks,
+  sourcePages,
+  sourceSections,
+  sourceVersions,
+  sources,
+} from '../schema/index.js';
 import { newId } from '../ids.js';
 import type { TenantContext } from '../tenant.js';
 
@@ -10,10 +16,55 @@ import type { TenantContext } from '../tenant.js';
  * match nothing.
  */
 const LEXICAL_STOPWORDS = new Set([
-  'a', 'an', 'and', 'are', 'as', 'at', 'be', 'been', 'but', 'by', 'do', 'does', 'for',
-  'from', 'has', 'have', 'in', 'is', 'it', 'its', 'of', 'on', 'or', 'that', 'the', 'this',
-  'to', 'was', 'were', 'what', 'when', 'where', 'which', 'with', 'will', 'would', 'my',
-  'me', 'we', 'you', 'they', 'their', 'there', 'any', 'all', 'not', 'if', 'then', 'than',
+  'a',
+  'an',
+  'and',
+  'are',
+  'as',
+  'at',
+  'be',
+  'been',
+  'but',
+  'by',
+  'do',
+  'does',
+  'for',
+  'from',
+  'has',
+  'have',
+  'in',
+  'is',
+  'it',
+  'its',
+  'of',
+  'on',
+  'or',
+  'that',
+  'the',
+  'this',
+  'to',
+  'was',
+  'were',
+  'what',
+  'when',
+  'where',
+  'which',
+  'with',
+  'will',
+  'would',
+  'my',
+  'me',
+  'we',
+  'you',
+  'they',
+  'their',
+  'there',
+  'any',
+  'all',
+  'not',
+  'if',
+  'then',
+  'than',
 ]);
 
 export interface ChunkCandidate {
@@ -95,7 +146,9 @@ export class RetrievalRepository {
   async replaceSections(
     ctx: TenantContext,
     versionId: string,
-    sections: Array<Omit<typeof sourceSections.$inferInsert, 'id' | 'sourceVersionId' | 'workspaceId'>>,
+    sections: Array<
+      Omit<typeof sourceSections.$inferInsert, 'id' | 'sourceVersionId' | 'workspaceId'>
+    >,
   ) {
     await this.db.transaction(async (tx) => {
       await tx.delete(sourceSections).where(eq(sourceSections.sourceVersionId, versionId));
@@ -392,7 +445,10 @@ export class RetrievalRepository {
       .select()
       .from(sourcePages)
       .where(
-        and(eq(sourcePages.workspaceId, ctx.workspaceId), eq(sourcePages.sourceVersionId, versionId)),
+        and(
+          eq(sourcePages.workspaceId, ctx.workspaceId),
+          eq(sourcePages.sourceVersionId, versionId),
+        ),
       )
       .orderBy(asc(sourcePages.pageNumber));
   }

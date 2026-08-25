@@ -7,8 +7,84 @@
  *    explicitly opts in with LOG_DOCUMENT_CONTENT for local debugging.
  */
 
-const SECRET_KEY_PATTERN =
-  /^(?:.*_)?(password|passwd|secret|token|api[_-]?key|apikey|authorization|auth|cookie|session|credential|private[_-]?key|refresh[_-]?token|access[_-]?token|csrf|otp|code|hash|signature)(?:_.*)?$/i;
+/**
+ * Field names are matched on whole words, after splitting on `_`, `-` and camelCase
+ * boundaries. Matching the raw string would miss `csrfToken` and `sessionToken`, which are
+ * exactly the shapes this codebase uses.
+ */
+const SECRET_WORDS = new Set([
+  'password',
+  'passwd',
+  'passphrase',
+  'secret',
+  'token',
+  'apikey',
+  'authorization',
+  'auth',
+  'cookie',
+  'credential',
+  'credentials',
+  'csrf',
+  'xsrf',
+  'otp',
+  'totp',
+  'jwt',
+  'signature',
+  'salt',
+  'nonce',
+  'pin',
+]);
+
+/** Words that are only sensitive next to another word, so `statusCode` stays readable. */
+const QUALIFIED_SECRETS: Array<[string, string]> = [
+  ['session', 'token'],
+  ['session', 'secret'],
+  ['session', 'key'],
+  ['api', 'key'],
+  ['private', 'key'],
+  ['secret', 'key'],
+  ['signing', 'key'],
+  ['encryption', 'key'],
+  ['access', 'key'],
+  ['recovery', 'code'],
+  ['backup', 'code'],
+  ['verification', 'code'],
+  ['reset', 'code'],
+  ['auth', 'code'],
+  ['otp', 'code'],
+  ['password', 'hash'],
+  ['token', 'hash'],
+  ['secret', 'hash'],
+];
+
+function keyWords(key: string): string[] {
+  return key
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
+    .split(/[^A-Za-z0-9]+/)
+    .filter(Boolean)
+    .map((word) => word.toLowerCase());
+}
+
+export function isSecretKey(key: string): boolean {
+  const words = keyWords(key);
+  if (words.some((word) => SECRET_WORDS.has(word))) return true;
+  // `apikey` written as one word survives the split, so also test adjacent pairs.
+  for (let i = 0; i < words.length - 1; i += 1) {
+    for (const [first, second] of QUALIFIED_SECRETS) {
+      if (words[i] === first && words[i + 1] === second) return true;
+    }
+  }
+  // A field named exactly `hash`, `key` or `session` is a credential; the same word
+  // qualified by something else (`sessionId`, `storageKey`) stays readable so logs remain
+  // useful for correlation.
+  //
+  // A bare `code` is deliberately NOT in this list: in logs it is almost always an error
+  // code, and redacting it hides the reason a job failed. Secret codes are named
+  // (`recoveryCode`, `otpCode`, ...) and are caught by the qualified pairs above.
+  const only = words.length === 1 ? words[0] : undefined;
+  return only !== undefined && ['hash', 'key', 'session'].includes(only);
+}
 
 /** Content fields that hold document text; excluded by default. */
 const CONTENT_KEYS = new Set([
@@ -73,7 +149,7 @@ function redactInner(
     seen.add(value);
     const out: Record<string, unknown> = {};
     for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
-      if (SECRET_KEY_PATTERN.test(key)) {
+      if (isSecretKey(key)) {
         out[key] = '[redacted]';
         continue;
       }

@@ -18,7 +18,8 @@
 
 export interface InjectionSignal {
   pattern: string;
-  category: 'instruction_override' | 'exfiltration' | 'tool_abuse' | 'role_confusion' | 'hidden_content';
+  category:
+    'instruction_override' | 'exfiltration' | 'tool_abuse' | 'role_confusion' | 'hidden_content';
   severity: 'high' | 'medium' | 'low';
   excerpt: string;
   offset: number;
@@ -36,13 +37,15 @@ const RULES: Rule[] = [
     id: 'ignore_previous_instructions',
     category: 'instruction_override',
     severity: 'high',
-    pattern: /\b(ignore|disregard|forget|override)\s+(all\s+|any\s+|the\s+)?(previous|prior|earlier|above|preceding|system)\s+(instruction|instructions|prompt|prompts|rule|rules|direction|directions)\b/i,
+    pattern:
+      /\b(ignore|disregard|forget|override)\s+(all\s+|any\s+|the\s+)?(previous|prior|earlier|above|preceding|system)\s+(instruction|instructions|prompt|prompts|rule|rules|direction|directions)\b/i,
   },
   {
     id: 'new_instructions',
     category: 'instruction_override',
     severity: 'high',
-    pattern: /\b(new|updated|revised)\s+(instruction|instructions|system\s+prompt|directive)s?\s*[:.]/i,
+    pattern:
+      /\b(new|updated|revised)\s+(instruction|instructions|system\s+prompt|directive)s?\s*[:.]/i,
   },
   {
     id: 'role_confusion',
@@ -54,56 +57,65 @@ const RULES: Rule[] = [
     id: 'act_as',
     category: 'role_confusion',
     severity: 'medium',
-    pattern: /\byou\s+(are|must\s+now|should\s+now)\s+(act\s+as|behave\s+as|pretend\s+to\s+be|roleplay)\b/i,
+    pattern:
+      /\byou\s+(are|must\s+now|should\s+now)\s+(act\s+as|behave\s+as|pretend\s+to\s+be|roleplay)\b/i,
   },
   {
     id: 'reveal_secrets',
     category: 'exfiltration',
     severity: 'high',
-    pattern: /\b(reveal|disclose|print|output|show|repeat|dump)\s+(your\s+|the\s+)?(system\s+prompt|instructions|api\s+key|secret|credential|token|password|env(?:ironment)?\s+variable)/i,
+    pattern:
+      /\b(reveal|disclose|print|output|show|repeat|dump)\s+(your\s+|the\s+)?(system\s+prompt|instructions|api\s+key|secret|credential|token|password|env(?:ironment)?\s+variable)/i,
   },
   {
     id: 'exfiltrate_to_url',
     category: 'exfiltration',
     severity: 'high',
-    pattern: /\b(send|post|upload|transmit|forward|exfiltrate)\b[^.\n]{0,60}\b(to|at)\s+https?:\/\/\S+/i,
+    pattern:
+      /\b(send|post|upload|transmit|forward|exfiltrate)\b[^.\n]{0,60}\b(to|at)\s+https?:\/\/\S+/i,
   },
   {
     id: 'disable_grounding',
     category: 'tool_abuse',
     severity: 'high',
-    pattern: /\b(disable|turn\s+off|bypass|skip|do\s+not\s+use)\s+(the\s+)?(citation|citations|grounding|knowledge\s+base|source\s+check|verification|safety)/i,
+    pattern:
+      /\b(disable|turn\s+off|bypass|skip|do\s+not\s+use)\s+(the\s+)?(citation|citations|grounding|knowledge\s+base|source\s+check|verification|safety)/i,
   },
   {
     id: 'grant_permission',
     category: 'tool_abuse',
     severity: 'high',
-    pattern: /\b(grant|give|elevate|escalate)\b[^.\n]{0,40}\b(admin|owner|full)\s+(access|permission|privilege)/i,
+    pattern:
+      /\b(grant|give|elevate|escalate)\b[^.\n]{0,40}\b(admin|owner|full)\s+(access|permission|privilege)/i,
   },
   {
     id: 'mark_compliant',
     category: 'tool_abuse',
     severity: 'high',
     // Aimed squarely at this product: text that tries to force a compliant verdict.
-    pattern: /\b(mark|report|declare|treat|consider)\b[^.\n]{0,40}\b(as\s+)?(fully\s+)?compliant\b[^.\n]{0,40}\b(regardless|without|no\s+matter|even\s+if)\b/i,
+    pattern:
+      /\b(mark|report|declare|treat|consider)\b[^.\n]{0,40}\b(as\s+)?(fully\s+)?compliant\b[^.\n]{0,40}\b(regardless|without|no\s+matter|even\s+if)\b/i,
   },
   {
     id: 'fake_citation',
     category: 'tool_abuse',
     severity: 'high',
-    pattern: /\b(cite|reference|attribute)\b[^.\n]{0,40}\b(any|a\s+random|a\s+made[\s-]?up|fictional|invented)\b[^.\n]{0,20}\b(page|clause|section|source)/i,
+    pattern:
+      /\b(cite|reference|attribute)\b[^.\n]{0,40}\b(any|a\s+random|a\s+made[\s-]?up|fictional|invented)\b[^.\n]{0,20}\b(page|clause|section|source)/i,
   },
   {
     id: 'delimiter_injection',
     category: 'instruction_override',
     severity: 'medium',
-    pattern: /(\[\/?(?:INST|SYSTEM|SYS)\]|<\|(?:im_start|im_end|system|endoftext)\|>|###\s*(?:System|Instruction)\s*:)/i,
+    pattern:
+      /(\[\/?(?:INST|SYSTEM|SYS)\]|<\|(?:im_start|im_end|system|endoftext)\|>|###\s*(?:System|Instruction)\s*:)/i,
   },
   {
     id: 'hidden_html_instruction',
     category: 'hidden_content',
     severity: 'medium',
-    pattern: /<[^>]*style\s*=\s*["'][^"']*(?:display\s*:\s*none|visibility\s*:\s*hidden|font-size\s*:\s*0|color\s*:\s*#?f{3,6}\b)[^"']*["'][^>]*>/i,
+    pattern:
+      /<[^>]*style\s*=\s*["'][^"']*(?:display\s*:\s*none|visibility\s*:\s*hidden|font-size\s*:\s*0|color\s*:\s*#?f{3,6}\b)[^"']*["'][^>]*>/i,
   },
   {
     id: 'script_or_macro',
@@ -114,7 +126,10 @@ const RULES: Rule[] = [
 ];
 
 /** Scans untrusted document text and returns every injection signal it recognises. */
-export function detectInjection(text: string, options: { maxSignals?: number } = {}): InjectionSignal[] {
+export function detectInjection(
+  text: string,
+  options: { maxSignals?: number } = {},
+): InjectionSignal[] {
   const maxSignals = options.maxSignals ?? 20;
   const signals: InjectionSignal[] = [];
 
@@ -178,11 +193,7 @@ export function stripActiveContent(text: string): string {
  * and any occurrence of the delimiter inside the content is defanged. Model adapters must
  * pass source excerpts through this and never interpolate them into system policy.
  */
-export function wrapUntrusted(
-  label: string,
-  content: string,
-  nonce: string,
-): string {
+export function wrapUntrusted(label: string, content: string, nonce: string): string {
   const fence = `UNTRUSTED_${nonce}`;
   const safe = content.replaceAll(fence, `${fence.slice(0, 8)}_REDACTED`);
   return [

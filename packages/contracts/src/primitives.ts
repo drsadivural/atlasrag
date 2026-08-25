@@ -177,6 +177,8 @@ export const ERROR_CODES = [
   'mfa_required',
   'email_unverified',
   'forbidden',
+  /** Distinct from `forbidden`: the client should refresh the session token and retry. */
+  'csrf_failed',
   'not_found',
   'conflict',
   'version_conflict',

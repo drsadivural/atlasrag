@@ -57,6 +57,7 @@ import type {
 } from '@uxe/contracts';
 import { ApiError, api, newIdempotencyKey, uploadFile } from '../lib/api.js';
 import { subscribeToConsultation } from '../lib/stream.js';
+import { useSyncedState } from '../lib/forms.js';
 import { useI18n } from '../lib/i18n.js';
 import { Ayumi } from '../components/Brand.js';
 import { AnswerView } from '../components/AnswerView.js';
@@ -81,8 +82,6 @@ export function ConsultPage() {
   const [railOpen, setRailOpen] = useState(false);
   const [sourceDialogOpen, setSourceDialogOpen] = useState(false);
   const [openCitationId, setOpenCitationId] = useState<string | null>(null);
-  const [answerStyle, setAnswerStyle] = useState<AnswerStyle>('optimal');
-  const [taskMode, setTaskMode] = useState<TaskMode>('ask');
 
   const list = useQuery<Paginated<ConsultationSummary>, ApiError>({
     queryKey: ['consultations'],
@@ -95,16 +94,20 @@ export function ConsultPage() {
     enabled: Boolean(consultationId),
   });
 
-  // Adopt the consultation's stored preferences when it loads.
-  useEffect(() => {
-    if (!detail.data) return;
-    setAnswerStyle(detail.data.answerStyle);
-    setTaskMode(detail.data.taskMode);
-  }, [detail.data?.id, detail.data?.answerStyle, detail.data?.taskMode]);
+  // Seeded from the consultation's stored preference, so the panel opens in the mode the
+  // conversation was left in rather than snapping to it a frame later.
+  const [answerStyle, setAnswerStyle] = useSyncedState<AnswerStyle>(
+    detail.data?.answerStyle ?? 'optimal',
+  );
+  const [taskMode, setTaskMode] = useSyncedState<TaskMode>(detail.data?.taskMode ?? 'ask');
 
   const create = useMutation({
     mutationFn: () =>
-      api.post<ConsultationDetail>('/consultations', { title: 'New consultation', taskMode: 'ask', sourceIds: [] }),
+      api.post<ConsultationDetail>('/consultations', {
+        title: 'New consultation',
+        taskMode: 'ask',
+        sourceIds: [],
+      }),
     onSuccess: (created) => {
       void queryClient.invalidateQueries({ queryKey: ['consultations'] });
       navigate(`/consult/${created.id}`);
@@ -118,7 +121,8 @@ export function ConsultPage() {
   useEffect(() => {
     if (!consultationId) return;
     const controller = subscribeToConsultation(consultationId, {
-      onStage: () => void queryClient.invalidateQueries({ queryKey: ['consultation', consultationId] }),
+      onStage: () =>
+        void queryClient.invalidateQueries({ queryKey: ['consultation', consultationId] }),
       onMessage: () => {
         void queryClient.invalidateQueries({ queryKey: ['consultation', consultationId] });
         void queryClient.invalidateQueries({ queryKey: ['consultations'] });
@@ -135,14 +139,19 @@ export function ConsultPage() {
                   onClick: () => {
                     void api
                       .post(`/jobs/${event.job.id}/retry`, undefined, newIdempotencyKey())
-                      .then(() => queryClient.invalidateQueries({ queryKey: ['consultation', consultationId] }));
+                      .then(() =>
+                        queryClient.invalidateQueries({
+                          queryKey: ['consultation', consultationId],
+                        }),
+                      );
                   },
                 }
               : undefined,
           });
         }
       },
-      onDone: () => void queryClient.invalidateQueries({ queryKey: ['consultation', consultationId] }),
+      onDone: () =>
+        void queryClient.invalidateQueries({ queryKey: ['consultation', consultationId] }),
     });
     return () => controller.close();
   }, [consultationId, queryClient, push]);
@@ -185,7 +194,11 @@ export function ConsultPage() {
               title={t('consult.emptyTitle')}
               description={t('consult.emptyBody')}
               action={
-                <Button variant="primary" onClick={() => create.mutate()} loading={create.isPending}>
+                <Button
+                  variant="primary"
+                  onClick={() => create.mutate()}
+                  loading={create.isPending}
+                >
                   <Plus className="h-4 w-4" aria-hidden />
                   {t('consult.newConsultation')}
                 </Button>
@@ -269,7 +282,9 @@ function HistoryPanel({
 
   const filtered = useMemo(() => {
     const term = query.trim().toLowerCase();
-    const matched = term ? consultations.filter((c) => c.title.toLowerCase().includes(term)) : consultations;
+    const matched = term
+      ? consultations.filter((c) => c.title.toLowerCase().includes(term))
+      : consultations;
     // Pinned first, then most recently touched.
     return [...matched].sort((a, b) => {
       if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
@@ -280,10 +295,16 @@ function HistoryPanel({
   const content = (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex shrink-0 items-center justify-between gap-2 p-4">
-        <h2 className="text-[12px] font-semibold uppercase tracking-wider text-[var(--uxe-text-secondary)]">
+        <h2 className="text-[12px] font-semibold tracking-wider text-[var(--uxe-text-secondary)] uppercase">
           {t('consult.consultations')}
         </h2>
-        <Button variant="primary" size="icon-sm" onClick={onCreate} loading={creating} aria-label={t('consult.newConsultation')}>
+        <Button
+          variant="primary"
+          size="icon-sm"
+          onClick={onCreate}
+          loading={creating}
+          aria-label={t('consult.newConsultation')}
+        >
           <Plus className="h-4 w-4" aria-hidden />
         </Button>
       </div>
@@ -299,7 +320,10 @@ function HistoryPanel({
         />
       </div>
 
-      <nav aria-label={t('consult.consultations')} className="min-h-0 flex-1 overflow-y-auto px-3 pb-3">
+      <nav
+        aria-label={t('consult.consultations')}
+        className="min-h-0 flex-1 overflow-y-auto px-3 pb-3"
+      >
         {loading ? (
           <LoadingRegion label="Loading consultations">
             <div className="flex flex-col gap-2">
@@ -316,7 +340,10 @@ function HistoryPanel({
           <ul className="flex flex-col gap-1">
             {filtered.map((consultation) => (
               <li key={consultation.id}>
-                <ConsultationListItem consultation={consultation} active={consultation.id === activeId} />
+                <ConsultationListItem
+                  consultation={consultation}
+                  active={consultation.id === activeId}
+                />
               </li>
             ))}
           </ul>
@@ -336,7 +363,12 @@ function HistoryPanel({
         {content}
       </aside>
 
-      <SlideOver open={open} onOpenChange={onOpenChange} title={t('consult.consultations')} width="sm">
+      <SlideOver
+        open={open}
+        onOpenChange={onOpenChange}
+        title={t('consult.consultations')}
+        width="sm"
+      >
         {content}
       </SlideOver>
     </>
@@ -361,7 +393,8 @@ function ConsultationListItem({
       void queryClient.invalidateQueries({ queryKey: ['consultations'] });
       if (active) navigate('/consult');
     },
-    onError: (error: ApiError) => push({ tone: 'error', title: 'Could not delete', description: error.message }),
+    onError: (error: ApiError) =>
+      push({ tone: 'error', title: 'Could not delete', description: error.message }),
   });
 
   const statusDot =
@@ -392,7 +425,9 @@ function ConsultationListItem({
           aria-hidden
           className={cn(
             'mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--uxe-radius-control)]',
-            active ? 'bg-[var(--uxe-cobalt)]/12 text-[var(--uxe-cobalt)]' : 'bg-[var(--uxe-neutral-bg)] text-[var(--uxe-text-secondary)]',
+            active
+              ? 'bg-[var(--uxe-cobalt)]/12 text-[var(--uxe-cobalt)]'
+              : 'bg-[var(--uxe-neutral-bg)] text-[var(--uxe-text-secondary)]',
           )}
         >
           <FileText className="h-4 w-4" />
@@ -422,7 +457,11 @@ function ConsultationListItem({
           </Button>
         }
         items={[
-          { label: 'Open', icon: <ArrowRight className="h-4 w-4" aria-hidden />, onSelect: () => navigate(`/consult/${consultation.id}`) },
+          {
+            label: 'Open',
+            icon: <ArrowRight className="h-4 w-4" aria-hidden />,
+            onSelect: () => navigate(`/consult/${consultation.id}`),
+          },
           {
             label: 'Delete',
             icon: <X className="h-4 w-4" aria-hidden />,
@@ -446,15 +485,14 @@ function AyumiStatusCard() {
         </div>
         <span
           aria-hidden
-          className="absolute right-4 top-4 flex h-7 w-7 items-center justify-center rounded-full bg-[var(--uxe-success)] text-white shadow-[var(--uxe-shadow-sm)]"
+          className="absolute top-4 right-4 flex h-7 w-7 items-center justify-center rounded-full bg-[var(--uxe-success)] text-white shadow-[var(--uxe-shadow-sm)]"
         >
           <CheckCircle2 className="h-4 w-4" />
         </span>
       </div>
       <div className="px-4 pb-4 text-center">
         <p className="text-[15px] font-semibold text-[var(--uxe-text)]">
-          {t('app.consultant')} is{' '}
-          <span className="text-[var(--uxe-success)]">online</span>
+          {t('app.consultant')} is <span className="text-[var(--uxe-success)]">online</span>
         </p>
         <p className="mt-1 text-[12px] leading-snug text-[var(--uxe-text-secondary)]">
           {t('consult.groundedIn')}
@@ -488,10 +526,8 @@ function ConsultationWorkspace({
   const { t } = useI18n();
   const queryClient = useQueryClient();
   const { push } = useToast();
-  const [title, setTitle] = useState(consultation.title);
+  const [title, setTitle] = useSyncedState(consultation.title);
   const scrollRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => setTitle(consultation.title), [consultation.title]);
 
   // Follow the conversation as it grows.
   useEffect(() => {
@@ -500,7 +536,10 @@ function ConsultationWorkspace({
 
   const rename = useMutation({
     mutationFn: (next: string) =>
-      api.patch(`/consultations/${consultation.id}`, { title: next, version: consultation.version }),
+      api.patch(`/consultations/${consultation.id}`, {
+        title: next,
+        version: consultation.version,
+      }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['consultation', consultation.id] });
       void queryClient.invalidateQueries({ queryKey: ['consultations'] });
@@ -542,7 +581,9 @@ function ConsultationWorkspace({
               <FileText
                 className={cn(
                   'h-3.5 w-3.5 shrink-0',
-                  source.role === 'governing' ? 'text-[var(--uxe-cobalt)]' : 'text-[var(--uxe-teal)]',
+                  source.role === 'governing'
+                    ? 'text-[var(--uxe-cobalt)]'
+                    : 'text-[var(--uxe-teal)]',
                 )}
                 aria-hidden
               />
@@ -554,7 +595,8 @@ function ConsultationWorkspace({
           ))}
           {consultation.sources.length > 3 && (
             <span className="rounded-[var(--uxe-radius-control)] border border-[var(--uxe-border)] px-2.5 py-1.5 text-[13px] text-[var(--uxe-text-secondary)]">
-              +{consultation.sources.length - 3} {t('consult.documents', { count: consultation.sources.length - 3 })}
+              +{consultation.sources.length - 3}{' '}
+              {t('consult.documents', { count: consultation.sources.length - 3 })}
             </span>
           )}
           <Button variant="secondary" size="sm" onClick={onManageSources}>
@@ -565,11 +607,7 @@ function ConsultationWorkspace({
       </div>
 
       <div className="shrink-0 border-b border-[var(--uxe-border)] bg-[var(--uxe-surface)] px-4 py-3 sm:px-6">
-        <div
-          role="radiogroup"
-          aria-label="Task"
-          className="grid grid-cols-2 gap-2 sm:grid-cols-4"
-        >
+        <div role="radiogroup" aria-label="Task" className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {TASK_MODES.map((mode) => {
             const Icon = mode.icon;
             const active = taskMode === mode.value;
@@ -589,7 +627,10 @@ function ConsultationWorkspace({
                 )}
               >
                 <Icon
-                  className={cn('h-5 w-5', active ? 'text-[var(--uxe-cobalt)]' : 'text-[var(--uxe-text-secondary)]')}
+                  className={cn(
+                    'h-5 w-5',
+                    active ? 'text-[var(--uxe-cobalt)]' : 'text-[var(--uxe-text-secondary)]',
+                  )}
                   aria-hidden
                 />
                 <span
@@ -610,7 +651,9 @@ function ConsultationWorkspace({
         {consultation.messages.length === 0 ? (
           <EmptyState
             icon={<Sparkles className="h-6 w-6" aria-hidden />}
-            title={consultation.sources.length === 0 ? t('consult.noSources') : 'Ask your first question'}
+            title={
+              consultation.sources.length === 0 ? t('consult.noSources') : 'Ask your first question'
+            }
             description={
               consultation.sources.length === 0
                 ? t('consult.noSourcesBody')
@@ -679,14 +722,17 @@ function MessageBubble({
       push({ tone: 'info', title: 'Retrying' });
       void queryClient.invalidateQueries({ queryKey: ['consultation', consultationId] });
     },
-    onError: (error: ApiError) => push({ tone: 'error', title: 'Retry failed', description: error.message }),
+    onError: (error: ApiError) =>
+      push({ tone: 'error', title: 'Retry failed', description: error.message }),
   });
 
   if (message.role === 'user') {
     return (
       <div className="flex justify-end gap-3">
         <div className="max-w-[min(680px,85%)] rounded-[var(--uxe-radius-card-lg)] rounded-tr-sm bg-[var(--uxe-surface-selected)] px-4 py-3">
-          <p className="whitespace-pre-wrap text-[15px] leading-relaxed text-[var(--uxe-text)]">{message.text}</p>
+          <p className="text-[15px] leading-relaxed whitespace-pre-wrap text-[var(--uxe-text)]">
+            {message.text}
+          </p>
           {message.attachments.length > 0 && (
             <ul className="mt-2.5 flex flex-wrap gap-1.5">
               {message.attachments.map((attachment) => (
@@ -716,8 +762,12 @@ function MessageBubble({
 
       <div className="min-w-0 flex-1">
         <div className="mb-1.5 flex flex-wrap items-center gap-2">
-          <span className="text-[14px] font-semibold text-[var(--uxe-text)]">{t('app.consultant')}</span>
-          <span className="text-[13px] text-[var(--uxe-text-secondary)]">· {t('app.consultantRole')}</span>
+          <span className="text-[14px] font-semibold text-[var(--uxe-text)]">
+            {t('app.consultant')}
+          </span>
+          <span className="text-[13px] text-[var(--uxe-text-secondary)]">
+            · {t('app.consultantRole')}
+          </span>
           {message.answer && (
             <Badge tone="success" size="sm" icon={<CheckCircle2 className="h-3 w-3" aria-hidden />}>
               {t('compliance.groundedAnswer')}
@@ -731,8 +781,13 @@ function MessageBubble({
         <Card>
           {pending ? (
             <div role="status" aria-live="polite" className="flex items-center gap-3">
-              <Loader2 className="h-5 w-5 animate-[uxe-spin_0.9s_linear_infinite] text-[var(--uxe-cobalt)]" aria-hidden />
-              <p className="text-[14px] text-[var(--uxe-text-secondary)]">{t('consult.thinking')}</p>
+              <Loader2
+                className="h-5 w-5 animate-[uxe-spin_0.9s_linear_infinite] text-[var(--uxe-cobalt)]"
+                aria-hidden
+              />
+              <p className="text-[14px] text-[var(--uxe-text-secondary)]">
+                {t('consult.thinking')}
+              </p>
             </div>
           ) : message.error ? (
             <ErrorState
@@ -812,7 +867,8 @@ function Composer({
 
   const cancel = useMutation({
     mutationFn: () => api.post(`/consultations/${consultation.id}/cancel`),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['consultation', consultation.id] }),
+    onSuccess: () =>
+      void queryClient.invalidateQueries({ queryKey: ['consultation', consultation.id] }),
   });
 
   const submit = useCallback(() => {
@@ -850,14 +906,16 @@ function Composer({
         push({
           tone: 'success',
           title: `${files.length} document(s) attached`,
-          description: 'These are consultation inputs. Promote them from the Knowledge Base to make them permanent sources.',
+          description:
+            'These are consultation inputs. Promote them from the Knowledge Base to make them permanent sources.',
         });
         void queryClient.invalidateQueries({ queryKey: ['consultation', consultation.id] });
       } catch (error) {
         push({
           tone: 'error',
           title: 'Attachment failed',
-          description: error instanceof ApiError ? error.message : 'The file could not be uploaded.',
+          description:
+            error instanceof ApiError ? error.message : 'The file could not be uploaded.',
         });
       } finally {
         setUploading([]);
@@ -884,8 +942,12 @@ function Composer({
     }
 
     const Ctor =
-      (window as unknown as { SpeechRecognition?: new () => never; webkitSpeechRecognition?: new () => never })
-        .SpeechRecognition ??
+      (
+        window as unknown as {
+          SpeechRecognition?: new () => never;
+          webkitSpeechRecognition?: new () => never;
+        }
+      ).SpeechRecognition ??
       (window as unknown as { webkitSpeechRecognition?: new () => never }).webkitSpeechRecognition;
     if (!Ctor) return;
 
@@ -904,7 +966,10 @@ function Composer({
     recognition.continuous = false;
     recognition.interimResults = false;
     recognition.onresult = (event) => {
-      const transcript = Array.from({ length: event.results.length }, (_, i) => event.results[i]?.[0]?.transcript ?? '')
+      const transcript = Array.from(
+        { length: event.results.length },
+        (_, i) => event.results[i]?.[0]?.transcript ?? '',
+      )
         .join(' ')
         .trim();
       if (transcript) setText((current) => (current ? `${current} ${transcript}` : transcript));
@@ -912,7 +977,11 @@ function Composer({
     recognition.onend = () => setListening(false);
     recognition.onerror = () => {
       setListening(false);
-      push({ tone: 'error', title: 'Voice input failed', description: 'Check microphone permission and try again.' });
+      push({
+        tone: 'error',
+        title: 'Voice input failed',
+        description: 'Check microphone permission and try again.',
+      });
     };
 
     recognitionRef.current = recognition;
@@ -921,7 +990,7 @@ function Composer({
   }, [listening, push]);
 
   return (
-    <div className="shrink-0 border-t border-[var(--uxe-border)] bg-[var(--uxe-surface)] p-3 pb-safe sm:p-4">
+    <div className="pb-safe shrink-0 border-t border-[var(--uxe-border)] bg-[var(--uxe-surface)] p-3 sm:p-4">
       <div className="mx-auto max-w-4xl">
         {uploading.length > 0 && (
           <p role="status" className="mb-2 text-[12px] text-[var(--uxe-text-secondary)]">
@@ -963,7 +1032,12 @@ function Composer({
                 event.target.value = '';
               }}
             />
-            <Button variant="ghost" size="icon-sm" onClick={() => fileRef.current?.click()} aria-label={t('consult.uploadDocuments')}>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => fileRef.current?.click()}
+              aria-label={t('consult.uploadDocuments')}
+            >
               <Plus className="h-4 w-4" aria-hidden />
             </Button>
             <Button variant="ghost" size="sm" onClick={() => fileRef.current?.click()}>
@@ -993,12 +1067,21 @@ function Composer({
                   aria-label={listening ? t('consult.stopVoiceInput') : t('consult.voiceInput')}
                   aria-pressed={listening}
                 >
-                  {listening ? <MicOff className="h-4 w-4" aria-hidden /> : <Mic className="h-4 w-4" aria-hidden />}
+                  {listening ? (
+                    <MicOff className="h-4 w-4" aria-hidden />
+                  ) : (
+                    <Mic className="h-4 w-4" aria-hidden />
+                  )}
                 </Button>
               )}
 
               {busy ? (
-                <Button variant="danger" size="icon" onClick={() => cancel.mutate()} aria-label={t('consult.cancel')}>
+                <Button
+                  variant="danger"
+                  size="icon"
+                  onClick={() => cancel.mutate()}
+                  aria-label={t('consult.cancel')}
+                >
                   <Square className="h-4 w-4" aria-hidden />
                 </Button>
               ) : (
@@ -1047,12 +1130,27 @@ function ConnectorChip({ label, icon }: { label: string; icon: React.ReactNode }
 function GoogleDriveGlyph() {
   return (
     <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden>
-      <path fill="#0066DA" d="M1.6 17.3l1.4 2.4c.3.5.7.9 1.2 1.2l4.9-8.5H0c0 .6.1 1.1.4 1.6l1.2 3.3z" />
-      <path fill="#00AC47" d="M12 7.6L7.1 0h-.2c-.5.3-.9.7-1.2 1.2L.4 10.6c-.3.5-.4 1-.4 1.6h9.1L12 7.6z" />
-      <path fill="#EA4335" d="M16.9 24c.5-.3.9-.7 1.2-1.2l.6-1 2.8-4.8c.3-.5.4-1 .4-1.6h-9.1l1.9 3.4L16.9 24z" />
+      <path
+        fill="#0066DA"
+        d="M1.6 17.3l1.4 2.4c.3.5.7.9 1.2 1.2l4.9-8.5H0c0 .6.1 1.1.4 1.6l1.2 3.3z"
+      />
+      <path
+        fill="#00AC47"
+        d="M12 7.6L7.1 0h-.2c-.5.3-.9.7-1.2 1.2L.4 10.6c-.3.5-.4 1-.4 1.6h9.1L12 7.6z"
+      />
+      <path
+        fill="#EA4335"
+        d="M16.9 24c.5-.3.9-.7 1.2-1.2l.6-1 2.8-4.8c.3-.5.4-1 .4-1.6h-9.1l1.9 3.4L16.9 24z"
+      />
       <path fill="#00832D" d="M12 7.6L16.9 0H7.1L12 7.6z" />
-      <path fill="#2684FC" d="M19.1 12.4H24c0-.6-.1-1.1-.4-1.6L18.3 1.2c-.3-.5-.7-.9-1.2-1.2l-4.9 8.5 6.9 3.9z" />
-      <path fill="#FFBA00" d="M9.1 12.4H0l4.9 8.5c.5.3 1 .4 1.6.4h11c.6 0 1.1-.1 1.6-.4l-4.9-8.5H9.1z" />
+      <path
+        fill="#2684FC"
+        d="M19.1 12.4H24c0-.6-.1-1.1-.4-1.6L18.3 1.2c-.3-.5-.7-.9-1.2-1.2l-4.9 8.5 6.9 3.9z"
+      />
+      <path
+        fill="#FFBA00"
+        d="M9.1 12.4H0l4.9 8.5c.5.3 1 .4 1.6.4h11c.6 0 1.1-.1 1.6-.4l-4.9-8.5H9.1z"
+      />
     </svg>
   );
 }
@@ -1060,9 +1158,18 @@ function GoogleDriveGlyph() {
 function OneDriveGlyph() {
   return (
     <svg width="17" height="13" viewBox="0 0 24 16" aria-hidden>
-      <path fill="#0364B8" d="M9.6 5.3l4.3 2.6 2.6-1.1a4 4 0 0 1 1.6-.3A6 6 0 0 0 7.7 3.4a4.7 4.7 0 0 1 1.9 1.9z" />
-      <path fill="#0078D4" d="M7.7 3.4a4.8 4.8 0 0 0-2.6 1.2 4.8 4.8 0 0 0-1.5 2.6 4.4 4.4 0 0 0-2.4 1.2L8.6 12l5.3-4.1-4.3-2.6a4.7 4.7 0 0 0-1.9-1.9z" />
-      <path fill="#28A8EA" d="M18.1 6.5a4 4 0 0 0-1.6.3l-2.6 1.1L18.6 16h3.1A4.3 4.3 0 0 0 24 12.2a4.3 4.3 0 0 0-4.3-4.3c-.5 0-1 .1-1.5.2v-1.6z" />
+      <path
+        fill="#0364B8"
+        d="M9.6 5.3l4.3 2.6 2.6-1.1a4 4 0 0 1 1.6-.3A6 6 0 0 0 7.7 3.4a4.7 4.7 0 0 1 1.9 1.9z"
+      />
+      <path
+        fill="#0078D4"
+        d="M7.7 3.4a4.8 4.8 0 0 0-2.6 1.2 4.8 4.8 0 0 0-1.5 2.6 4.4 4.4 0 0 0-2.4 1.2L8.6 12l5.3-4.1-4.3-2.6a4.7 4.7 0 0 0-1.9-1.9z"
+      />
+      <path
+        fill="#28A8EA"
+        d="M18.1 6.5a4 4 0 0 0-1.6.3l-2.6 1.1L18.6 16h3.1A4.3 4.3 0 0 0 24 12.2a4.3 4.3 0 0 0-4.3-4.3c-.5 0-1 .1-1.5.2v-1.6z"
+      />
       <path fill="#0078D4" d="M.1 12.4A4.3 4.3 0 0 0 4.3 16h14.3l-4.7-8.1L8.6 12 .1 12.4z" />
     </svg>
   );
@@ -1075,7 +1182,17 @@ function SharePointGlyph() {
       <circle cx="15.5" cy="12" r="5.5" fill="#1A9BA1" />
       <circle cx="12.5" cy="18" r="4.5" fill="#37C6D0" />
       <rect x="2" y="8" width="11" height="11" rx="1" fill="#03787C" />
-      <text x="7.5" y="16.4" fontSize="8.5" fill="#fff" textAnchor="middle" fontFamily="Inter, sans-serif" fontWeight="700">S</text>
+      <text
+        x="7.5"
+        y="16.4"
+        fontSize="8.5"
+        fill="#fff"
+        textAnchor="middle"
+        fontFamily="Inter, sans-serif"
+        fontWeight="700"
+      >
+        S
+      </text>
     </svg>
   );
 }
@@ -1109,8 +1226,10 @@ function EvidencePanel({
   const update = useMutation({
     mutationFn: (patch: Record<string, unknown>) =>
       api.patch(`/consultations/${consultation.id}`, { ...patch, version: consultation.version }),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['consultation', consultation.id] }),
-    onError: (error: ApiError) => push({ tone: 'error', title: 'Could not save', description: error.message }),
+    onSuccess: () =>
+      void queryClient.invalidateQueries({ queryKey: ['consultation', consultation.id] }),
+    onError: (error: ApiError) =>
+      push({ tone: 'error', title: 'Could not save', description: error.message }),
   });
 
   const generateReport = useMutation({
@@ -1126,8 +1245,14 @@ function EvidencePanel({
         },
         newIdempotencyKey(),
       ),
-    onSuccess: () => push({ tone: 'success', title: 'Report queued', description: 'It appears in Reports when ready.' }),
-    onError: (error: ApiError) => push({ tone: 'error', title: 'Could not create report', description: error.message }),
+    onSuccess: () =>
+      push({
+        tone: 'success',
+        title: 'Report queued',
+        description: 'It appears in Reports when ready.',
+      }),
+    onError: (error: ApiError) =>
+      push({ tone: 'error', title: 'Could not create report', description: error.message }),
   });
 
   const projectSource = consultation.sources.find((s) => s.role === 'project');
@@ -1160,7 +1285,9 @@ function EvidencePanel({
   const content = (
     <div className="flex flex-col gap-5">
       <section>
-        <h3 className="text-[14px] font-semibold text-[var(--uxe-text)]">{t('consult.answerStyle')}</h3>
+        <h3 className="text-[14px] font-semibold text-[var(--uxe-text)]">
+          {t('consult.answerStyle')}
+        </h3>
         <SegmentedControl
           className="mt-2 w-full"
           full
@@ -1177,11 +1304,15 @@ function EvidencePanel({
             { value: 'details', label: t('consult.styleDetails') },
           ]}
         />
-        <p className="mt-1.5 text-[12px] text-[var(--uxe-text-secondary)]">{t('consult.answerStyleHint')}</p>
+        <p className="mt-1.5 text-[12px] text-[var(--uxe-text-secondary)]">
+          {t('consult.answerStyleHint')}
+        </p>
       </section>
 
       <section className="rounded-[var(--uxe-radius-card)] border border-[var(--uxe-border)] p-3.5">
-        <h3 className="text-[14px] font-semibold text-[var(--uxe-text)]">{t('consult.evidenceDetails')}</h3>
+        <h3 className="text-[14px] font-semibold text-[var(--uxe-text)]">
+          {t('consult.evidenceDetails')}
+        </h3>
         <div className="mt-1.5 flex flex-col">
           {(
             [
@@ -1195,7 +1326,9 @@ function EvidencePanel({
               className="py-1.5"
               checked={consultation.evidenceDetail[key]}
               onCheckedChange={(checked) =>
-                update.mutate({ evidenceDetail: { ...consultation.evidenceDetail, [key]: checked } })
+                update.mutate({
+                  evidenceDetail: { ...consultation.evidenceDetail, [key]: checked },
+                })
               }
               label={label}
             />
@@ -1204,11 +1337,15 @@ function EvidencePanel({
       </section>
 
       <section className="rounded-[var(--uxe-radius-card)] border border-[var(--uxe-border)] p-3.5">
-        <h3 className="text-[14px] font-semibold text-[var(--uxe-text)]">{t('consult.outputDocument')}</h3>
+        <h3 className="text-[14px] font-semibold text-[var(--uxe-text)]">
+          {t('consult.outputDocument')}
+        </h3>
         <div className="mt-2.5 flex items-start gap-2.5 rounded-[var(--uxe-radius-control)] border border-[var(--uxe-cobalt)] bg-[var(--uxe-surface-selected)] p-3">
           <FileText className="mt-0.5 h-5 w-5 shrink-0 text-[var(--uxe-danger)]" aria-hidden />
           <div className="min-w-0">
-            <p className="text-[13px] font-semibold text-[var(--uxe-text)]">{t('consult.matchOriginal')}</p>
+            <p className="text-[13px] font-semibold text-[var(--uxe-text)]">
+              {t('consult.matchOriginal')}
+            </p>
             <p className="text-[12px] text-[var(--uxe-text-secondary)]">
               {outputFormat} — corrected {outputFormat}
             </p>
@@ -1246,7 +1383,9 @@ function EvidencePanel({
 
       {coverage && (
         <section className="rounded-[var(--uxe-radius-card)] border border-[var(--uxe-border)] p-3.5">
-          <h3 className="text-[14px] font-semibold text-[var(--uxe-text)]">{t('consult.evidenceCoverage')}</h3>
+          <h3 className="text-[14px] font-semibold text-[var(--uxe-text)]">
+            {t('consult.evidenceCoverage')}
+          </h3>
           <div className="mt-3 flex items-center gap-4">
             <Gauge
               value={coverage.score * 100}
@@ -1276,7 +1415,11 @@ function EvidencePanel({
               {coverage.unverifiedCitations === 1 ? '' : 's'}
             </Badge>
           ) : (
-            <Badge tone="success" className="mt-3" icon={<CheckCircle2 className="h-3.5 w-3.5" aria-hidden />}>
+            <Badge
+              tone="success"
+              className="mt-3"
+              icon={<CheckCircle2 className="h-3.5 w-3.5" aria-hidden />}
+            >
               {t('compliance.sourcesVerified')}
             </Badge>
           )}
@@ -1284,19 +1427,25 @@ function EvidencePanel({
       )}
 
       <section className="rounded-[var(--uxe-radius-card)] border border-[var(--uxe-border)] p-3.5">
-        <h3 className="text-[14px] font-semibold text-[var(--uxe-text)]">{t('consult.responseControls')}</h3>
+        <h3 className="text-[14px] font-semibold text-[var(--uxe-text)]">
+          {t('consult.responseControls')}
+        </h3>
         <SwitchField
           label={t('consult.knowledgeOnly')}
           checked={consultation.responseControls.knowledgeOnly}
           onCheckedChange={(checked) =>
-            update.mutate({ responseControls: { ...consultation.responseControls, knowledgeOnly: checked } })
+            update.mutate({
+              responseControls: { ...consultation.responseControls, knowledgeOnly: checked },
+            })
           }
         />
         <SwitchField
           label={t('consult.askWhenUncertain')}
           checked={consultation.responseControls.askWhenUncertain}
           onCheckedChange={(checked) =>
-            update.mutate({ responseControls: { ...consultation.responseControls, askWhenUncertain: checked } })
+            update.mutate({
+              responseControls: { ...consultation.responseControls, askWhenUncertain: checked },
+            })
           }
         />
         <SwitchField
@@ -1304,7 +1453,9 @@ function EvidencePanel({
           description={t('consult.generalFallbackHint')}
           checked={consultation.responseControls.generalModelFallback}
           onCheckedChange={(checked) =>
-            update.mutate({ responseControls: { ...consultation.responseControls, generalModelFallback: checked } })
+            update.mutate({
+              responseControls: { ...consultation.responseControls, generalModelFallback: checked },
+            })
           }
         />
       </section>
@@ -1328,11 +1479,18 @@ function EvidencePanel({
         className="hidden w-[var(--uxe-rail-width)] shrink-0 overflow-y-auto border-l border-[var(--uxe-border)] bg-[var(--uxe-surface)] p-4 xl:block"
         aria-label={t('consult.evidenceOutput')}
       >
-        <h2 className="mb-4 text-[16px] font-semibold text-[var(--uxe-text)]">{t('consult.evidenceOutput')}</h2>
+        <h2 className="mb-4 text-[16px] font-semibold text-[var(--uxe-text)]">
+          {t('consult.evidenceOutput')}
+        </h2>
         {content}
       </aside>
 
-      <SlideOver open={open} onOpenChange={onOpenChange} title={t('consult.evidenceOutput')} width="md">
+      <SlideOver
+        open={open}
+        onOpenChange={onOpenChange}
+        title={t('consult.evidenceOutput')}
+        width="md"
+      >
         {content}
       </SlideOver>
     </>
@@ -1343,7 +1501,7 @@ function EvidencePanel({
 /* Source selector                                                            */
 /* -------------------------------------------------------------------------- */
 
-function SourceSelectorDialog({
+export function SourceSelectorDialog({
   open,
   onOpenChange,
   consultation,
@@ -1357,21 +1515,30 @@ function SourceSelectorDialog({
   const { push } = useToast();
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<Set<string>>(
-    () => new Set(consultation.sources.filter((s) => s.role === 'governing').map((s) => s.sourceId)),
+    () =>
+      new Set(consultation.sources.filter((s) => s.role === 'governing').map((s) => s.sourceId)),
   );
 
-  useEffect(() => {
+  // Re-seed on the open transition, during render: an effect would show last time's
+  // selection for one frame before correcting itself.
+  const [wasOpen, setWasOpen] = useState(open);
+  if (wasOpen !== open) {
+    setWasOpen(open);
     if (open) {
-      setSelected(new Set(consultation.sources.filter((s) => s.role === 'governing').map((s) => s.sourceId)));
+      setSelected(
+        new Set(consultation.sources.filter((s) => s.role === 'governing').map((s) => s.sourceId)),
+      );
     }
-  }, [open, consultation.sources]);
+  }
 
   // Only sources the caller may actually see are returned; the permission filter runs
   // server-side, so this list can never offer a restricted document.
   const sources = useQuery<SourcesResponse, ApiError>({
     queryKey: ['sources', 'selector', query],
     queryFn: () =>
-      api.get<SourcesResponse>(`/sources?status=ready&pageSize=100${query ? `&q=${encodeURIComponent(query)}` : ''}`),
+      api.get<SourcesResponse>(
+        `/sources?status=ready&pageSize=100${query ? `&q=${encodeURIComponent(query)}` : ''}`,
+      ),
     enabled: open,
   });
 
@@ -1386,7 +1553,8 @@ function SourceSelectorDialog({
       void queryClient.invalidateQueries({ queryKey: ['consultation', consultation.id] });
       onOpenChange(false);
     },
-    onError: (error: ApiError) => push({ tone: 'error', title: 'Could not update sources', description: error.message }),
+    onError: (error: ApiError) =>
+      push({ tone: 'error', title: 'Could not update sources', description: error.message }),
   });
 
   return (
@@ -1434,6 +1602,7 @@ function SourceSelectorDialog({
           {sources.data?.items.map((source) => (
             <li key={source.id}>
               <label
+                htmlFor={`source-select-${source.id}`}
                 className={cn(
                   'flex cursor-pointer items-start gap-3 rounded-[var(--uxe-radius-card)] border p-3 transition-colors',
                   selected.has(source.id)
@@ -1442,6 +1611,7 @@ function SourceSelectorDialog({
                 )}
               >
                 <Checkbox
+                  id={`source-select-${source.id}`}
                   checked={selected.has(source.id)}
                   onCheckedChange={(checked) =>
                     setSelected((current) => {
@@ -1460,7 +1630,8 @@ function SourceSelectorDialog({
                   <span className="mt-0.5 block text-[12px] text-[var(--uxe-text-secondary)]">
                     {source.currentVersion}
                     {source.pages !== null && ` · ${source.pages} pages`}
-                    {source.effectiveDate && ` · effective ${new Date(source.effectiveDate).getFullYear()}`}
+                    {source.effectiveDate &&
+                      ` · effective ${new Date(source.effectiveDate).getFullYear()}`}
                     {` · ${source.accessLabel}`}
                   </span>
                 </span>

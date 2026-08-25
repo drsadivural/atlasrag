@@ -1,5 +1,11 @@
 import type { BoundingBox, Citation, Entailment } from '@uxe/contracts';
-import { findExcerpt, normalizeForMatch, normalizeWhitespace, splitSentences, truncateExcerpt } from './text.js';
+import {
+  findExcerpt,
+  normalizeForMatch,
+  normalizeWhitespace,
+  splitSentences,
+  truncateExcerpt,
+} from './text.js';
 import type { FusedCandidate } from './fusion.js';
 
 export interface PageRecord {
@@ -46,6 +52,15 @@ export interface VerificationResult {
   charStart: number | null;
   charEnd: number | null;
   boundingBoxes: BoundingBox[];
+  /**
+   * The matched text exactly as it appears in the stored page, including its line breaks.
+   *
+   * This is what gets persisted as the citation's excerpt, so the quotation the reader
+   * sees is character-for-character what the highlight covers. Storing a whitespace-
+   * normalised copy instead would make `pageText.includes(excerpt)` false and leave the
+   * viewer unable to find its own quotation.
+   */
+  matchedText: string | null;
 }
 
 /**
@@ -73,7 +88,15 @@ export function verifyExcerpt(
   const trimmed = normalizeWhitespace(excerpt);
 
   if (!trimmed) {
-    return { verified: false, method: 'failed', reason: 'Excerpt is empty', charStart: null, charEnd: null, boundingBoxes: [] };
+    return {
+      verified: false,
+      method: 'failed',
+      reason: 'Excerpt is empty',
+      charStart: null,
+      charEnd: null,
+      boundingBoxes: [],
+      matchedText: null,
+    };
   }
   if (!page) {
     return {
@@ -83,6 +106,7 @@ export function verifyExcerpt(
       charStart: null,
       charEnd: null,
       boundingBoxes: [],
+      matchedText: null,
     };
   }
 
@@ -95,11 +119,12 @@ export function verifyExcerpt(
       charStart: null,
       charEnd: null,
       boundingBoxes: [],
+      matchedText: null,
     };
   }
 
-  const boxes =
-    options.computeBoxes === false ? [] : computeBoundingBoxes(page, page.text.slice(span.start, span.end));
+  const matchedText = page.text.slice(span.start, span.end);
+  const boxes = options.computeBoxes === false ? [] : computeBoundingBoxes(page, matchedText);
 
   return {
     verified: true,
@@ -108,6 +133,7 @@ export function verifyExcerpt(
     charStart: span.start,
     charEnd: span.end,
     boundingBoxes: boxes,
+    matchedText,
   };
 }
 
@@ -201,14 +227,20 @@ export function selectExcerpt(
   const sentences = splitSentences(passage);
   if (sentences.length === 0) return truncateExcerpt(passage, maxChars);
 
-  const queryTerms = new Set(normalizeForMatch(query).split(' ').filter((t) => t.length > 2));
+  const queryTerms = new Set(
+    normalizeForMatch(query)
+      .split(' ')
+      .filter((t) => t.length > 2),
+  );
 
   const scored = sentences.map((sentence, index) => {
     const terms = normalizeForMatch(sentence).split(' ');
     const hits = terms.filter((t) => queryTerms.has(t)).length;
     const density = terms.length === 0 ? 0 : hits / Math.sqrt(terms.length);
     // Obligation language is what a compliance reader wants quoted.
-    const obligation = /\b(shall|must|shall not|must not|required|prohibited)\b/i.test(sentence) ? 0.35 : 0;
+    const obligation = /\b(shall|must|shall not|must not|required|prohibited)\b/i.test(sentence)
+      ? 0.35
+      : 0;
     return { sentence, index, score: density + obligation };
   });
 
@@ -257,8 +289,12 @@ export function classifyEntailment(claim: string, passage: string): Entailment {
   const overlap = [...claimTerms].filter((t) => passageNorm.includes(t)).length;
   const ratio = claimTerms.size === 0 ? 0 : overlap / claimTerms.size;
 
-  const claimIsNegative = /\b(not|no|without|prohibited|shall not|must not|fails?|non-compliant)\b/i.test(claim);
-  const passageIsNegative = /\b(shall not|must not|is prohibited|are prohibited|no .{0,20}shall|not permitted|not allowed)\b/i.test(passage);
+  const claimIsNegative =
+    /\b(not|no|without|prohibited|shall not|must not|fails?|non-compliant)\b/i.test(claim);
+  const passageIsNegative =
+    /\b(shall not|must not|is prohibited|are prohibited|no .{0,20}shall|not permitted|not allowed)\b/i.test(
+      passage,
+    );
 
   if (ratio < 0.28) return 'context';
   // Opposite polarity over the same subject matter is a contradiction.
@@ -323,7 +359,11 @@ export function extractQuantities(text: string): Map<string, number> {
 
 function canonicalUnit(unit: string): string {
   if (['mm', 'cm', 'm', 'km', 'in', 'ft'].includes(unit)) return 'length_m';
-  if (['s', 'sec', 'second', 'seconds', 'min', 'minute', 'minutes', 'h', 'hour', 'hours'].includes(unit)) {
+  if (
+    ['s', 'sec', 'second', 'seconds', 'min', 'minute', 'minutes', 'h', 'hour', 'hours'].includes(
+      unit,
+    )
+  ) {
     return 'time_s';
   }
   if (['kg', 'g', 'lb'].includes(unit)) return 'mass_kg';
@@ -336,24 +376,48 @@ function canonicalUnit(unit: string): string {
 
 function convertToCanonical(value: number, unit: string): number {
   switch (unit) {
-    case 'mm': return value / 1000;
-    case 'cm': return value / 100;
-    case 'km': return value * 1000;
-    case 'in': return value * 0.0254;
-    case 'ft': return value * 0.3048;
-    case 'min': case 'minute': case 'minutes': return value * 60;
-    case 'h': case 'hour': case 'hours': return value * 3600;
-    case 'g': return value / 1000;
-    case 'lb': return value * 0.453592;
-    case 'kpa': return value * 1000;
-    case 'bar': return value * 100000;
-    default: return value;
+    case 'mm':
+      return value / 1000;
+    case 'cm':
+      return value / 100;
+    case 'km':
+      return value * 1000;
+    case 'in':
+      return value * 0.0254;
+    case 'ft':
+      return value * 0.3048;
+    case 'min':
+    case 'minute':
+    case 'minutes':
+      return value * 60;
+    case 'h':
+    case 'hour':
+    case 'hours':
+      return value * 3600;
+    case 'g':
+      return value / 1000;
+    case 'lb':
+      return value * 0.453592;
+    case 'kpa':
+      return value * 1000;
+    case 'bar':
+      return value * 100000;
+    default:
+      return value;
   }
 }
 
 function sharedTerms(a: string, b: string): number {
-  const aSet = new Set(normalizeForMatch(a).split(' ').filter((t) => t.length > 3));
-  const bSet = new Set(normalizeForMatch(b).split(' ').filter((t) => t.length > 3));
+  const aSet = new Set(
+    normalizeForMatch(a)
+      .split(' ')
+      .filter((t) => t.length > 3),
+  );
+  const bSet = new Set(
+    normalizeForMatch(b)
+      .split(' ')
+      .filter((t) => t.length > 3),
+  );
   if (aSet.size === 0 || bSet.size === 0) return 0;
   let hits = 0;
   for (const t of aSet) if (bSet.has(t)) hits += 1;
@@ -424,7 +488,9 @@ export function finalizeCitation(
     charEnd: verification.charEnd ?? draft.charEnd,
     urlFragment: draft.urlFragment,
     boundingBoxes: verification.boundingBoxes,
-    supportingExcerpt: draft.supportingExcerpt,
+    // The verbatim slice when verification succeeded, so the stored quotation and the
+    // highlight offsets describe exactly the same characters.
+    supportingExcerpt: verification.matchedText ?? draft.supportingExcerpt,
     retrievalScore: draft.retrievalScore,
     rerankScore: draft.rerankScore,
     entailment: draft.entailment,

@@ -213,7 +213,9 @@ export class ConsultationRepository {
     const visible = await this.db
       .select({ id: sources.id, currentVersionId: sources.currentVersionId })
       .from(sources)
-      .where(and(inArray(sources.id, sourceIds.length ? sourceIds : ['-']), visibleSourcePredicate(ctx)));
+      .where(
+        and(inArray(sources.id, sourceIds.length ? sourceIds : ['-']), visibleSourcePredicate(ctx)),
+      );
 
     return this.db.transaction(async (tx) => {
       await tx
@@ -342,7 +344,11 @@ export class ConsultationRepository {
    */
   async completeMessage(
     messageId: string,
-    patch: { text?: string; answer?: Record<string, unknown> | null; error?: Record<string, unknown> | null },
+    patch: {
+      text?: string;
+      answer?: Record<string, unknown> | null;
+      error?: Record<string, unknown> | null;
+    },
   ) {
     await this.db.update(messages).set(patch).where(eq(messages.id, messageId));
   }

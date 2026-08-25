@@ -34,6 +34,7 @@ export const ja: Catalogue = {
   'nav.platform': 'プラットフォーム',
   'nav.skipToContent': 'メインコンテンツへスキップ',
   'nav.mainLabel': 'メインナビゲーション',
+  'nav.mobileLabel': '主要ナビゲーション',
 
   'auth.welcomeBack': 'おかえりなさい',
   'auth.continueGoogle': 'Google で続行',
@@ -87,6 +88,8 @@ export const ja: Catalogue = {
 
   'common.search': '検索',
   'common.cancel': 'キャンセル',
+  'common.edit': '編集',
+  'common.delete': '削除',
   'common.save': '保存',
   'common.close': '閉じる',
   'common.retry': '再試行',

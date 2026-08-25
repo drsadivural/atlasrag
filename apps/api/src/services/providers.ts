@@ -44,14 +44,27 @@ export function buildProviders(env: AppEnv): { chat: ChatProvider; embeddings: E
  */
 export async function probeProvider(
   deps: AppDeps,
-  config: { provider: string; model: string; capability: string; credentialEncrypted: string | null },
+  config: {
+    provider: string;
+    model: string;
+    capability: string;
+    credentialEncrypted: string | null;
+  },
 ): Promise<ProviderHealth> {
   if (config.provider === 'deterministic') {
-    return { status: 'healthy', detail: 'Local extractive engine; no credential required.', latencyMs: 0 };
+    return {
+      status: 'healthy',
+      detail: 'Local extractive engine; no credential required.',
+      latencyMs: 0,
+    };
   }
 
   if (!config.credentialEncrypted) {
-    return { status: 'unconfigured', detail: 'No API key has been saved for this provider.', latencyMs: null };
+    return {
+      status: 'unconfigured',
+      detail: 'No API key has been saved for this provider.',
+      latencyMs: null,
+    };
   }
 
   let apiKey: string;
@@ -96,7 +109,14 @@ export async function probeProvider(
  */
 export async function providersForWorkspace(
   deps: AppDeps,
-  tenant: { workspaceId: string; organizationId: string; userId: string; role: string; groupIds: readonly string[]; traceId: string },
+  tenant: {
+    workspaceId: string;
+    organizationId: string;
+    userId: string;
+    role: string;
+    groupIds: readonly string[];
+    traceId: string;
+  },
 ): Promise<{ chat: ChatProvider; embeddings: EmbeddingProvider; chatConfigId: string | null }> {
   const ctx = tenant as never;
 
@@ -122,12 +142,21 @@ export async function providersForWorkspace(
   const embeddingConfig = await deps.repos.settings.primaryFor(ctx, 'embedding').catch(() => null);
   let embeddings = deps.services.embeddings;
 
-  if (embeddingConfig && embeddingConfig.provider === 'openai' && embeddingConfig.credentialEncrypted) {
+  if (
+    embeddingConfig &&
+    embeddingConfig.provider === 'openai' &&
+    embeddingConfig.credentialEncrypted
+  ) {
     try {
-      const apiKey = await decryptSecret(embeddingConfig.credentialEncrypted, deps.env.ENCRYPTION_KEY);
+      const apiKey = await decryptSecret(
+        embeddingConfig.credentialEncrypted,
+        deps.env.ENCRYPTION_KEY,
+      );
       embeddings = new OpenAIEmbeddingProvider(apiKey, embeddingConfig.model);
     } catch {
-      deps.logger.warn('provider.embedding_credential_unreadable', { configId: embeddingConfig.id });
+      deps.logger.warn('provider.embedding_credential_unreadable', {
+        configId: embeddingConfig.id,
+      });
     }
   }
 

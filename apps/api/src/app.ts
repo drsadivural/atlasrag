@@ -17,7 +17,7 @@ import {
   type Database,
 } from '@uxe/db';
 import {
-  Logger,
+  type Logger,
   MetricsRegistry,
   Tracer,
   createLogger,
@@ -82,7 +82,11 @@ export interface BuiltApp {
  * integration tests (env and database injected). No module reaches for global state.
  */
 export function buildApp(options: BuildOptions = {}): BuiltApp {
-  const env: AppEnv = loadEnv(options.env ?? (globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env ?? {});
+  const env: AppEnv = loadEnv(
+    options.env ??
+      (globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env ??
+      {},
+  );
 
   const logger =
     options.logger ??
@@ -106,7 +110,8 @@ export function buildApp(options: BuildOptions = {}): BuiltApp {
   );
 
   const metrics = new MetricsRegistry();
-  const db = options.db ?? createDb({ url: env.DATABASE_URL, max: env.DATABASE_MAX_CONNECTIONS }).db;
+  const db =
+    options.db ?? createDb({ url: env.DATABASE_URL, max: env.DATABASE_MAX_CONNECTIONS }).db;
 
   const repos: Repositories = {
     identity: new IdentityRepository(db),

@@ -1,0 +1,152 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        required: true
+        default: staging
+        type: choice
+        options: [staging, production]
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: '22.19.2'
+  PNPM_VERSION: '11.16.0'
+
+jobs:
+  # Staging deploys automatically on green main.
+  staging:
+    name: Deploy to staging
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment:
+      name: staging
+      url: https://staging.uxe.example
+    if: github.event_name == 'push' || inputs.environment == 'staging'
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      # Expand/contract discipline: migrations are additive and are applied before the
+      # code that uses them, so a rollback never lands on a schema it cannot read.
+      - name: Apply migrations
+        run: pnpm --filter @uxe/db migrate
+        env:
+          DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+
+      - name: Build web bundle
+        run: pnpm --filter @uxe/web build
+        env:
+          VITE_PUBLIC_API_URL: https://api-staging.uxe.example
+
+      - name: Deploy API worker
+        run: pnpm exec wrangler deploy --config infra/cloudflare/wrangler.api.toml --env staging
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Deploy web worker
+        run: pnpm exec wrangler deploy --config infra/cloudflare/wrangler.web.toml --env staging
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Build and push the document worker image
+        run: |
+          echo "${{ secrets.REGISTRY_PASSWORD }}" | \
+            docker login "${{ secrets.REGISTRY_HOST }}" -u "${{ secrets.REGISTRY_USERNAME }}" --password-stdin
+          IMAGE="${{ secrets.REGISTRY_HOST }}/uxe-document-worker:${{ github.sha }}"
+          docker build -f infra/document-worker/Dockerfile -t "$IMAGE" .
+          docker push "$IMAGE"
+
+      - name: Smoke test
+        run: |
+          curl --fail --silent --show-error https://api-staging.uxe.example/api/v1/health | tee /dev/stderr | grep -q '"status":"ok"'
+          curl --fail --silent --show-error --output /dev/null https://staging.uxe.example
+
+  # Production requires a human approval on the `production` environment.
+  production:
+    name: Deploy to production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    needs: [staging]
+    environment:
+      name: production
+      url: https://app.uxe.example
+    if: github.event_name == 'workflow_dispatch' && inputs.environment == 'production'
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Apply migrations
+        run: pnpm --filter @uxe/db migrate
+        env:
+          DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+
+      - name: Build web bundle
+        run: pnpm --filter @uxe/web build
+        env:
+          VITE_PUBLIC_API_URL: https://api.uxe.example
+
+      - name: Deploy API worker
+        run: pnpm exec wrangler deploy --config infra/cloudflare/wrangler.api.toml --env production
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Deploy web worker
+        run: pnpm exec wrangler deploy --config infra/cloudflare/wrangler.web.toml --env production
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Release the document worker image
+        run: |
+          echo "${{ secrets.REGISTRY_PASSWORD }}" | \
+            docker login "${{ secrets.REGISTRY_HOST }}" -u "${{ secrets.REGISTRY_USERNAME }}" --password-stdin
+          IMAGE="${{ secrets.REGISTRY_HOST }}/uxe-document-worker:${{ github.sha }}"
+          docker build -f infra/document-worker/Dockerfile -t "$IMAGE" .
+          docker push "$IMAGE"
+
+      - name: Smoke test
+        run: |
+          curl --fail --silent --show-error https://api.uxe.example/api/v1/health | grep -q '"status":"ok"'
+          curl --fail --silent --show-error --output /dev/null https://app.uxe.example
+
+      - name: Roll back on a failed smoke test
+        if: failure()
+        run: |
+          pnpm exec wrangler rollback --config infra/cloudflare/wrangler.api.toml --env production --message "Smoke test failed for ${{ github.sha }}"
+          pnpm exec wrangler rollback --config infra/cloudflare/wrangler.web.toml --env production --message "Smoke test failed for ${{ github.sha }}"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

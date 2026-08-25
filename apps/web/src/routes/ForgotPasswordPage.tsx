@@ -45,19 +45,30 @@ export function ForgotPasswordPage() {
               >
                 <Mail className="h-6 w-6" />
               </span>
-              <h1 className="mt-4 text-[22px] font-bold text-[var(--uxe-text)]">{t('auth.checkInbox')}</h1>
-              <p className="mt-2 text-[14px] text-[var(--uxe-text-secondary)]">{t('auth.resetSent')}</p>
+              <h1 className="mt-4 text-[22px] font-bold text-[var(--uxe-text)]">
+                {t('auth.checkInbox')}
+              </h1>
+              <p className="mt-2 text-[14px] text-[var(--uxe-text-secondary)]">
+                {t('auth.resetSent')}
+              </p>
               <Button asChild variant="secondary" className="mt-6">
                 <Link to="/login">{t('auth.backToSignIn')}</Link>
               </Button>
             </div>
           ) : (
             <>
-              <h1 className="text-[24px] font-bold text-[var(--uxe-text)]">{t('auth.resetTitle')}</h1>
-              <p className="mt-1.5 text-[14px] text-[var(--uxe-text-secondary)]">{t('auth.resetDescription')}</p>
+              <h1 className="text-[24px] font-bold text-[var(--uxe-text)]">
+                {t('auth.resetTitle')}
+              </h1>
+              <p className="mt-1.5 text-[14px] text-[var(--uxe-text-secondary)]">
+                {t('auth.resetDescription')}
+              </p>
 
               {error && (
-                <p role="alert" className="mt-4 rounded-[var(--uxe-radius-control)] border border-[var(--uxe-danger-border)] bg-[var(--uxe-danger-bg)] px-3 py-2.5 text-[13px] text-[var(--uxe-danger)]">
+                <p
+                  role="alert"
+                  className="mt-4 rounded-[var(--uxe-radius-control)] border border-[var(--uxe-danger-border)] bg-[var(--uxe-danger-bg)] px-3 py-2.5 text-[13px] text-[var(--uxe-danger)]"
+                >
                   {error}
                 </p>
               )}
@@ -81,7 +92,10 @@ export function ForgotPasswordPage() {
               </form>
 
               <p className="mt-6 text-center text-[14px]">
-                <Link to="/login" className="font-semibold text-[var(--uxe-cobalt)] hover:underline">
+                <Link
+                  to="/login"
+                  className="font-semibold text-[var(--uxe-cobalt)] hover:underline"
+                >
                   {t('auth.backToSignIn')}
                 </Link>
               </p>

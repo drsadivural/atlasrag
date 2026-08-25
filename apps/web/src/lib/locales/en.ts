@@ -27,6 +27,7 @@ export const en = {
   'nav.openMenu': 'Open navigation menu',
   'nav.closeMenu': 'Close navigation menu',
   'nav.mainLabel': 'Main navigation',
+  'nav.mobileLabel': 'Primary navigation',
 
   // --- Auth --------------------------------------------------------------
   'auth.welcomeBack': 'Welcome back',
@@ -65,7 +66,8 @@ export const en = {
   'auth.mfaVerify': 'Verify',
   'auth.mfaRecoveryHint': 'You can also use one of your recovery codes.',
   'auth.checkInbox': 'Check your inbox',
-  'auth.verifyEmailSent': 'We sent a confirmation link to {email}. Open it to finish setting up your workspace.',
+  'auth.verifyEmailSent':
+    'We sent a confirmation link to {email}. Open it to finish setting up your workspace.',
   'auth.resetSent': 'If that address has an account, a reset link is on its way.',
   'auth.resetTitle': 'Reset your password',
   'auth.resetDescription': 'Enter your work email and we will send you a reset link.',
@@ -77,7 +79,8 @@ export const en = {
   'auth.organizationName': 'Organization name',
   'auth.acceptTerms': 'I accept the terms of service and privacy policy',
   'auth.ssoUnavailable': 'Single sign-on is not configured for this deployment.',
-  'auth.ssoFailed': 'Sign-in with that provider did not complete. Try again, or use your email and password.',
+  'auth.ssoFailed':
+    'Sign-in with that provider did not complete. Try again, or use your email and password.',
 
   // --- Dashboard ---------------------------------------------------------
   'dashboard.goodMorning': 'Good morning, {name}',
@@ -101,7 +104,8 @@ export const en = {
   'dashboard.showTable': 'Show data table',
   'dashboard.hideTable': 'Hide data table',
   'dashboard.emptyTitle': 'Your workspace is ready',
-  'dashboard.emptyBody': 'Add an approved source, then start a consultation to see verified answers with exact evidence.',
+  'dashboard.emptyBody':
+    'Add an approved source, then start a consultation to see verified answers with exact evidence.',
   'dashboard.addSources': 'Add sources',
   'dashboard.last7': 'Last 7 days',
   'dashboard.last30': 'Last 30 days',
@@ -156,10 +160,12 @@ export const en = {
   'knowledge.retry': 'Retry',
   'knowledge.uploadFailed': 'Upload failed',
   'knowledge.askAyumi': 'Ask Ayumi',
-  'knowledge.askAyumiBody': 'Ask me about your sources, indexing status, permissions, or how to improve coverage.',
+  'knowledge.askAyumiBody':
+    'Ask me about your sources, indexing status, permissions, or how to improve coverage.',
   'knowledge.needHelp': 'Need help managing knowledge sources?',
   'knowledge.emptyTitle': 'No approved sources yet',
-  'knowledge.emptyBody': 'Upload a regulation, standard or policy. Answers are only ever grounded in sources you have approved.',
+  'knowledge.emptyBody':
+    'Upload a regulation, standard or policy. Answers are only ever grounded in sources you have approved.',
   'knowledge.searchPlaceholder': 'Search sources…',
   'knowledge.allTypes': 'All types',
   'knowledge.showing': 'Showing {from} to {to} of {total} sources',
@@ -208,13 +214,16 @@ export const en = {
   'consult.knowledgeOnly': 'Knowledge only',
   'consult.askWhenUncertain': 'Ask when uncertain',
   'consult.generalFallback': 'General model fallback',
-  'consult.generalFallbackHint': 'When on, Ayumi may add statements that are not from your sources. Those statements are always labelled.',
+  'consult.generalFallbackHint':
+    'When on, Ayumi may add statements that are not from your sources. Those statements are always labelled.',
   'consult.openExactPage': 'Open exact page',
   'consult.viewAllCitations': 'View all citations',
   'consult.emptyTitle': 'Start your first consultation',
-  'consult.emptyBody': 'Ask a question, summarise a document, check compliance against a regulation, or request a corrected edition.',
+  'consult.emptyBody':
+    'Ask a question, summarise a document, check compliance against a regulation, or request a corrected edition.',
   'consult.noSources': 'No sources selected',
-  'consult.noSourcesBody': 'Choose the approved sources Ayumi should use. Without a source, there is nothing to ground an answer in.',
+  'consult.noSourcesBody':
+    'Choose the approved sources Ayumi should use. Without a source, there is nothing to ground an answer in.',
   'consult.regenerate': 'Regenerate',
   'consult.branchFromHere': 'Branch from here',
   'consult.copyAnswer': 'Copy answer',
@@ -236,7 +245,8 @@ export const en = {
   'evidence.excerpt': 'Supporting excerpt',
   'evidence.verified': 'Verified',
   'evidence.unverified': 'Unverified',
-  'evidence.unverifiedHint': 'This excerpt could not be re-located in the stored source text, so it is shown unverified.',
+  'evidence.unverifiedHint':
+    'This excerpt could not be re-located in the stored source text, so it is shown unverified.',
   'evidence.downloadCsv': 'Download evidence matrix (CSV)',
   'evidence.downloadXlsx': 'Download evidence matrix (XLSX)',
   'evidence.missing': 'Missing evidence',
@@ -252,13 +262,15 @@ export const en = {
   'evidence.nextCitation': 'Next citation',
   'evidence.jumpToPassage': 'Jump to the cited passage',
   'evidence.noCitations': 'No citations',
-  'evidence.noCitationsBody': 'Nothing in the selected sources could be verified as supporting this answer.',
+  'evidence.noCitationsBody':
+    'Nothing in the selected sources could be verified as supporting this answer.',
 
   // --- Reports -----------------------------------------------------------
   'reports.title': 'Reports',
   'reports.subtitle': 'Summaries, compliance reports, evidence matrices and corrected documents',
   'reports.emptyTitle': 'No reports yet',
-  'reports.emptyBody': 'Run a compliance review or generate a corrected edition, and the artifact will appear here.',
+  'reports.emptyBody':
+    'Run a compliance review or generate a corrected edition, and the artifact will appear here.',
   'reports.download': 'Download',
   'reports.preview': 'Preview',
   'reports.archive': 'Archive',
@@ -269,7 +281,8 @@ export const en = {
 
   // --- Activity ----------------------------------------------------------
   'activity.title': 'Activity',
-  'activity.subtitle': 'Every authentication, permission, source, review, artifact and deletion event',
+  'activity.subtitle':
+    'Every authentication, permission, source, review, artifact and deletion event',
   'activity.export': 'Export CSV',
   'activity.actor': 'Actor',
   'activity.action': 'Action',
@@ -325,6 +338,7 @@ export const en = {
   'common.cancel': 'Cancel',
   'common.confirm': 'Confirm',
   'common.delete': 'Delete',
+  'common.edit': 'Edit',
   'common.save': 'Save',
   'common.close': 'Close',
   'common.retry': 'Try again',
@@ -344,7 +358,8 @@ export const en = {
   'common.filters': 'Filters',
   'common.clearFilters': 'Clear filters',
   'common.permissionDenied': 'You do not have permission to do that',
-  'common.permissionDeniedBody': 'Ask an Owner or Admin to grant your role the required permission.',
+  'common.permissionDeniedBody':
+    'Ask an Owner or Admin to grant your role the required permission.',
   'common.notFound': 'Not found',
   'common.notFoundBody': 'That page does not exist, or you do not have access to it.',
   'common.goToDashboard': 'Go to dashboard',

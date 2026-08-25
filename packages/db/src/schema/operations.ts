@@ -32,7 +32,15 @@ export const processingJobs = pgTable(
     priority: integer('priority').notNull().default(0),
     payload: jsonb('payload').$type<Record<string, unknown>>().notNull().default({}),
     stages: jsonb('stages')
-      .$type<Array<{ key: string; label: string; state: string; detail: string | null; percent: number | null }>>()
+      .$type<
+        Array<{
+          key: string;
+          label: string;
+          state: string;
+          detail: string | null;
+          percent: number | null;
+        }>
+      >()
       .notNull()
       .default([]),
     percent: real('percent').notNull().default(0),
@@ -45,7 +53,9 @@ export const processingJobs = pgTable(
     resultRef: jsonb('result_ref').$type<{ kind: string; id: string } | null>(),
     targetType: text('target_type'),
     targetId: text('target_id'),
-    createdByUserId: text('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+    createdByUserId: text('created_by_user_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
     startedAt: timestamp('started_at', { withTimezone: true, mode: 'date' }),
     finishedAt: timestamp('finished_at', { withTimezone: true, mode: 'date' }),
     version: rowVersion(),

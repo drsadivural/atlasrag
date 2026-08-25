@@ -30,7 +30,13 @@ export class ConsoleEmailDriver implements EmailDriver {
     this.outbox.push({ ...message, id, at: new Date() });
     if (this.outbox.length > 100) this.outbox.shift();
     // The body is deliberately not logged: verification and reset emails carry live tokens.
-    this.logger.info('email.sent', { driver: 'console', to: message.to, subject: message.subject, tag: message.tag, id });
+    this.logger.info('email.sent', {
+      driver: 'console',
+      to: message.to,
+      subject: message.subject,
+      tag: message.tag,
+      id,
+    });
     return { id };
   }
 
@@ -72,7 +78,9 @@ export class ResendEmailDriver implements EmailDriver {
     });
 
     if (!response.ok) {
-      throw new Error(`Email send failed: ${response.status} ${await response.text().catch(() => '')}`);
+      throw new Error(
+        `Email send failed: ${response.status} ${await response.text().catch(() => '')}`,
+      );
     }
 
     const json = (await response.json()) as { id?: string };
@@ -126,7 +134,11 @@ ${
 }
 
 export const EmailTemplates = {
-  verifyEmail(input: { fullName: string; url: string; expiresInHours: number }): Omit<EmailMessage, 'to'> {
+  verifyEmail(input: {
+    fullName: string;
+    url: string;
+    expiresInHours: number;
+  }): Omit<EmailMessage, 'to'> {
     return {
       subject: 'Confirm your email address',
       tag: 'verify-email',
@@ -140,7 +152,11 @@ export const EmailTemplates = {
     };
   },
 
-  resetPassword(input: { fullName: string; url: string; expiresInMinutes: number }): Omit<EmailMessage, 'to'> {
+  resetPassword(input: {
+    fullName: string;
+    url: string;
+    expiresInMinutes: number;
+  }): Omit<EmailMessage, 'to'> {
     return {
       subject: 'Reset your password',
       tag: 'reset-password',
@@ -167,7 +183,13 @@ export const EmailTemplates = {
     };
   },
 
-  invitation(input: { inviterName: string; workspaceName: string; role: string; url: string; message?: string | null }): Omit<EmailMessage, 'to'> {
+  invitation(input: {
+    inviterName: string;
+    workspaceName: string;
+    role: string;
+    url: string;
+    message?: string | null;
+  }): Omit<EmailMessage, 'to'> {
     return {
       subject: `${input.inviterName} invited you to ${input.workspaceName}`,
       tag: 'invitation',
@@ -194,7 +216,12 @@ export const EmailTemplates = {
     };
   },
 
-  jobFailed(input: { title: string; reason: string; traceId: string; url: string }): Omit<EmailMessage, 'to'> {
+  jobFailed(input: {
+    title: string;
+    reason: string;
+    traceId: string;
+    url: string;
+  }): Omit<EmailMessage, 'to'> {
     return {
       subject: `Action needed: ${input.title}`,
       tag: 'job-failed',

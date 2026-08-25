@@ -39,6 +39,7 @@ import {
   MfaVerifyRequest,
   RegisterRequest,
   ResetPasswordRequest,
+  AcceptInvitationRequest,
   VerifyEmailRequest,
   permissionsForRole,
   type Role,
@@ -89,7 +90,9 @@ export function authRoutes(deps: AppDeps) {
       // Registering an existing address must not confirm that it exists. The response is
       // identical to a success, and the account holder gets an email instead.
       await sendVerificationEmail(deps, existing.id, existing.email, existing.fullName);
-      return c.json({ status: 'email_verification_required', email: input.email }, 200);
+      // Same status as the success path, not only the same body: a different status code
+      // is an enumeration oracle on its own.
+      return c.json({ status: 'email_verification_required', email: input.email }, 201);
     }
 
     const user = await deps.repos.identity.createUser({
@@ -219,11 +222,20 @@ export function authRoutes(deps: AppDeps) {
     const factors = await deps.repos.identity.listActiveFactors(user.id);
     const hasFactor = factors.some((f) => f.kind === 'totp' || f.kind === 'webauthn');
 
-    if (requiresMfa({ policy, role: (primary?.role ?? 'member') as Role, hasActiveFactor: hasFactor })) {
+    if (
+      requiresMfa({ policy, role: (primary?.role ?? 'member') as Role, hasActiveFactor: hasFactor })
+    ) {
       if (!hasFactor) {
         // Policy demands MFA but the user has none: route into enrolment rather than
         // locking them out of their own workspace.
-        const session = await issueSession(deps, c, user, primary?.id ?? null, input.rememberMe, true);
+        const session = await issueSession(
+          deps,
+          c,
+          user,
+          primary?.id ?? null,
+          input.rememberMe,
+          true,
+        );
         return c.json({ status: 'authenticated', session }, 200);
       }
 
@@ -274,11 +286,10 @@ export function authRoutes(deps: AppDeps) {
   /* MFA                                                                    */
   /* ---------------------------------------------------------------------- */
 
-  app.post('/mfa/verify', validateJson(MfaVerifyRequest.extend({})), async (c) => {
-    const input = body<typeof MfaVerifyRequest._output & { challengeToken?: string }>(c);
-    const raw = (await c.req.raw.clone().json()) as { challengeToken?: string };
-    const challengeToken = raw.challengeToken;
-    if (!challengeToken) throw ApiError.badRequest('The challenge has expired. Sign in again.');
+  app.post('/mfa/verify', validateJson(MfaVerifyRequest), async (c) => {
+    // The body has already been read by the validator; re-reading the raw request throws.
+    const input = body<typeof MfaVerifyRequest._output>(c);
+    const challengeToken = input.challengeToken;
 
     const token = await deps.repos.identity.findAuthToken(
       await sha256Hex(challengeToken),
@@ -288,7 +299,11 @@ export function authRoutes(deps: AppDeps) {
       throw new ApiError(401, 'unauthenticated', 'That challenge has expired. Sign in again.');
     }
 
-    const limit = await deps.services.rateLimiter.check(RateLimitBuckets.mfaByUser(token.userId), 8, 900);
+    const limit = await deps.services.rateLimiter.check(
+      RateLimitBuckets.mfaByUser(token.userId),
+      8,
+      900,
+    );
     if (!limit.allowed) throw ApiError.rateLimited(limit.retryAfterSeconds);
 
     const user = await deps.repos.identity.findUserById(token.userId);
@@ -297,7 +312,11 @@ export function authRoutes(deps: AppDeps) {
     const factors = await deps.repos.identity.listActiveFactors(user.id);
     const verified = await verifyAnyFactor(deps, factors, input.code);
     if (!verified) {
-      throw new ApiError(401, 'unauthenticated', 'That code is not valid. Check your authenticator and try again.');
+      throw new ApiError(
+        401,
+        'unauthenticated',
+        'That code is not valid. Check your authenticator and try again.',
+      );
     }
 
     // Consume only after success, so a mistyped digit does not force a fresh sign-in.
@@ -367,9 +386,12 @@ export function authRoutes(deps: AppDeps) {
 
     const secret = await decryptSecret(factor.secretEncrypted, deps.env.ENCRYPTION_KEY);
     if (!(await verifyTotp(secret, input.code))) {
-      throw ApiError.badRequest('That code is not valid. Check the time on your device and try again.', {
-        code: ['Incorrect code'],
-      });
+      throw ApiError.badRequest(
+        'That code is not valid. Check the time on your device and try again.',
+        {
+          code: ['Incorrect code'],
+        },
+      );
     }
 
     const recoveryCodes = generateRecoveryCodes(10);
@@ -402,9 +424,14 @@ export function authRoutes(deps: AppDeps) {
         400,
         'provider_unconfigured',
         `${provider === 'google' ? 'Google' : 'Microsoft'} sign-in is not configured for this deployment. An administrator needs to add the OAuth client ID and secret.`,
-        { details: { requiredEnv: provider === 'google'
-          ? ['GOOGLE_OAUTH_CLIENT_ID', 'GOOGLE_OAUTH_CLIENT_SECRET']
-          : ['MICROSOFT_OAUTH_CLIENT_ID', 'MICROSOFT_OAUTH_CLIENT_SECRET'] } },
+        {
+          details: {
+            requiredEnv:
+              provider === 'google'
+                ? ['GOOGLE_OAUTH_CLIENT_ID', 'GOOGLE_OAUTH_CLIENT_SECRET']
+                : ['MICROSOFT_OAUTH_CLIENT_ID', 'MICROSOFT_OAUTH_CLIENT_SECRET'],
+          },
+        },
       );
     }
 
@@ -424,7 +451,10 @@ export function authRoutes(deps: AppDeps) {
   app.get('/oauth/:provider/callback', async (c) => {
     const provider = c.req.param('provider');
     const failure = (reason: string) =>
-      c.redirect(`${deps.env.PUBLIC_APP_URL}/login?sso=failed&reason=${encodeURIComponent(reason)}`, 302);
+      c.redirect(
+        `${deps.env.PUBLIC_APP_URL}/login?sso=failed&reason=${encodeURIComponent(reason)}`,
+        302,
+      );
 
     if (provider !== 'google' && provider !== 'microsoft') return failure('unknown_provider');
 
@@ -437,7 +467,10 @@ export function authRoutes(deps: AppDeps) {
     if (!code || !state) return failure('missing_code');
 
     // Single-use: consuming the state here means a replayed callback cannot succeed.
-    const stored = await deps.repos.identity.consumeAuthToken(await sha256Hex(state), 'oauth_state');
+    const stored = await deps.repos.identity.consumeAuthToken(
+      await sha256Hex(state),
+      'oauth_state',
+    );
     if (!stored) return failure('invalid_state');
 
     const metadata = stored.metadata as { provider?: string; codeVerifier?: string };
@@ -590,6 +623,122 @@ export function authRoutes(deps: AppDeps) {
     return c.json({ ok: true as const });
   });
 
+  /* ---------------------------------------------------------------------- */
+  /* Invitations                                                            */
+  /* ---------------------------------------------------------------------- */
+
+  /**
+   * Shows who is being invited, and to what, before anything is committed.
+   *
+   * Answering this without a session is safe: the token is the secret, it is stored only
+   * as a hash, and the response says nothing an attacker could not already infer by
+   * holding the invitation email.
+   */
+  app.get('/invitations/:token', async (c) => {
+    const raw = c.req.param('token');
+    if (!raw || raw.length < 20) throw ApiError.badRequest('That invitation link is not valid.');
+
+    const invitation = await deps.repos.identity.findInvitation(await sha256Hex(raw));
+    if (!invitation) {
+      throw ApiError.badRequest('That invitation has expired or has already been used.');
+    }
+
+    const workspace = await deps.repos.identity.getWorkspace(invitation.workspaceId);
+    const inviter = invitation.invitedByUserId
+      ? await deps.repos.identity.findUserById(invitation.invitedByUserId)
+      : null;
+    const existing = await deps.repos.identity.findUserByEmail(invitation.email);
+
+    return c.json({
+      email: invitation.email,
+      workspaceName: workspace?.name ?? 'the workspace',
+      role: invitation.role,
+      invitedByName: inviter?.fullName ?? 'A colleague',
+      hasAccount: Boolean(existing?.passwordHash),
+      message: invitation.message,
+      expiresAt: invitation.expiresAt.toISOString(),
+    });
+  });
+
+  /**
+   * Accepts an invitation and signs the person in.
+   *
+   * Receiving the email proves control of the address, so the account is marked verified
+   * here rather than sending a second round trip the user has no way to understand.
+   */
+  app.post('/invitations/accept', validateJson(AcceptInvitationRequest), async (c) => {
+    const input = body<typeof AcceptInvitationRequest._output>(c);
+    const ip = clientIp(c);
+
+    const limit = await deps.services.rateLimiter.check(
+      RateLimitBuckets.registration(ip),
+      10,
+      3600,
+    );
+    if (!limit.allowed) throw ApiError.rateLimited(limit.retryAfterSeconds);
+
+    const invitation = await deps.repos.identity.findInvitation(await sha256Hex(input.token));
+    if (!invitation) {
+      throw ApiError.badRequest('That invitation has expired or has already been used.');
+    }
+
+    const user = await deps.repos.identity.findUserByEmail(invitation.email);
+    if (!user) throw ApiError.badRequest('That invitation is no longer valid.');
+
+    // A brand-new account must set a password; an existing one keeps the password it has.
+    if (!user.passwordHash) {
+      if (!input.password) {
+        throw ApiError.badRequest('Choose a password to finish setting up your account.', {
+          password: ['Required'],
+        });
+      }
+      const strength = checkPasswordStrength(input.password, {
+        email: user.email,
+        fullName: input.fullName ?? user.fullName,
+      });
+      if (!strength.ok) {
+        throw ApiError.badRequest('Choose a stronger password.', { password: strength.reasons });
+      }
+      await deps.repos.identity.updateUser(user.id, {
+        passwordHash: await hashPassword(input.password),
+        emailVerifiedAt: new Date(),
+        ...(input.fullName ? { fullName: input.fullName } : {}),
+      });
+    } else if (input.fullName) {
+      await deps.repos.identity.updateUser(user.id, { fullName: input.fullName });
+    }
+
+    await deps.repos.identity.activateInvitedMembership({
+      workspaceId: invitation.workspaceId,
+      userId: user.id,
+      role: invitation.role,
+      groupIds: invitation.groupIds,
+    });
+    await deps.repos.identity.acceptInvitation(invitation.id);
+
+    const fresh = await deps.repos.identity.findUserById(user.id);
+    if (!fresh) throw ApiError.badRequest('That invitation is no longer valid.');
+
+    await deps.repos.audit.record({
+      organizationId: invitation.organizationId,
+      workspaceId: invitation.workspaceId,
+      actorUserId: fresh.id,
+      actorName: fresh.fullName,
+      action: 'member.joined',
+      category: 'permission',
+      targetType: 'user',
+      targetId: fresh.id,
+      targetLabel: fresh.email,
+      ipAddress: ip,
+      userAgent: userAgent(c),
+      traceId: c.get('traceId') ?? 'unknown',
+      summary: `${fresh.fullName} accepted an invitation as ${invitation.role.replace(/_/g, ' ')}.`,
+    });
+
+    const session = await issueSession(deps, c, fresh, invitation.workspaceId, false, false);
+    return c.json(session, 200);
+  });
+
   app.post('/forgot-password', validateJson(ForgotPasswordRequest), async (c) => {
     const input = body<typeof ForgotPasswordRequest._output>(c);
     const limit = await deps.services.rateLimiter.check(
@@ -708,7 +857,8 @@ export function authRoutes(deps: AppDeps) {
       await sha256Hex(input.token),
       'magic_link',
     );
-    if (!token?.userId) throw ApiError.badRequest('That link has expired or has already been used.');
+    if (!token?.userId)
+      throw ApiError.badRequest('That link has expired or has already been used.');
 
     const user = await deps.repos.identity.findUserById(token.userId);
     if (!user) throw ApiError.badRequest('That link is no longer valid.');
@@ -738,7 +888,17 @@ const DUMMY_HASH =
 async function issueSession(
   deps: AppDeps,
   c: Context<AppBindings>,
-  user: { id: string; email: string; fullName: string; avatarUrl: string | null; title: string | null; locale: string; theme: string; emailVerifiedAt: Date | null; createdAt: Date },
+  user: {
+    id: string;
+    email: string;
+    fullName: string;
+    avatarUrl: string | null;
+    title: string | null;
+    locale: string;
+    theme: string;
+    emailVerifiedAt: Date | null;
+    createdAt: Date;
+  },
   workspaceId: string | null,
   rememberMe: boolean,
   mfaSatisfied: boolean,
@@ -842,7 +1002,12 @@ export async function buildSessionResponse(
 }
 
 async function securityFor(deps: AppDeps, workspaceId: string | null) {
-  if (!workspaceId) return { sessionIdleMinutes: 480, sessionAbsoluteHours: 720, mfaPolicy: 'optional' as MfaPolicy };
+  if (!workspaceId)
+    return {
+      sessionIdleMinutes: 480,
+      sessionAbsoluteHours: 720,
+      mfaPolicy: 'optional' as MfaPolicy,
+    };
   const workspace = await deps.repos.identity.getWorkspace(workspaceId);
   const settings = workspaceSettingsFrom(workspace?.settings ?? {}, workspace?.name ?? 'Workspace');
   return {
@@ -858,7 +1023,12 @@ async function mfaPolicyFor(deps: AppDeps, workspaceId: string | null): Promise<
 
 async function verifyAnyFactor(
   deps: AppDeps,
-  factors: Array<{ id: string; kind: string; secretEncrypted: string | null; recoveryHashes: string[] }>,
+  factors: Array<{
+    id: string;
+    kind: string;
+    secretEncrypted: string | null;
+    recoveryHashes: string[];
+  }>,
   code: string,
 ): Promise<boolean> {
   for (const factor of factors) {
@@ -884,7 +1054,12 @@ async function verifyAnyFactor(
   return false;
 }
 
-async function sendVerificationEmail(deps: AppDeps, userId: string, email: string, fullName: string) {
+async function sendVerificationEmail(
+  deps: AppDeps,
+  userId: string,
+  email: string,
+  fullName: string,
+) {
   const token = randomToken(32);
   await deps.repos.identity.createAuthToken({
     userId,
@@ -914,7 +1089,6 @@ function slugify(value: string): string {
 }
 
 export { newId, parseCookies, hashSessionToken, mustEnrollMfa };
-
 
 /** Returns the OAuth configuration for a provider, or null when it is not configured. */
 function oauthConfigFor(deps: AppDeps, provider: OAuthProvider): OAuthConfig | null {

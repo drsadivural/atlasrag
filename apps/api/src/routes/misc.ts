@@ -162,7 +162,23 @@ function greetingNameFor(fullName: string): string {
   const parts = fullName.trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return fullName;
 
-  const honorifics = new Set(['dr', 'dr.', 'prof', 'prof.', 'mr', 'mr.', 'mrs', 'mrs.', 'ms', 'ms.', 'mx', 'mx.', 'sir', 'eng', 'eng.']);
+  const honorifics = new Set([
+    'dr',
+    'dr.',
+    'prof',
+    'prof.',
+    'mr',
+    'mr.',
+    'mrs',
+    'mrs.',
+    'ms',
+    'ms.',
+    'mx',
+    'mx.',
+    'sir',
+    'eng',
+    'eng.',
+  ]);
   const first = parts[0] as string;
 
   if (honorifics.has(first.toLowerCase()) && parts.length > 1) {
@@ -195,7 +211,11 @@ export function citationRoutes(deps: AppDeps) {
 
     let pageText = '';
     if (citation.pageNumber !== null) {
-      const page = await deps.repos.retrieval.getPage(tenant, citation.sourceVersionId, citation.pageNumber);
+      const page = await deps.repos.retrieval.getPage(
+        tenant,
+        citation.sourceVersionId,
+        citation.pageNumber,
+      );
       pageText = page?.text ?? '';
     }
 
@@ -225,7 +245,8 @@ export function citationRoutes(deps: AppDeps) {
       highlight: span ? { start: span.start, end: span.end } : null,
       downloadUrl: download.url,
       previousCitationId: index > 0 ? (neighbours[index - 1]?.id ?? null) : null,
-      nextCitationId: index >= 0 && index < neighbours.length - 1 ? (neighbours[index + 1]?.id ?? null) : null,
+      nextCitationId:
+        index >= 0 && index < neighbours.length - 1 ? (neighbours[index + 1]?.id ?? null) : null,
     };
 
     return c.json(resolution);
@@ -289,25 +310,29 @@ export function artifactRoutes(deps: AppDeps) {
       owners.set(artifact.createdByUserId, user?.fullName ?? 'Unknown');
     }
 
-    const summaries: ArtifactSummary[] = items.map(({ artifact, consultationTitle, sourceTitle }) => ({
-      id: artifact.id,
-      title: artifact.title,
-      kind: artifact.kind as ArtifactSummary['kind'],
-      documentType: artifact.documentType as ArtifactSummary['documentType'],
-      sizeBytes: artifact.sizeBytes,
-      sha256: artifact.sha256,
-      status: artifact.status as ArtifactSummary['status'],
-      consultationId: artifact.consultationId,
-      consultationTitle: consultationTitle ?? null,
-      sourceId: artifact.sourceId,
-      sourceVersionId: artifact.sourceVersionId,
-      sourceTitle: sourceTitle ?? null,
-      generatorDescriptor: artifact.generatorDescriptor,
-      ownerName: artifact.createdByUserId ? (owners.get(artifact.createdByUserId) ?? 'Unknown') : 'System',
-      createdAt: artifact.createdAt.toISOString(),
-      retainUntil: artifact.retainUntil?.toISOString() ?? null,
-      disclosures: artifact.disclosures,
-    }));
+    const summaries: ArtifactSummary[] = items.map(
+      ({ artifact, consultationTitle, sourceTitle }) => ({
+        id: artifact.id,
+        title: artifact.title,
+        kind: artifact.kind as ArtifactSummary['kind'],
+        documentType: artifact.documentType as ArtifactSummary['documentType'],
+        sizeBytes: artifact.sizeBytes,
+        sha256: artifact.sha256,
+        status: artifact.status as ArtifactSummary['status'],
+        consultationId: artifact.consultationId,
+        consultationTitle: consultationTitle ?? null,
+        sourceId: artifact.sourceId,
+        sourceVersionId: artifact.sourceVersionId,
+        sourceTitle: sourceTitle ?? null,
+        generatorDescriptor: artifact.generatorDescriptor,
+        ownerName: artifact.createdByUserId
+          ? (owners.get(artifact.createdByUserId) ?? 'Unknown')
+          : 'System',
+        createdAt: artifact.createdAt.toISOString(),
+        retainUntil: artifact.retainUntil?.toISOString() ?? null,
+        disclosures: artifact.disclosures,
+      }),
+    );
 
     return c.json({
       items: summaries,
@@ -469,7 +494,17 @@ export function auditRoutes(deps: AppDeps) {
       to: params.to ? new Date(params.to) : undefined,
     });
 
-    const header = ['at', 'actor', 'action', 'category', 'target', 'result', 'ip', 'traceId', 'summary'];
+    const header = [
+      'at',
+      'actor',
+      'action',
+      'category',
+      'target',
+      'result',
+      'ip',
+      'traceId',
+      'summary',
+    ];
     const csv = [
       header.join(','),
       ...items.map((row) =>
@@ -502,7 +537,8 @@ export function auditRoutes(deps: AppDeps) {
 
     c.header('content-type', 'text/csv; charset=utf-8');
     c.header('content-disposition', 'attachment; filename="audit-events.csv"');
-    return c.body(`﻿${csv}`);
+    // UTF-8 BOM, so Excel opens the export in the right encoding.
+    return c.body(`\uFEFF${csv}`);
   });
 
   return app;
@@ -541,159 +577,175 @@ export function userRoutes(deps: AppDeps) {
     return c.json(users);
   });
 
-  app.post('/invite', requirePermission('member:invite'), validateJson(InviteUserRequest), async (c) => {
-    const tenant = c.get('tenant');
-    const session = c.get('session');
-    if (!tenant || !session) throw ApiError.unauthenticated();
-    const input = body<typeof InviteUserRequest._output>(c);
+  app.post(
+    '/invite',
+    requirePermission('member:invite'),
+    validateJson(InviteUserRequest),
+    async (c) => {
+      const tenant = c.get('tenant');
+      const session = c.get('session');
+      if (!tenant || !session) throw ApiError.unauthenticated();
+      const input = body<typeof InviteUserRequest._output>(c);
 
-    const workspace = await deps.repos.identity.getWorkspace(tenant.workspaceId);
-    const settings = workspaceSettingsFrom(workspace?.settings ?? {}, workspace?.name ?? 'Workspace');
-    const domains = settings.security.allowedEmailDomains;
-    if (domains.length > 0) {
-      const domain = input.email.split('@')[1]?.toLowerCase() ?? '';
-      if (!domains.map((d) => d.toLowerCase()).includes(domain)) {
-        throw ApiError.badRequest(
-          `This workspace only admits ${domains.join(', ')} addresses.`,
-          { email: [`Domain "${domain}" is not on the allowlist.`] },
-        );
+      const workspace = await deps.repos.identity.getWorkspace(tenant.workspaceId);
+      const settings = workspaceSettingsFrom(
+        workspace?.settings ?? {},
+        workspace?.name ?? 'Workspace',
+      );
+      const domains = settings.security.allowedEmailDomains;
+      if (domains.length > 0) {
+        const domain = input.email.split('@')[1]?.toLowerCase() ?? '';
+        if (!domains.map((d) => d.toLowerCase()).includes(domain)) {
+          throw ApiError.badRequest(`This workspace only admits ${domains.join(', ')} addresses.`, {
+            email: [`Domain "${domain}" is not on the allowlist.`],
+          });
+        }
       }
-    }
 
-    const token = randomToken(32);
-    const invitation = await deps.repos.identity.createInvitation(tenant, {
-      email: input.email,
-      role: input.role,
-      tokenHash: await sha256Hex(token),
-      groupIds: input.groupIds,
-      message: input.message ?? null,
-      ttlHours: 168,
-    });
-
-    let user = await deps.repos.identity.findUserByEmail(input.email);
-    if (!user) {
-      user = await deps.repos.identity.createUser({
+      const token = randomToken(32);
+      const invitation = await deps.repos.identity.createInvitation(tenant, {
         email: input.email,
-        passwordHash: null,
-        fullName: input.email.split('@')[0] ?? input.email,
-      });
-    }
-    await deps.repos.identity.addMembership({
-      organizationId: tenant.organizationId,
-      workspaceId: tenant.workspaceId,
-      userId: user.id,
-      role: input.role,
-      status: 'invited',
-    });
-
-    await deps.services.email.send({
-      to: input.email,
-      ...EmailTemplates.invitation({
-        inviterName: session.user.fullName,
-        workspaceName: workspace?.name ?? 'the workspace',
-        role: input.role.replace(/_/g, ' '),
-        url: `${deps.env.PUBLIC_APP_URL}/accept-invite?token=${encodeURIComponent(token)}`,
-        message: input.message ?? null,
-      }),
-    });
-
-    await deps.repos.audit.record({
-      organizationId: tenant.organizationId,
-      workspaceId: tenant.workspaceId,
-      actorUserId: tenant.userId,
-      actorName: session.user.fullName,
-      action: 'member.invited',
-      category: 'permission',
-      targetType: 'user',
-      targetId: user.id,
-      targetLabel: input.email,
-      ipAddress: clientIp(c),
-      userAgent: userAgent(c),
-      traceId: tenant.traceId,
-      summary: `Invited ${input.email} as ${input.role.replace(/_/g, ' ')}.`,
-    });
-
-    return c.json(
-      {
-        id: user.id,
-        email: user.email,
-        fullName: user.fullName,
-        avatarUrl: null,
         role: input.role,
-        status: 'invited' as const,
+        tokenHash: await sha256Hex(token),
+        groupIds: input.groupIds,
+        message: input.message ?? null,
+        ttlHours: 168,
+      });
+
+      let user = await deps.repos.identity.findUserByEmail(input.email);
+      if (!user) {
+        user = await deps.repos.identity.createUser({
+          email: input.email,
+          passwordHash: null,
+          fullName: input.email.split('@')[0] ?? input.email,
+        });
+      }
+      await deps.repos.identity.addMembership({
+        organizationId: tenant.organizationId,
+        workspaceId: tenant.workspaceId,
+        userId: user.id,
+        role: input.role,
+        status: 'invited',
+      });
+
+      await deps.services.email.send({
+        to: input.email,
+        ...EmailTemplates.invitation({
+          inviterName: session.user.fullName,
+          workspaceName: workspace?.name ?? 'the workspace',
+          role: input.role.replace(/_/g, ' '),
+          url: `${deps.env.PUBLIC_APP_URL}/accept-invite?token=${encodeURIComponent(token)}`,
+          message: input.message ?? null,
+        }),
+      });
+
+      await deps.repos.audit.record({
+        organizationId: tenant.organizationId,
+        workspaceId: tenant.workspaceId,
+        actorUserId: tenant.userId,
+        actorName: session.user.fullName,
+        action: 'member.invited',
+        category: 'permission',
+        targetType: 'user',
+        targetId: user.id,
+        targetLabel: input.email,
+        ipAddress: clientIp(c),
+        userAgent: userAgent(c),
+        traceId: tenant.traceId,
+        summary: `Invited ${input.email} as ${input.role.replace(/_/g, ' ')}.`,
+      });
+
+      return c.json(
+        {
+          id: user.id,
+          email: user.email,
+          fullName: user.fullName,
+          avatarUrl: null,
+          role: input.role,
+          status: 'invited' as const,
+          groups: [],
+          mfaEnabled: false,
+          activeSessions: 0,
+          lastActiveAt: null,
+          invitedAt: invitation.createdAt.toISOString(),
+          joinedAt: null,
+          accessibleSourceCount: 0,
+        },
+        201,
+      );
+    },
+  );
+
+  app.patch(
+    '/:id',
+    requirePermission('member:update'),
+    validateJson(UpdateUserRequest),
+    async (c) => {
+      const tenant = c.get('tenant');
+      const session = c.get('session');
+      if (!tenant || !session) throw ApiError.unauthenticated();
+      const targetId = requireId(c, 'id');
+      const input = body<typeof UpdateUserRequest._output>(c);
+
+      const before = await deps.repos.identity.getMembershipAnyStatus(targetId, tenant.workspaceId);
+      if (!before) throw ApiError.notFound('Member');
+
+      const patch: { role?: Role; status?: 'active' | 'suspended' } = {};
+      if (input.role) patch.role = input.role;
+      if (input.status) patch.status = input.status;
+      const after = await deps.repos.identity.updateMembership(tenant, targetId, patch);
+
+      if (input.groupIds) {
+        await deps.repos.identity.setUserGroups(tenant, targetId, input.groupIds);
+      }
+
+      let revoked = 0;
+      if (
+        input.revokeSessions ||
+        input.status === 'suspended' ||
+        (input.role && input.role !== before.role)
+      ) {
+        // A privilege change must not leave a live session running at the old level.
+        revoked = await deps.repos.identity.revokeAllSessionsForUser(targetId);
+      }
+
+      const user = await deps.repos.identity.findUserById(targetId);
+
+      await deps.repos.audit.record({
+        organizationId: tenant.organizationId,
+        workspaceId: tenant.workspaceId,
+        actorUserId: tenant.userId,
+        actorName: session.user.fullName,
+        action: 'member.updated',
+        category: 'permission',
+        targetType: 'user',
+        targetId,
+        targetLabel: user?.email ?? targetId,
+        ipAddress: clientIp(c),
+        userAgent: userAgent(c),
+        traceId: tenant.traceId,
+        summary: `Updated ${user?.fullName ?? targetId}${revoked > 0 ? `; revoked ${revoked} session(s)` : ''}.`,
+        before: { role: before.role, status: before.status },
+        after: { role: after.role, status: after.status },
+      });
+
+      return c.json({
+        id: targetId,
+        email: user?.email ?? '',
+        fullName: user?.fullName ?? '',
+        avatarUrl: user?.avatarUrl ?? null,
+        role: after.role as Role,
+        status: after.status as WorkspaceUser['status'],
         groups: [],
         mfaEnabled: false,
         activeSessions: 0,
-        lastActiveAt: null,
-        invitedAt: invitation.createdAt.toISOString(),
-        joinedAt: null,
+        lastActiveAt: user?.lastActiveAt?.toISOString() ?? null,
+        invitedAt: after.invitedAt?.toISOString() ?? null,
+        joinedAt: after.joinedAt?.toISOString() ?? null,
         accessibleSourceCount: 0,
-      },
-      201,
-    );
-  });
-
-  app.patch('/:id', requirePermission('member:update'), validateJson(UpdateUserRequest), async (c) => {
-    const tenant = c.get('tenant');
-    const session = c.get('session');
-    if (!tenant || !session) throw ApiError.unauthenticated();
-    const targetId = requireId(c, 'id');
-    const input = body<typeof UpdateUserRequest._output>(c);
-
-    const before = await deps.repos.identity.getMembershipAnyStatus(targetId, tenant.workspaceId);
-    if (!before) throw ApiError.notFound('Member');
-
-    const patch: { role?: Role; status?: 'active' | 'suspended' } = {};
-    if (input.role) patch.role = input.role;
-    if (input.status) patch.status = input.status;
-    const after = await deps.repos.identity.updateMembership(tenant, targetId, patch);
-
-    if (input.groupIds) {
-      await deps.repos.identity.setUserGroups(tenant, targetId, input.groupIds);
-    }
-
-    let revoked = 0;
-    if (input.revokeSessions || input.status === 'suspended' || (input.role && input.role !== before.role)) {
-      // A privilege change must not leave a live session running at the old level.
-      revoked = await deps.repos.identity.revokeAllSessionsForUser(targetId);
-    }
-
-    const user = await deps.repos.identity.findUserById(targetId);
-
-    await deps.repos.audit.record({
-      organizationId: tenant.organizationId,
-      workspaceId: tenant.workspaceId,
-      actorUserId: tenant.userId,
-      actorName: session.user.fullName,
-      action: 'member.updated',
-      category: 'permission',
-      targetType: 'user',
-      targetId,
-      targetLabel: user?.email ?? targetId,
-      ipAddress: clientIp(c),
-      userAgent: userAgent(c),
-      traceId: tenant.traceId,
-      summary: `Updated ${user?.fullName ?? targetId}${revoked > 0 ? `; revoked ${revoked} session(s)` : ''}.`,
-      before: { role: before.role, status: before.status },
-      after: { role: after.role, status: after.status },
-    });
-
-    return c.json({
-      id: targetId,
-      email: user?.email ?? '',
-      fullName: user?.fullName ?? '',
-      avatarUrl: user?.avatarUrl ?? null,
-      role: after.role as Role,
-      status: after.status as WorkspaceUser['status'],
-      groups: [],
-      mfaEnabled: false,
-      activeSessions: 0,
-      lastActiveAt: user?.lastActiveAt?.toISOString() ?? null,
-      invitedAt: after.invitedAt?.toISOString() ?? null,
-      joinedAt: after.joinedAt?.toISOString() ?? null,
-      accessibleSourceCount: 0,
-    });
-  });
+      });
+    },
+  );
 
   return app;
 }
@@ -726,122 +778,135 @@ export function settingsRoutes(deps: AppDeps) {
     return c.json({ settings, models });
   });
 
-  app.patch('/', requirePermission('settings:update'), validateJson(UpdateSettingsRequest), async (c) => {
-    const tenant = c.get('tenant');
-    if (!tenant) throw ApiError.unauthenticated();
-    const input = body<typeof UpdateSettingsRequest._output>(c);
+  app.patch(
+    '/',
+    requirePermission('settings:update'),
+    validateJson(UpdateSettingsRequest),
+    async (c) => {
+      const tenant = c.get('tenant');
+      if (!tenant) throw ApiError.unauthenticated();
+      const input = body<typeof UpdateSettingsRequest._output>(c);
 
-    const workspace = await deps.repos.identity.getWorkspace(tenant.workspaceId);
-    if (!workspace) throw ApiError.notFound('Workspace');
+      const workspace = await deps.repos.identity.getWorkspace(tenant.workspaceId);
+      if (!workspace) throw ApiError.notFound('Workspace');
 
-    if (input.security && !['owner', 'admin'].includes(tenant.role)) {
-      throw ApiError.forbidden('Only an Owner or Admin can change security settings.');
-    }
-    if (input.retention && !['owner', 'admin'].includes(tenant.role)) {
-      throw ApiError.forbidden('Only an Owner or Admin can change retention settings.');
-    }
+      if (input.security && !['owner', 'admin'].includes(tenant.role)) {
+        throw ApiError.forbidden('Only an Owner or Admin can change security settings.');
+      }
+      if (input.retention && !['owner', 'admin'].includes(tenant.role)) {
+        throw ApiError.forbidden('Only an Owner or Admin can change retention settings.');
+      }
 
-    const { general, ...rest } = input;
-    const merged = mergeSettings(workspace.settings, rest as Record<string, unknown>);
+      const { general, ...rest } = input;
+      const merged = mergeSettings(workspace.settings, rest as Record<string, unknown>);
 
-    const columnPatch: Record<string, unknown> = { settings: merged };
-    if (general?.workspaceName) columnPatch.name = general.workspaceName;
-    if (general?.locale) columnPatch.locale = general.locale;
-    if (general?.timezone) columnPatch.timezone = general.timezone;
-    if (general?.brandColor) columnPatch.brandColor = general.brandColor;
-    if (general?.logoUrl !== undefined) columnPatch.logoUrl = general.logoUrl;
+      const columnPatch: Record<string, unknown> = { settings: merged };
+      if (general?.workspaceName) columnPatch.name = general.workspaceName;
+      if (general?.locale) columnPatch.locale = general.locale;
+      if (general?.timezone) columnPatch.timezone = general.timezone;
+      if (general?.brandColor) columnPatch.brandColor = general.brandColor;
+      if (general?.logoUrl !== undefined) columnPatch.logoUrl = general.logoUrl;
 
-    const updated = await deps.repos.identity.updateWorkspace(tenant, columnPatch);
+      const updated = await deps.repos.identity.updateWorkspace(tenant, columnPatch);
 
-    if (input.retention) {
-      await deps.repos.settings.updateRetentionPolicy(tenant, {
-        consultationDays: input.retention.consultationDays,
-        artifactDays: input.retention.artifactDays,
-        auditDays: input.retention.auditDays,
-        purgeGraceDays: input.retention.purgeGraceDays,
-        legalHold: input.retention.legalHold,
-      });
-    }
-
-    await deps.repos.audit.record({
-      organizationId: tenant.organizationId,
-      workspaceId: tenant.workspaceId,
-      actorUserId: tenant.userId,
-      actorName: c.get('session')?.user.fullName ?? 'Unknown',
-      action: 'settings.updated',
-      category: 'configuration',
-      targetType: 'workspace',
-      targetId: tenant.workspaceId,
-      targetLabel: updated.name,
-      ipAddress: clientIp(c),
-      userAgent: userAgent(c),
-      traceId: tenant.traceId,
-      summary: `Updated ${Object.keys(input).join(', ')} settings.`,
-      before: workspace.settings,
-      after: merged,
-    });
-
-    return c.json(
-      workspaceSettingsFrom(updated.settings, updated.name, {
-        slug: updated.slug,
-        locale: updated.locale,
-        timezone: updated.timezone,
-        brandColor: updated.brandColor,
-        logoUrl: updated.logoUrl,
-      }),
-    );
-  });
-
-  app.post('/models', requirePermission('settings:models'), validateJson(UpsertModelConfigRequest), async (c) => {
-    const tenant = c.get('tenant');
-    if (!tenant) throw ApiError.unauthenticated();
-    const input = body<typeof UpsertModelConfigRequest._output>(c);
-
-    if (input.provider !== 'deterministic' && !input.apiKey) {
-      const existing = await deps.repos.settings.listModelConfigurations(tenant);
-      const hasStored = existing.some(
-        (row) =>
-          row.provider === input.provider &&
-          row.capability === input.capability &&
-          row.credentialEncrypted !== null,
-      );
-      if (!hasStored) {
-        throw ApiError.badRequest(`${input.provider} needs an API key before it can be enabled.`, {
-          apiKey: ['Provide an API key for this provider.'],
+      if (input.retention) {
+        await deps.repos.settings.updateRetentionPolicy(tenant, {
+          consultationDays: input.retention.consultationDays,
+          artifactDays: input.retention.artifactDays,
+          auditDays: input.retention.auditDays,
+          purgeGraceDays: input.retention.purgeGraceDays,
+          legalHold: input.retention.legalHold,
         });
       }
-    }
 
-    const config = await deps.repos.settings.upsertModelConfiguration(tenant, {
-      capability: input.capability,
-      provider: input.provider,
-      model: input.model,
-      isPrimary: input.isPrimary,
-      isFallback: input.isFallback,
-      enabled: input.enabled,
-      // Encrypted before it touches the database; there is no read path back out.
-      credentialEncrypted: input.apiKey
-        ? await encryptSecret(input.apiKey, deps.env.ENCRYPTION_KEY)
-        : null,
-    });
+      await deps.repos.audit.record({
+        organizationId: tenant.organizationId,
+        workspaceId: tenant.workspaceId,
+        actorUserId: tenant.userId,
+        actorName: c.get('session')?.user.fullName ?? 'Unknown',
+        action: 'settings.updated',
+        category: 'configuration',
+        targetType: 'workspace',
+        targetId: tenant.workspaceId,
+        targetLabel: updated.name,
+        ipAddress: clientIp(c),
+        userAgent: userAgent(c),
+        traceId: tenant.traceId,
+        summary: `Updated ${Object.keys(input).join(', ')} settings.`,
+        before: workspace.settings,
+        after: merged,
+      });
 
-    await deps.repos.audit.record({
-      organizationId: tenant.organizationId,
-      workspaceId: tenant.workspaceId,
-      actorUserId: tenant.userId,
-      actorName: c.get('session')?.user.fullName ?? 'Unknown',
-      action: 'settings.model.configured',
-      category: 'configuration',
-      targetType: 'model_configuration',
-      targetId: config.id,
-      targetLabel: `${input.provider}:${input.model}`,
-      traceId: tenant.traceId,
-      // The key itself is never recorded, only the fact that one was supplied.
-      summary: `Configured ${input.provider} ${input.model} for ${input.capability}${input.apiKey ? ' with a new credential' : ''}.`,
-    });
+      return c.json(
+        workspaceSettingsFrom(updated.settings, updated.name, {
+          slug: updated.slug,
+          locale: updated.locale,
+          timezone: updated.timezone,
+          brandColor: updated.brandColor,
+          logoUrl: updated.logoUrl,
+        }),
+      );
+    },
+  );
 
-    return c.json(toModelConfiguration(config));
-  });
+  app.post(
+    '/models',
+    requirePermission('settings:models'),
+    validateJson(UpsertModelConfigRequest),
+    async (c) => {
+      const tenant = c.get('tenant');
+      if (!tenant) throw ApiError.unauthenticated();
+      const input = body<typeof UpsertModelConfigRequest._output>(c);
+
+      if (input.provider !== 'deterministic' && !input.apiKey) {
+        const existing = await deps.repos.settings.listModelConfigurations(tenant);
+        const hasStored = existing.some(
+          (row) =>
+            row.provider === input.provider &&
+            row.capability === input.capability &&
+            row.credentialEncrypted !== null,
+        );
+        if (!hasStored) {
+          throw ApiError.badRequest(
+            `${input.provider} needs an API key before it can be enabled.`,
+            {
+              apiKey: ['Provide an API key for this provider.'],
+            },
+          );
+        }
+      }
+
+      const config = await deps.repos.settings.upsertModelConfiguration(tenant, {
+        capability: input.capability,
+        provider: input.provider,
+        model: input.model,
+        isPrimary: input.isPrimary,
+        isFallback: input.isFallback,
+        enabled: input.enabled,
+        // Encrypted before it touches the database; there is no read path back out.
+        credentialEncrypted: input.apiKey
+          ? await encryptSecret(input.apiKey, deps.env.ENCRYPTION_KEY)
+          : null,
+      });
+
+      await deps.repos.audit.record({
+        organizationId: tenant.organizationId,
+        workspaceId: tenant.workspaceId,
+        actorUserId: tenant.userId,
+        actorName: c.get('session')?.user.fullName ?? 'Unknown',
+        action: 'settings.model.configured',
+        category: 'configuration',
+        targetType: 'model_configuration',
+        targetId: config.id,
+        targetLabel: `${input.provider}:${input.model}`,
+        traceId: tenant.traceId,
+        // The key itself is never recorded, only the fact that one was supplied.
+        summary: `Configured ${input.provider} ${input.model} for ${input.capability}${input.apiKey ? ' with a new credential' : ''}.`,
+      });
+
+      return c.json(toModelConfiguration(config));
+    },
+  );
 
   app.post('/models/:id/test', requirePermission('settings:models'), async (c) => {
     const tenant = c.get('tenant');

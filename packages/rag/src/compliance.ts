@@ -1,7 +1,13 @@
 import type { ComplianceResult, RiskLevel } from '@uxe/contracts';
 import type { FusedCandidate } from './fusion.js';
 import { detectConflict, extractQuantities, selectExcerpt } from './citations.js';
-import { contentTokens, lightStem, normalizeForMatch, normalizeWhitespace, splitSentences } from './text.js';
+import {
+  contentTokens,
+  lightStem,
+  normalizeForMatch,
+  normalizeWhitespace,
+  splitSentences,
+} from './text.js';
 import type { DetectedSection } from './structure.js';
 import { sectionReference } from './structure.js';
 
@@ -81,7 +87,9 @@ export function buildRequirementSet(
 function extractObligationSentences(body: string): string | null {
   const sentences = splitSentences(body);
   const obligations = sentences.filter((s) =>
-    /\b(shall|must|is required|are required|shall not|must not|is prohibited|are prohibited)\b/i.test(s),
+    /\b(shall|must|is required|are required|shall not|must not|is prohibited|are prohibited)\b/i.test(
+      s,
+    ),
   );
   const text = normalizeWhitespace((obligations.length > 0 ? obligations : sentences).join(' '));
   return text.length >= 25 ? text.slice(0, 2000) : null;
@@ -93,17 +101,71 @@ function extractObligationSentences(body: string): string | null {
  */
 const OBLIGATION_NOISE = new Set([
   // Modal and boilerplate verbs.
-  'shall', 'must', 'should', 'may', 'required', 'require', 'requires', 'prohibited',
-  'permitted', 'allowed', 'accordance', 'provided', 'specified', 'applicable', 'relevant',
-  'following', 'above', 'below', 'section', 'clause', 'article', 'annex', 'table', 'figure',
-  'subject', 'means', 'include', 'includes', 'including', 'ensure', 'ensured', 'provide',
-  'provides', 'comply', 'complies', 'compliance', 'requirement', 'requirements',
+  'shall',
+  'must',
+  'should',
+  'may',
+  'required',
+  'require',
+  'requires',
+  'prohibited',
+  'permitted',
+  'allowed',
+  'accordance',
+  'provided',
+  'specified',
+  'applicable',
+  'relevant',
+  'following',
+  'above',
+  'below',
+  'section',
+  'clause',
+  'article',
+  'annex',
+  'table',
+  'figure',
+  'subject',
+  'means',
+  'include',
+  'includes',
+  'including',
+  'ensure',
+  'ensured',
+  'provide',
+  'provides',
+  'comply',
+  'complies',
+  'compliance',
+  'requirement',
+  'requirements',
   // Comparatives and quantifiers. The magnitude they qualify is compared numerically by
   // `quantitySatisfies`; leaving the words in key terms only dilutes subject-matter
   // coverage, which made genuinely-evidenced requirements look unaddressed.
-  'less', 'more', 'least', 'most', 'minimum', 'maximum', 'exceed', 'exceeds', 'exceeding',
-  'greater', 'lower', 'higher', 'than', 'every', 'each', 'all', 'any', 'other', 'such',
-  'measured', 'upon', 'within', 'per', 'shall_not',
+  'less',
+  'more',
+  'least',
+  'most',
+  'minimum',
+  'maximum',
+  'exceed',
+  'exceeds',
+  'exceeding',
+  'greater',
+  'lower',
+  'higher',
+  'than',
+  'every',
+  'each',
+  'all',
+  'any',
+  'other',
+  'such',
+  'measured',
+  'upon',
+  'within',
+  'per',
+  'shall_not',
 ]);
 
 export function requirementKeyTerms(text: string): string[] {
@@ -203,7 +265,9 @@ export function evaluateRequirement(
     return {
       result: 'non_compliant',
       risk: requirement.modality === 'prohibited' ? 'critical' : 'high',
-      finding: quantityConflicts[0]?.description ?? 'A specified value in the project document conflicts with the requirement.',
+      finding:
+        quantityConflicts[0]?.description ??
+        'A specified value in the project document conflicts with the requirement.',
       confidence: 0.82,
       missingEvidence: [],
       conflicts: quantityConflicts,
@@ -228,9 +292,9 @@ export function evaluateRequirement(
       missingEvidence: [],
       conflicts: [],
       recommendedAction: null,
-      supportingEvidenceIndexes: [...new Set([evidence.indexOf(best[item.index] as RequirementEvidence), ...supporting])].filter(
-        (i) => i >= 0,
-      ),
+      supportingEvidenceIndexes: [
+        ...new Set([evidence.indexOf(best[item.index] as RequirementEvidence), ...supporting]),
+      ].filter((i) => i >= 0),
     };
   }
 
@@ -386,11 +450,15 @@ export function quantitySatisfies(obligation: string, required: number, actual: 
   // Maximum is tested first because "shall not exceed" contains "exceed", and reading that
   // as a lower bound would invert the verdict: 38 m would be reported as failing a 45 m cap.
   const isMaximum =
-    /\b(?:at most|not more than|no more than|maximum|not exceeding|(?:shall|must|may)\s+not\s+exceed|less than or equal|up to)\b/.test(t);
+    /\b(?:at most|not more than|no more than|maximum|not exceeding|(?:shall|must|may)\s+not\s+exceed|less than or equal|up to)\b/.test(
+      t,
+    );
   if (isMaximum) return actual <= required + 1e-9;
 
   const isMinimum =
-    /\b(?:at least|not less than|no less than|minimum|greater than or equal|no lower than)\b/.test(t);
+    /\b(?:at least|not less than|no less than|minimum|greater than or equal|no lower than)\b/.test(
+      t,
+    );
   if (isMinimum) return actual >= required - 1e-9;
 
   // With no stated direction, only an exact match is defensible.
@@ -400,11 +468,16 @@ export function quantitySatisfies(obligation: string, required: number, actual: 
 function negatesObligation(requirement: RequirementDraft, passage: string): boolean {
   const passageNorm = normalizeForMatch(passage);
   const overlap = requirement.keyTerms.filter((t) => passageNorm.includes(t)).length;
-  if (requirement.keyTerms.length === 0 || overlap / requirement.keyTerms.length < 0.4) return false;
+  if (requirement.keyTerms.length === 0 || overlap / requirement.keyTerms.length < 0.4)
+    return false;
 
-  const passageProhibits = /\b(shall not|must not|is not provided|are not provided|not required|no .{0,25}(is|are) provided|is omitted|are omitted|not installed|not applicable)\b/i.test(passage);
+  const passageProhibits =
+    /\b(shall not|must not|is not provided|are not provided|not required|no .{0,25}(is|are) provided|is omitted|are omitted|not installed|not applicable)\b/i.test(
+      passage,
+    );
   const requirementRequires = requirement.modality === 'mandatory';
-  const passageRequires = /\b(shall|must|is provided|are provided|is installed)\b/i.test(passage) && !passageProhibits;
+  const passageRequires =
+    /\b(shall|must|is provided|are provided|is installed)\b/i.test(passage) && !passageProhibits;
   const requirementProhibits = requirement.modality === 'prohibited';
 
   return (requirementRequires && passageProhibits) || (requirementProhibits && passageRequires);
@@ -429,7 +502,9 @@ function truncate(text: string, max: number): string {
 }
 
 /** Rolls the individual verdicts up into the review-level risk level. */
-export function aggregateRisk(results: Array<{ result: ComplianceResult; risk: RiskLevel }>): RiskLevel {
+export function aggregateRisk(
+  results: Array<{ result: ComplianceResult; risk: RiskLevel }>,
+): RiskLevel {
   if (results.some((r) => r.result === 'non_compliant' && r.risk === 'critical')) return 'critical';
   const nonCompliant = results.filter((r) => r.result === 'non_compliant').length;
   if (nonCompliant >= 3) return 'critical';

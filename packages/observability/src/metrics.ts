@@ -57,7 +57,10 @@ export class MetricsRegistry {
     const list = this.histograms.get(this.key(name, labels));
     if (!list || list.length === 0) return null;
     const sorted = [...list].sort((a, b) => a - b);
-    const index = Math.min(sorted.length - 1, Math.max(0, Math.ceil((p / 100) * sorted.length) - 1));
+    const index = Math.min(
+      sorted.length - 1,
+      Math.max(0, Math.ceil((p / 100) * sorted.length) - 1),
+    );
     return sorted[index] ?? null;
   }
 
@@ -66,10 +69,20 @@ export class MetricsRegistry {
     const out: MetricPoint[] = [];
 
     for (const [key, value] of this.counters) {
-      out.push({ name: this.nameOf(key), value, labels: this.labelSets.get(key) ?? {}, timestamp: now });
+      out.push({
+        name: this.nameOf(key),
+        value,
+        labels: this.labelSets.get(key) ?? {},
+        timestamp: now,
+      });
     }
     for (const [key, value] of this.gauges) {
-      out.push({ name: this.nameOf(key), value, labels: this.labelSets.get(key) ?? {}, timestamp: now });
+      out.push({
+        name: this.nameOf(key),
+        value,
+        labels: this.labelSets.get(key) ?? {},
+        timestamp: now,
+      });
     }
     for (const [key, list] of this.histograms) {
       const labels = this.labelSets.get(key) ?? {};
@@ -83,7 +96,10 @@ export class MetricsRegistry {
         timestamp: now,
       });
       for (const p of [50, 95, 99]) {
-        const index = Math.min(sorted.length - 1, Math.max(0, Math.ceil((p / 100) * sorted.length) - 1));
+        const index = Math.min(
+          sorted.length - 1,
+          Math.max(0, Math.ceil((p / 100) * sorted.length) - 1),
+        );
         out.push({ name: `${name}_p${p}`, value: sorted[index] ?? 0, labels, timestamp: now });
       }
     }

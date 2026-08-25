@@ -10,6 +10,7 @@ import {
   type SourcesResponse,
 } from '@uxe/contracts';
 import { computeKnowledgeHealth, KNOWLEDGE_HEALTH_FORMULA } from '@uxe/rag';
+import type { TenantContext } from '@uxe/db';
 import type { AppBindings, AppDeps } from '../context.js';
 import { ApiError } from '../errors.js';
 import { body, query, requireId, validateJson, validateQuery } from '../middleware/validate.js';
@@ -37,14 +38,19 @@ export function sourceRoutes(deps: AppDeps) {
       deps.repos.sources.healthMetrics(tenant),
     ]);
 
-    const ownerIds = [...new Set(items.map((s) => s.ownerUserId).filter((v): v is string => v !== null))];
+    const ownerIds = [
+      ...new Set(items.map((s) => s.ownerUserId).filter((v): v is string => v !== null)),
+    ];
     const owners = new Map<string, string>();
     for (const id of ownerIds) {
       const user = await deps.repos.identity.findUserById(id);
       if (user) owners.set(id, user.fullName);
     }
 
-    const versionByCurrent = new Map<string, { version: string; pages: number | null; sizeBytes: number }>();
+    const versionByCurrent = new Map<
+      string,
+      { version: string; pages: number | null; sizeBytes: number }
+    >();
     for (const source of items) {
       if (!source.currentVersionId) continue;
       const versions = await deps.repos.sources.listVersions(tenant, source.id);
@@ -81,6 +87,7 @@ export function sourceRoutes(deps: AppDeps) {
         processingPercent: await0(source.status),
         isPromotedUpload: source.promotedToKnowledge,
         effectiveDate: source.effectiveDate?.toISOString() ?? null,
+        version: source.version,
       };
     });
 
@@ -111,11 +118,8 @@ export function sourceRoutes(deps: AppDeps) {
   /* Detail                                                                 */
   /* ---------------------------------------------------------------------- */
 
-  app.get('/:id', requirePermission('source:read'), async (c) => {
-    const tenant = c.get('tenant');
-    if (!tenant) throw ApiError.unauthenticated();
-    const id = requireId(c, 'id');
-
+  /** Builds the full source document; shared by GET and by PATCH's response. */
+  async function buildSourceDetail(tenant: TenantContext, id: string): Promise<SourceDetail> {
     const source = await deps.repos.sources.getById(tenant, id);
     const versions = await deps.repos.sources.listVersions(tenant, id);
     const permissions = await deps.repos.sources.listPermissions(tenant, id);
@@ -125,7 +129,9 @@ export function sourceRoutes(deps: AppDeps) {
       ? await deps.repos.sources.structureCounts(current.id)
       : { headings: 0, clauses: 0, tables: 0, definitions: 0, chunks: 0 };
 
-    const owner = source.ownerUserId ? await deps.repos.identity.findUserById(source.ownerUserId) : null;
+    const owner = source.ownerUserId
+      ? await deps.repos.identity.findUserById(source.ownerUserId)
+      : null;
     const creators = new Map<string, string>();
     for (const version of versions) {
       if (!version.createdByUserId || creators.has(version.createdByUserId)) continue;
@@ -155,6 +161,7 @@ export function sourceRoutes(deps: AppDeps) {
       processingPercent: await0(source.status),
       isPromotedUpload: source.promotedToKnowledge,
       effectiveDate: source.effectiveDate?.toISOString() ?? null,
+      version: source.version,
       versions: versions.map((v) => ({
         id: v.id,
         version: v.version,
@@ -166,7 +173,9 @@ export function sourceRoutes(deps: AppDeps) {
         isCurrent: v.isCurrent,
         createdAt: v.createdAt.toISOString(),
         promotedAt: v.promotedAt?.toISOString() ?? null,
-        createdByName: v.createdByUserId ? (creators.get(v.createdByUserId) ?? 'Unknown') : 'System',
+        createdByName: v.createdByUserId
+          ? (creators.get(v.createdByUserId) ?? 'Unknown')
+          : 'System',
         ocrApplied: v.ocrApplied,
         ocrConfidence: v.ocrConfidence,
         extractionCoverage: v.extractionCoverage,
@@ -197,7 +206,9 @@ export function sourceRoutes(deps: AppDeps) {
               id: attempt.id,
               stage: attempt.stage ?? job.kind,
               status: attempt.status as SourceDetail['processingLog'][number]['status'],
-              message: attempt.message ?? (attempt.error ? String(attempt.error.message ?? '') : 'Completed'),
+              message:
+                attempt.message ??
+                (attempt.error ? String(attempt.error.message ?? '') : 'Completed'),
               at: attempt.startedAt.toISOString(),
               attempt: attempt.attempt,
             }));
@@ -214,7 +225,13 @@ export function sourceRoutes(deps: AppDeps) {
         : null,
     };
 
-    return c.json(detail);
+    return detail;
+  }
+
+  app.get('/:id', requirePermission('source:read'), async (c) => {
+    const tenant = c.get('tenant');
+    if (!tenant) throw ApiError.unauthenticated();
+    return c.json(await buildSourceDetail(tenant, requireId(c, 'id')));
   });
 
   app.get('/:id/versions', requirePermission('source:read'), async (c) => {
@@ -349,6 +366,13 @@ export function sourceRoutes(deps: AppDeps) {
     if (bytes.byteLength > deps.env.MAX_UPLOAD_BYTES) {
       throw new ApiError(413, 'payload_too_large', 'That file exceeds the upload limit.');
     }
+    // The ticket declared a size and the quota was reserved against it. Accepting a
+    // different number of bytes would make that declaration meaningless.
+    if (bytes.byteLength !== ticket.declaredBytes) {
+      throw ApiError.badRequest(
+        `This upload is ${bytes.byteLength} bytes but the ticket was issued for ${ticket.declaredBytes}. Start the upload again.`,
+      );
+    }
 
     const stored = await deps.services.storage.put(
       'originals',
@@ -478,19 +502,17 @@ export function sourceRoutes(deps: AppDeps) {
         const canonical = canonicalizeUrl(input.url);
         let fetched;
         try {
-          fetched = await safeFetch(
-            canonical,
-            {
-              allowedSchemes: deps.env.URL_INGEST_ALLOWED_SCHEMES.split(','),
-              blockPrivateNetworks: deps.env.URL_INGEST_BLOCK_PRIVATE_NETWORKS,
-              maxBytes: Math.min(deps.env.MAX_UPLOAD_BYTES, 50 * 1024 * 1024),
-              timeoutMs: 20_000,
-              maxRedirects: 4,
-              allowedDomains: input.allowedDomains,
-            },
-          );
+          fetched = await safeFetch(canonical, {
+            allowedSchemes: deps.env.URL_INGEST_ALLOWED_SCHEMES.split(','),
+            blockPrivateNetworks: deps.env.URL_INGEST_BLOCK_PRIVATE_NETWORKS,
+            maxBytes: Math.min(deps.env.MAX_UPLOAD_BYTES, 50 * 1024 * 1024),
+            timeoutMs: 20_000,
+            maxRedirects: 4,
+            allowedDomains: input.allowedDomains,
+          });
         } catch (error) {
-          if (error instanceof SsrfError) throw ApiError.badRequest(error.message, { url: [error.message] });
+          if (error instanceof SsrfError)
+            throw ApiError.badRequest(error.message, { url: [error.message] });
           throw error;
         }
 
@@ -510,7 +532,12 @@ export function sourceRoutes(deps: AppDeps) {
           id: source.id,
           fileName: 'page.html',
         });
-        const stored = await deps.services.storage.put('originals', key, fetched.bytes, fetched.contentType);
+        const stored = await deps.services.storage.put(
+          'originals',
+          key,
+          fetched.bytes,
+          fetched.contentType,
+        );
         const { version } = await deps.repos.sources.createVersion(tenant, {
           sourceId: source.id,
           sha256: stored.sha256,
@@ -552,50 +579,72 @@ export function sourceRoutes(deps: AppDeps) {
   /* Mutations                                                              */
   /* ---------------------------------------------------------------------- */
 
-  app.patch('/:id', requirePermission('source:update'), validateJson(UpdateSourceRequest), async (c) => {
-    const tenant = c.get('tenant');
-    if (!tenant) throw ApiError.unauthenticated();
-    const id = requireId(c, 'id');
-    const input = body<typeof UpdateSourceRequest._output>(c);
+  app.patch(
+    '/:id',
+    requirePermission('source:update'),
+    validateJson(UpdateSourceRequest),
+    async (c) => {
+      const tenant = c.get('tenant');
+      if (!tenant) throw ApiError.unauthenticated();
+      const id = requireId(c, 'id');
+      const input = body<typeof UpdateSourceRequest._output>(c);
 
-    const before = await deps.repos.sources.getById(tenant, id);
+      const before = await deps.repos.sources.getById(tenant, id);
 
-    const patch: Record<string, unknown> = {};
-    if (input.title !== undefined) patch.title = input.title;
-    if (input.description !== undefined) patch.description = input.description;
-    if (input.tags !== undefined) patch.tags = input.tags;
-    if (input.effectiveDate !== undefined) {
-      patch.effectiveDate = input.effectiveDate ? new Date(input.effectiveDate) : null;
-    }
-    if (input.status !== undefined) patch.status = input.status;
+      const patch: Record<string, unknown> = {};
+      if (input.title !== undefined) patch.title = input.title;
+      if (input.description !== undefined) patch.description = input.description;
+      if (input.tags !== undefined) patch.tags = input.tags;
+      if (input.effectiveDate !== undefined) {
+        patch.effectiveDate = input.effectiveDate ? new Date(input.effectiveDate) : null;
+      }
+      if (input.status !== undefined) patch.status = input.status;
 
-    await deps.repos.sources.update(tenant, id, input.version, patch);
+      await deps.repos.sources.update(tenant, id, input.version, patch);
 
-    if (input.accessScope !== undefined) {
-      await deps.repos.sources.setPermissions(tenant, id, input.accessScope, input.accessSubjectIds ?? []);
-    }
+      if (input.accessScope !== undefined) {
+        await deps.repos.sources.setPermissions(
+          tenant,
+          id,
+          input.accessScope,
+          input.accessSubjectIds ?? [],
+        );
+      }
 
-    const after = await deps.repos.sources.getById(tenant, id);
-    await deps.repos.audit.record({
-      organizationId: tenant.organizationId,
-      workspaceId: tenant.workspaceId,
-      actorUserId: tenant.userId,
-      actorName: c.get('session')?.user.fullName ?? 'Unknown',
-      action: 'source.updated',
-      category: 'source',
-      targetType: 'source',
-      targetId: id,
-      targetLabel: after.title,
-      ipAddress: clientIp(c),
-      userAgent: userAgent(c),
-      traceId: tenant.traceId,
-      summary: `Updated source "${after.title}".`,
-      before: { title: before.title, tags: before.tags, accessScope: before.accessScope, status: before.status },
-      after: { title: after.title, tags: after.tags, accessScope: after.accessScope, status: after.status },
-    });
+      const after = await deps.repos.sources.getById(tenant, id);
+      await deps.repos.audit.record({
+        organizationId: tenant.organizationId,
+        workspaceId: tenant.workspaceId,
+        actorUserId: tenant.userId,
+        actorName: c.get('session')?.user.fullName ?? 'Unknown',
+        action: 'source.updated',
+        category: 'source',
+        targetType: 'source',
+        targetId: id,
+        targetLabel: after.title,
+        ipAddress: clientIp(c),
+        userAgent: userAgent(c),
+        traceId: tenant.traceId,
+        summary: `Updated source "${after.title}".`,
+        before: {
+          title: before.title,
+          tags: before.tags,
+          accessScope: before.accessScope,
+          status: before.status,
+        },
+        after: {
+          title: after.title,
+          tags: after.tags,
+          accessScope: after.accessScope,
+          status: after.status,
+        },
+      });
 
-    return c.redirect(`/api/v1/sources/${id}`, 303);
-  });
+      // The updated document, not a redirect: a PATCH that 303s cannot carry field errors,
+      // and every other mutation in this API answers with the resource it changed.
+      return c.json(await buildSourceDetail(tenant, id));
+    },
+  );
 
   app.post('/:id/reprocess', requirePermission('source:reprocess'), async (c) => {
     const tenant = c.get('tenant');
@@ -675,85 +724,90 @@ export function sourceRoutes(deps: AppDeps) {
     return c.json({ ok: true as const, sourceId: id });
   });
 
-  app.post('/bulk', requirePermission('source:update'), validateJson(BulkSourceActionRequest), async (c) => {
-    const tenant = c.get('tenant');
-    if (!tenant) throw ApiError.unauthenticated();
-    const input = body<typeof BulkSourceActionRequest._output>(c);
+  app.post(
+    '/bulk',
+    requirePermission('source:update'),
+    validateJson(BulkSourceActionRequest),
+    async (c) => {
+      const tenant = c.get('tenant');
+      if (!tenant) throw ApiError.unauthenticated();
+      const input = body<typeof BulkSourceActionRequest._output>(c);
 
-    // One inaccessible id fails the whole batch rather than partially applying.
-    await deps.repos.sources.assertAllVisible(tenant, input.sourceIds);
+      // One inaccessible id fails the whole batch rather than partially applying.
+      await deps.repos.sources.assertAllVisible(tenant, input.sourceIds);
 
-    let affected = 0;
-    for (const sourceId of input.sourceIds) {
-      const source = await deps.repos.sources.getById(tenant, sourceId);
-      switch (input.action) {
-        case 'tag':
-          await deps.repos.sources.update(tenant, sourceId, source.version, {
-            tags: [...new Set([...source.tags, ...(input.tags ?? [])])],
-          });
-          break;
-        case 'set_access':
-          if (input.accessScope) {
-            await deps.repos.sources.setPermissions(
-              tenant,
-              sourceId,
-              input.accessScope,
-              input.accessSubjectIds ?? [],
-            );
-          }
-          break;
-        case 'reprocess': {
-          const versions = await deps.repos.sources.listVersions(tenant, sourceId);
-          const target = versions.find((v) => v.isCurrent) ?? versions[0];
-          if (target) {
-            await deps.repos.jobs.enqueue(tenant, {
-              kind: 'source_reprocess',
-              idempotencyKey: `reprocess:${target.id}:${Date.now()}`,
-              payload: {
-                sourceId,
-                sourceVersionId: target.id,
-                storageKey: target.storageKey,
-                fileName: source.title,
-                contentType: target.contentType,
-              },
-              targetType: 'source',
-              targetId: sourceId,
+      let affected = 0;
+      for (const sourceId of input.sourceIds) {
+        const source = await deps.repos.sources.getById(tenant, sourceId);
+        switch (input.action) {
+          case 'tag':
+            await deps.repos.sources.update(tenant, sourceId, source.version, {
+              tags: [...new Set([...source.tags, ...(input.tags ?? [])])],
             });
+            break;
+          case 'set_access':
+            if (input.accessScope) {
+              await deps.repos.sources.setPermissions(
+                tenant,
+                sourceId,
+                input.accessScope,
+                input.accessSubjectIds ?? [],
+              );
+            }
+            break;
+          case 'reprocess': {
+            const versions = await deps.repos.sources.listVersions(tenant, sourceId);
+            const target = versions.find((v) => v.isCurrent) ?? versions[0];
+            if (target) {
+              await deps.repos.jobs.enqueue(tenant, {
+                kind: 'source_reprocess',
+                idempotencyKey: `reprocess:${target.id}:${Date.now()}`,
+                payload: {
+                  sourceId,
+                  sourceVersionId: target.id,
+                  storageKey: target.storageKey,
+                  fileName: source.title,
+                  contentType: target.contentType,
+                },
+                targetType: 'source',
+                targetId: sourceId,
+              });
+            }
+            break;
           }
-          break;
+          case 'archive':
+            await deps.repos.sources.archive(tenant, sourceId);
+            break;
+          case 'restore':
+            await deps.repos.sources.update(tenant, sourceId, source.version, { status: 'ready' });
+            break;
+          case 'delete':
+            await deps.repos.sources.softDelete(tenant, sourceId);
+            break;
+          case 'export':
+            // Export is handled by the artifacts route; nothing mutates here.
+            break;
         }
-        case 'archive':
-          await deps.repos.sources.archive(tenant, sourceId);
-          break;
-        case 'restore':
-          await deps.repos.sources.update(tenant, sourceId, source.version, { status: 'ready' });
-          break;
-        case 'delete':
-          await deps.repos.sources.softDelete(tenant, sourceId);
-          break;
-        case 'export':
-          // Export is handled by the artifacts route; nothing mutates here.
-          break;
+        affected += 1;
       }
-      affected += 1;
-    }
 
-    await deps.repos.audit.record({
-      organizationId: tenant.organizationId,
-      workspaceId: tenant.workspaceId,
-      actorUserId: tenant.userId,
-      actorName: c.get('session')?.user.fullName ?? 'Unknown',
-      action: `source.bulk.${input.action}`,
-      category: 'source',
-      ipAddress: clientIp(c),
-      userAgent: userAgent(c),
-      traceId: tenant.traceId,
-      summary: `Bulk ${input.action} applied to ${affected} source(s).`,
-      after: { sourceIds: input.sourceIds },
-    });
+      await deps.repos.audit.record({
+        organizationId: tenant.organizationId,
+        workspaceId: tenant.workspaceId,
+        actorUserId: tenant.userId,
+        actorName: c.get('session')?.user.fullName ?? 'Unknown',
+        action: `source.bulk.${input.action}`,
+        category: 'source',
+        ipAddress: clientIp(c),
+        userAgent: userAgent(c),
+        traceId: tenant.traceId,
+        summary: `Bulk ${input.action} applied to ${affected} source(s).`,
+        after: { sourceIds: input.sourceIds },
+      });
 
-    return c.json({ affected });
-  });
+      return c.json({ affected });
+    },
+  );
 
   app.delete('/:id', requirePermission('source:delete'), async (c) => {
     const tenant = c.get('tenant');
@@ -796,15 +850,25 @@ export function sourceRoutes(deps: AppDeps) {
 /* -------------------------------------------------------------------------- */
 
 function accessLabel(scope: string): string {
-  return scope === 'workspace' ? 'All users' : scope === 'group' ? 'Selected groups' : 'Named users';
+  return scope === 'workspace'
+    ? 'All users'
+    : scope === 'group'
+      ? 'Selected groups'
+      : 'Named users';
 }
 
 /** Processing sources report an indeterminate percentage until a job stage lands. */
 function await0(status: string): number | null {
-  return ['pending', 'scanning', 'extracting', 'indexing', 'validating'].includes(status) ? 0 : null;
+  return ['pending', 'scanning', 'extracting', 'indexing', 'validating'].includes(status)
+    ? 0
+    : null;
 }
 
-async function subjectLabel(deps: AppDeps, userId: string | null, groupId: string | null): Promise<string> {
+async function subjectLabel(
+  deps: AppDeps,
+  userId: string | null,
+  groupId: string | null,
+): Promise<string> {
   if (userId) {
     const user = await deps.repos.identity.findUserById(userId);
     return user?.fullName ?? 'Unknown user';

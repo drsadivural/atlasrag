@@ -121,7 +121,10 @@ export class MetricsRepository {
     `);
 
     const byDay = new Map(
-      (rows as unknown as Array<{ day: string; value: number }>).map((r) => [r.day, Number(r.value)]),
+      (rows as unknown as Array<{ day: string; value: number }>).map((r) => [
+        r.day,
+        Number(r.value),
+      ]),
     );
 
     const out: Array<{ date: string; consultations: number }> = [];
@@ -300,7 +303,10 @@ export class MetricsRepository {
       })
       .from(generatedArtifacts)
       .where(
-        and(eq(generatedArtifacts.workspaceId, ctx.workspaceId), isNull(generatedArtifacts.deletedAt)),
+        and(
+          eq(generatedArtifacts.workspaceId, ctx.workspaceId),
+          isNull(generatedArtifacts.deletedAt),
+        ),
       );
     return { total: Number(row?.total ?? 0), ready: Number(row?.ready ?? 0) };
   }

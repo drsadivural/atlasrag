@@ -14,15 +14,26 @@ import { ConsultPage } from './routes/ConsultPage.js';
 
 // Routes below the fold of the primary experience are split, so the first authenticated
 // paint does not pay for the settings forms or the audit log.
-const ReportsPage = lazy(() => import('./routes/ReportsPage.js').then((m) => ({ default: m.ReportsPage })));
-const ActivityPage = lazy(() => import('./routes/ActivityPage.js').then((m) => ({ default: m.ActivityPage })));
-const UsersPage = lazy(() => import('./routes/UsersPage.js').then((m) => ({ default: m.UsersPage })));
-const SettingsPage = lazy(() => import('./routes/SettingsPage.js').then((m) => ({ default: m.SettingsPage })));
+const ReportsPage = lazy(() =>
+  import('./routes/ReportsPage.js').then((m) => ({ default: m.ReportsPage })),
+);
+const ActivityPage = lazy(() =>
+  import('./routes/ActivityPage.js').then((m) => ({ default: m.ActivityPage })),
+);
+const UsersPage = lazy(() =>
+  import('./routes/UsersPage.js').then((m) => ({ default: m.UsersPage })),
+);
+const SettingsPage = lazy(() =>
+  import('./routes/SettingsPage.js').then((m) => ({ default: m.SettingsPage })),
+);
 const KnowledgeSourcePage = lazy(() =>
   import('./routes/KnowledgeSourcePage.js').then((m) => ({ default: m.KnowledgeSourcePage })),
 );
 const ReportDetailPage = lazy(() =>
   import('./routes/ReportDetailPage.js').then((m) => ({ default: m.ReportDetailPage })),
+);
+const AcceptInvitePage = lazy(() =>
+  import('./routes/AcceptInvitePage.js').then((m) => ({ default: m.AcceptInvitePage })),
 );
 const VerifyEmailPage = lazy(() =>
   import('./routes/VerifyEmailPage.js').then((m) => ({ default: m.VerifyEmailPage })),
@@ -116,6 +127,7 @@ export const router = createBrowserRouter([
       { path: '/forgot-password', element: <ForgotPasswordPage /> },
       { path: '/reset-password', element: <ResetPasswordPage /> },
       { path: '/verify-email', element: <VerifyEmailPage /> },
+      { path: '/accept-invite', element: <AcceptInvitePage /> },
     ],
   },
   {

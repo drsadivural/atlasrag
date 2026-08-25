@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { NavLink, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -34,7 +34,8 @@ import {
   useToast,
 } from '@uxe/ui';
 import type { ModelConfiguration, WorkspaceSettings } from '@uxe/contracts';
-import { ApiError, api } from '../lib/api.js';
+import { type ApiError, api } from '../lib/api.js';
+import { useSyncedState } from '../lib/forms.js';
 import { useI18n } from '../lib/i18n.js';
 import { useSession } from '../lib/session.js';
 import { useTheme } from '../lib/theme.js';
@@ -69,7 +70,10 @@ export function SettingsPage() {
       <PageHeader title={t('settings.title')} />
 
       <div className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-[220px_minmax(0,1fr)]">
-        <nav aria-label={t('settings.title')} className="lg:sticky lg:top-[calc(var(--uxe-header-height)+1.5rem)] lg:self-start">
+        <nav
+          aria-label={t('settings.title')}
+          className="lg:sticky lg:top-[calc(var(--uxe-header-height)+1.5rem)] lg:self-start"
+        >
           <ul className="flex gap-1 overflow-x-auto lg:flex-col">
             {SECTIONS.map((entry) => (
               <li key={entry.key}>
@@ -77,7 +81,7 @@ export function SettingsPage() {
                   to={`/settings/${entry.key}`}
                   className={({ isActive }) =>
                     cn(
-                      'flex items-center gap-2.5 whitespace-nowrap rounded-[var(--uxe-radius-control-lg)] px-3 py-2.5 text-[14px] font-medium transition-colors',
+                      'flex items-center gap-2.5 rounded-[var(--uxe-radius-control-lg)] px-3 py-2.5 text-[14px] font-medium whitespace-nowrap transition-colors',
                       isActive
                         ? 'bg-[var(--uxe-surface-selected)] text-[var(--uxe-cobalt)]'
                         : 'text-[var(--uxe-text-secondary)] hover:bg-[var(--uxe-surface-hover)]',
@@ -98,7 +102,11 @@ export function SettingsPage() {
               <Skeleton className="h-64 w-full rounded-[var(--uxe-radius-card)]" />
             </LoadingRegion>
           ) : query.error ? (
-            <ErrorState message={query.error.message} traceId={query.error.traceId} onRetry={() => void query.refetch()} />
+            <ErrorState
+              message={query.error.message}
+              traceId={query.error.traceId}
+              onRetry={() => void query.refetch()}
+            />
           ) : query.data ? (
             section === 'models' ? (
               <ModelsSection models={query.data.models} canEdit={can('settings:models')} />
@@ -107,7 +115,10 @@ export function SettingsPage() {
             ) : section === 'security' ? (
               <SecuritySection settings={query.data.settings} canEdit={can('settings:security')} />
             ) : section === 'retention' ? (
-              <RetentionSection settings={query.data.settings} canEdit={can('settings:retention')} />
+              <RetentionSection
+                settings={query.data.settings}
+                canEdit={can('settings:retention')}
+              />
             ) : (
               <GeneralSection settings={query.data.settings} canEdit={can('settings:update')} />
             )
@@ -150,13 +161,8 @@ function GeneralSection({ settings, canEdit }: { settings: WorkspaceSettings; ca
   const { t } = useI18n();
   const save = useSaveSettings();
   const { preference, setPreference } = useTheme();
-  const [name, setName] = useState(settings.general.workspaceName);
-  const [timezone, setTimezone] = useState(settings.general.timezone);
-
-  useEffect(() => {
-    setName(settings.general.workspaceName);
-    setTimezone(settings.general.timezone);
-  }, [settings.general]);
+  const [name, setName] = useSyncedState(settings.general.workspaceName);
+  const [timezone, setTimezone] = useSyncedState(settings.general.timezone);
 
   return (
     <Card>
@@ -167,7 +173,12 @@ function GeneralSection({ settings, canEdit }: { settings: WorkspaceSettings; ca
 
       <div className="flex flex-col gap-4">
         <Field label="Workspace name" htmlFor="workspace-name">
-          <Input id="workspace-name" value={name} onChange={(e) => setName(e.target.value)} disabled={!canEdit} />
+          <Input
+            id="workspace-name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            disabled={!canEdit}
+          />
         </Field>
 
         <Field label="Locale" htmlFor="locale">
@@ -184,12 +195,23 @@ function GeneralSection({ settings, canEdit }: { settings: WorkspaceSettings; ca
           />
         </Field>
 
-        <Field label="Timezone" htmlFor="timezone" hint="Used for dates in reports and the activity log.">
-          <Input id="timezone" value={timezone} onChange={(e) => setTimezone(e.target.value)} disabled={!canEdit} />
+        <Field
+          label="Timezone"
+          htmlFor="timezone"
+          hint="Used for dates in reports and the activity log."
+        >
+          <Input
+            id="timezone"
+            value={timezone}
+            onChange={(e) => setTimezone(e.target.value)}
+            disabled={!canEdit}
+          />
         </Field>
 
         <div>
-          <p className="mb-2 text-[13px] font-medium text-[var(--uxe-text)]">{t('settings.theme')}</p>
+          <p className="mb-2 text-[13px] font-medium text-[var(--uxe-text)]">
+            {t('settings.theme')}
+          </p>
           <SegmentedControl
             value={preference}
             onValueChange={(value) => setPreference(value as 'light' | 'dark' | 'system')}
@@ -217,16 +239,17 @@ function GeneralSection({ settings, canEdit }: { settings: WorkspaceSettings; ca
   );
 }
 
-function ConsultantSection({ settings, canEdit }: { settings: WorkspaceSettings; canEdit: boolean }) {
+function ConsultantSection({
+  settings,
+  canEdit,
+}: {
+  settings: WorkspaceSettings;
+  canEdit: boolean;
+}) {
   const { t } = useI18n();
   const save = useSaveSettings();
-  const [form, setForm] = useState(settings.consultant);
-  const [answers, setAnswers] = useState(settings.answers);
-
-  useEffect(() => {
-    setForm(settings.consultant);
-    setAnswers(settings.answers);
-  }, [settings]);
+  const [form, setForm] = useSyncedState(settings.consultant);
+  const [answers, setAnswers] = useSyncedState(settings.answers);
 
   return (
     <div className="flex flex-col gap-5">
@@ -329,7 +352,9 @@ function ConsultantSection({ settings, canEdit }: { settings: WorkspaceSettings;
             max={100}
             step={5}
             value={Math.round(answers.minimumEvidenceThreshold * 100)}
-            onChange={(e) => setAnswers({ ...answers, minimumEvidenceThreshold: Number(e.target.value) / 100 })}
+            onChange={(e) =>
+              setAnswers({ ...answers, minimumEvidenceThreshold: Number(e.target.value) / 100 })
+            }
             disabled={!canEdit}
             className="w-full accent-[var(--uxe-cobalt)]"
           />
@@ -361,11 +386,14 @@ function ModelsSection({ models, canEdit }: { models: ModelConfiguration[]; canE
       push({
         tone: result.health === 'healthy' ? 'success' : 'error',
         title: `${result.provider} ${result.model}`,
-        description: result.healthDetail ?? (result.health === 'healthy' ? 'Reachable and authorised.' : result.health),
+        description:
+          result.healthDetail ??
+          (result.health === 'healthy' ? 'Reachable and authorised.' : result.health),
       });
       void queryClient.invalidateQueries({ queryKey: ['settings'] });
     },
-    onError: (error: ApiError) => push({ tone: 'error', title: 'Test failed', description: error.message }),
+    onError: (error: ApiError) =>
+      push({ tone: 'error', title: 'Test failed', description: error.message }),
   });
 
   return (
@@ -377,10 +405,10 @@ function ModelsSection({ models, canEdit }: { models: ModelConfiguration[]; canE
         {!canEdit && <ReadOnlyNotice />}
 
         <p className="mb-4 text-[13px] text-[var(--uxe-text-secondary)]">
-          The <strong>deterministic</strong> engine is always available and needs no credentials: it answers by
-          selecting and quoting passages that were actually retrieved, so every sentence is verifiable.
-          Configure a hosted provider to enable abstractive drafting; its output is still held to the same
-          citation-verification gate.
+          The <strong>deterministic</strong> engine is always available and needs no credentials: it
+          answers by selecting and quoting passages that were actually retrieved, so every sentence
+          is verifiable. Configure a hosted provider to enable abstractive drafting; its output is
+          still held to the same citation-verification gate.
         </p>
 
         {models.length === 0 ? (
@@ -413,7 +441,11 @@ function ModelsSection({ models, canEdit }: { models: ModelConfiguration[]; canE
                 </div>
                 <HealthBadge health={model.health} detail={model.healthDetail} />
                 {model.hasCredential && (
-                  <Badge tone="neutral" size="sm" icon={<KeyRound className="h-3 w-3" aria-hidden />}>
+                  <Badge
+                    tone="neutral"
+                    size="sm"
+                    icon={<KeyRound className="h-3 w-3" aria-hidden />}
+                  >
                     Key saved
                   </Badge>
                 )}
@@ -438,13 +470,31 @@ function ModelsSection({ models, canEdit }: { models: ModelConfiguration[]; canE
   );
 }
 
-function HealthBadge({ health, detail }: { health: ModelConfiguration['health']; detail: string | null }) {
+function HealthBadge({
+  health,
+  detail,
+}: {
+  health: ModelConfiguration['health'];
+  detail: string | null;
+}) {
   const { t } = useI18n();
   const map = {
     healthy: { tone: 'success' as const, label: t('settings.providerHealthy'), Icon: CheckCircle2 },
-    degraded: { tone: 'warning' as const, label: t('settings.providerDegraded'), Icon: AlertTriangle },
-    unconfigured: { tone: 'neutral' as const, label: t('settings.providerUnconfigured'), Icon: XCircle },
-    circuit_open: { tone: 'danger' as const, label: t('settings.providerCircuitOpen'), Icon: XCircle },
+    degraded: {
+      tone: 'warning' as const,
+      label: t('settings.providerDegraded'),
+      Icon: AlertTriangle,
+    },
+    unconfigured: {
+      tone: 'neutral' as const,
+      label: t('settings.providerUnconfigured'),
+      Icon: XCircle,
+    },
+    circuit_open: {
+      tone: 'danger' as const,
+      label: t('settings.providerCircuitOpen'),
+      Icon: XCircle,
+    },
     unknown: { tone: 'neutral' as const, label: 'Not tested', Icon: AlertTriangle },
   };
   const entry = map[health];
@@ -480,7 +530,11 @@ function AddModelCard() {
         apiKey: apiKey || null,
       }),
     onSuccess: () => {
-      push({ tone: 'success', title: 'Provider saved', description: 'Run Test connection to verify it.' });
+      push({
+        tone: 'success',
+        title: 'Provider saved',
+        description: 'Run Test connection to verify it.',
+      });
       setApiKey('');
       setFieldErrors({});
       void queryClient.invalidateQueries({ queryKey: ['settings'] });
@@ -519,7 +573,13 @@ function AddModelCard() {
             value={provider}
             onValueChange={(value) => {
               setProvider(value);
-              setModel(value === 'anthropic' ? 'claude-sonnet-5' : value === 'openai' ? 'gpt-4.1' : 'uxe-extractive-v1');
+              setModel(
+                value === 'anthropic'
+                  ? 'claude-sonnet-5'
+                  : value === 'openai'
+                    ? 'gpt-4.1'
+                    : 'uxe-extractive-v1',
+              );
             }}
             ariaLabel="Provider"
             className="w-full"
@@ -555,7 +615,12 @@ function AddModelCard() {
         </Field>
       </div>
 
-      <Button variant="primary" className="mt-4 self-start" loading={save.isPending} onClick={() => save.mutate()}>
+      <Button
+        variant="primary"
+        className="mt-4 self-start"
+        loading={save.isPending}
+        onClick={() => save.mutate()}
+      >
         {t('settings.save')}
       </Button>
     </Card>
@@ -565,9 +630,7 @@ function AddModelCard() {
 function SecuritySection({ settings, canEdit }: { settings: WorkspaceSettings; canEdit: boolean }) {
   const { t } = useI18n();
   const save = useSaveSettings();
-  const [form, setForm] = useState(settings.security);
-
-  useEffect(() => setForm(settings.security), [settings.security]);
+  const [form, setForm] = useSyncedState(settings.security);
 
   return (
     <Card>
@@ -580,12 +643,18 @@ function SecuritySection({ settings, canEdit }: { settings: WorkspaceSettings; c
         <Field label="Two-factor authentication policy" htmlFor="mfa-policy">
           <Select
             value={form.mfaPolicy}
-            onValueChange={(value) => setForm({ ...form, mfaPolicy: value as typeof form.mfaPolicy })}
+            onValueChange={(value) =>
+              setForm({ ...form, mfaPolicy: value as typeof form.mfaPolicy })
+            }
             ariaLabel="MFA policy"
             disabled={!canEdit}
             className="w-full"
             options={[
-              { value: 'optional', label: 'Optional', description: 'Users may enrol; enrolled users are always challenged.' },
+              {
+                value: 'optional',
+                label: 'Optional',
+                description: 'Users may enrol; enrolled users are always challenged.',
+              },
               { value: 'required_admins', label: 'Required for Admins and Owners' },
               { value: 'required_all', label: 'Required for everyone' },
             ]}
@@ -643,7 +712,12 @@ function SecuritySection({ settings, canEdit }: { settings: WorkspaceSettings; c
         </Field>
 
         {canEdit && (
-          <Button variant="primary" className="self-start" loading={save.isPending} onClick={() => save.mutate({ security: form })}>
+          <Button
+            variant="primary"
+            className="self-start"
+            loading={save.isPending}
+            onClick={() => save.mutate({ security: form })}
+          >
             {t('settings.save')}
           </Button>
         )}
@@ -652,16 +726,17 @@ function SecuritySection({ settings, canEdit }: { settings: WorkspaceSettings; c
   );
 }
 
-function RetentionSection({ settings, canEdit }: { settings: WorkspaceSettings; canEdit: boolean }) {
+function RetentionSection({
+  settings,
+  canEdit,
+}: {
+  settings: WorkspaceSettings;
+  canEdit: boolean;
+}) {
   const { t } = useI18n();
   const save = useSaveSettings();
-  const [form, setForm] = useState(settings.retention);
-  const [notifications, setNotifications] = useState(settings.notifications);
-
-  useEffect(() => {
-    setForm(settings.retention);
-    setNotifications(settings.notifications);
-  }, [settings]);
+  const [form, setForm] = useSyncedState(settings.retention);
+  const [notifications, setNotifications] = useSyncedState(settings.notifications);
 
   return (
     <div className="flex flex-col gap-5">
@@ -728,7 +803,12 @@ function RetentionSection({ settings, canEdit }: { settings: WorkspaceSettings; 
         />
 
         {canEdit && (
-          <Button variant="primary" className="mt-4 self-start" loading={save.isPending} onClick={() => save.mutate({ retention: form })}>
+          <Button
+            variant="primary"
+            className="mt-4 self-start"
+            loading={save.isPending}
+            onClick={() => save.mutate({ retention: form })}
+          >
             {t('settings.save')}
           </Button>
         )}
@@ -748,20 +828,26 @@ function RetentionSection({ settings, canEdit }: { settings: WorkspaceSettings; 
           label="Job completion"
           description="Email when a review, report or corrected document finishes."
           checked={notifications.jobCompletion}
-          onCheckedChange={(checked) => setNotifications({ ...notifications, jobCompletion: checked })}
+          onCheckedChange={(checked) =>
+            setNotifications({ ...notifications, jobCompletion: checked })
+          }
           disabled={!canEdit}
         />
         <SwitchField
           label="Critical findings"
           description="Email when a review produces a critical gap."
           checked={notifications.criticalFindings}
-          onCheckedChange={(checked) => setNotifications({ ...notifications, criticalFindings: checked })}
+          onCheckedChange={(checked) =>
+            setNotifications({ ...notifications, criticalFindings: checked })
+          }
           disabled={!canEdit}
         />
         <SwitchField
           label="Weekly digest"
           checked={notifications.weeklyDigest}
-          onCheckedChange={(checked) => setNotifications({ ...notifications, weeklyDigest: checked })}
+          onCheckedChange={(checked) =>
+            setNotifications({ ...notifications, weeklyDigest: checked })
+          }
           disabled={!canEdit}
         />
 

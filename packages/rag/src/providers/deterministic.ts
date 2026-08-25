@@ -36,7 +36,9 @@ export class DeterministicChatProvider implements ChatProvider {
           const terms = contentTokens(sentence).map(lightStem);
           const hits = terms.filter((t) => queryTerms.has(t)).length;
           const density = terms.length === 0 ? 0 : hits / Math.sqrt(terms.length);
-          const obligation = /\b(shall|must|shall not|must not|required|prohibited)\b/i.test(sentence)
+          const obligation = /\b(shall|must|shall not|must not|required|prohibited)\b/i.test(
+            sentence,
+          )
             ? 0.3
             : 0;
           return { sentence: normalizeWhitespace(sentence), score: density + obligation };
@@ -71,7 +73,9 @@ export class DeterministicChatProvider implements ChatProvider {
       input.evidence.length === 0
         ? 'No passage in the selected sources addresses this question.'
         : `Based on ${describeCount(governing.size, 'regulation', 'regulations')}${
-            project.size > 0 ? ` and ${describeCount(project.size, 'project document', 'project documents')}` : ''
+            project.size > 0
+              ? ` and ${describeCount(project.size, 'project document', 'project documents')}`
+              : ''
           }.`;
 
     const body = statements

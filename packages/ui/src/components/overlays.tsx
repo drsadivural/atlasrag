@@ -72,8 +72,8 @@ export function Dialog({
             'shadow-[var(--uxe-shadow-xl)] focus:outline-none',
             'data-[state=open]:animate-[uxe-fade-in_var(--uxe-duration)_var(--uxe-ease)]',
             variant === 'sheet'
-              ? 'inset-x-0 bottom-0 top-auto max-h-[92vh] rounded-t-[var(--uxe-radius-card-lg)] sm:inset-auto sm:left-1/2 sm:top-1/2 sm:max-h-[85vh] sm:w-full sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-[var(--uxe-radius-card-lg)]'
-              : 'inset-x-4 top-1/2 max-h-[85vh] -translate-y-1/2 rounded-[var(--uxe-radius-card-lg)] sm:left-1/2 sm:right-auto sm:w-full sm:-translate-x-1/2',
+              ? 'inset-x-0 top-auto bottom-0 max-h-[92vh] rounded-t-[var(--uxe-radius-card-lg)] sm:inset-auto sm:top-1/2 sm:left-1/2 sm:max-h-[85vh] sm:w-full sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-[var(--uxe-radius-card-lg)]'
+              : 'inset-x-4 top-1/2 max-h-[85vh] -translate-y-1/2 rounded-[var(--uxe-radius-card-lg)] sm:right-auto sm:left-1/2 sm:w-full sm:-translate-x-1/2',
             variant === 'center' && 'sm:mx-0',
             DIALOG_WIDTHS[size],
             size !== 'full' && 'sm:mx-auto',
@@ -145,9 +145,13 @@ export function ConfirmDialog({
   const [typed, setTyped] = useState('');
   const canConfirm = !confirmWord || typed.trim().toUpperCase() === confirmWord.toUpperCase();
 
-  useEffect(() => {
+  // Clear the typed confirmation as the dialog closes, during render rather than in an
+  // effect: the word must never survive into the next thing the user is asked to confirm.
+  const [wasOpen, setWasOpen] = useState(open);
+  if (wasOpen !== open) {
+    setWasOpen(open);
     if (!open) setTyped('');
-  }, [open]);
+  }
 
   return (
     <Dialog
@@ -174,7 +178,8 @@ export function ConfirmDialog({
     >
       {confirmWord && (
         <label className="flex flex-col gap-1.5 text-[13px] font-medium text-[var(--uxe-text)]">
-          Type <span className="font-[family-name:var(--uxe-font-mono)]">{confirmWord}</span> to confirm
+          Type <span className="font-[family-name:var(--uxe-font-mono)]">{confirmWord}</span> to
+          confirm
           <input
             value={typed}
             onChange={(e) => setTyped(e.target.value)}
@@ -317,11 +322,15 @@ export function DropdownMenu({
 }) {
   return (
     <DropdownPrimitive.Root>
-      <DropdownPrimitive.Trigger asChild aria-label={label}>
-        {trigger}
-      </DropdownPrimitive.Trigger>
+      {/*
+        The label names the MENU, not the trigger. Putting it on the trigger would override
+        the name the trigger already has from its own content — the workspace switcher
+        would announce "Workspace" instead of the workspace the user is actually in.
+      */}
+      <DropdownPrimitive.Trigger asChild>{trigger}</DropdownPrimitive.Trigger>
       <DropdownPrimitive.Portal>
         <DropdownPrimitive.Content
+          aria-label={label}
           align={align}
           sideOffset={6}
           collisionPadding={12}
@@ -351,7 +360,11 @@ export function DropdownMenu({
                     : 'text-[var(--uxe-text)]',
                 )}
               >
-                {item.icon && <span aria-hidden className="flex shrink-0">{item.icon}</span>}
+                {item.icon && (
+                  <span aria-hidden className="flex shrink-0">
+                    {item.icon}
+                  </span>
+                )}
                 {item.label}
               </DropdownPrimitive.Item>
             </div>
@@ -406,7 +419,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       // problems get missed.
       const duration = toast.durationMs ?? (toast.tone === 'error' ? 0 : 5000);
       if (duration > 0) {
-        timers.current.set(id, setTimeout(() => dismiss(id), duration));
+        timers.current.set(
+          id,
+          setTimeout(() => dismiss(id), duration),
+        );
       }
       return id;
     },
@@ -438,19 +454,27 @@ export function useToast(): ToastContextValue {
 }
 
 const TOAST_TONES = {
-  success: 'border-[var(--uxe-success-border)] bg-[var(--uxe-success-bg)] text-[var(--uxe-success)]',
+  success:
+    'border-[var(--uxe-success-border)] bg-[var(--uxe-success-bg)] text-[var(--uxe-success)]',
   error: 'border-[var(--uxe-danger-border)] bg-[var(--uxe-danger-bg)] text-[var(--uxe-danger)]',
   info: 'border-[var(--uxe-info-border)] bg-[var(--uxe-info-bg)] text-[var(--uxe-info)]',
-  warning: 'border-[var(--uxe-warning-border)] bg-[var(--uxe-warning-bg)] text-[var(--uxe-warning)]',
+  warning:
+    'border-[var(--uxe-warning-border)] bg-[var(--uxe-warning-bg)] text-[var(--uxe-warning)]',
 } as const;
 
-function ToastViewport({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id: string) => void }) {
+function ToastViewport({
+  toasts,
+  onDismiss,
+}: {
+  toasts: Toast[];
+  onDismiss: (id: string) => void;
+}) {
   return (
     <div
       // `assertive` so an error interrupts; the container sits above the mobile bottom nav.
       aria-live="assertive"
       aria-atomic="false"
-      className="pointer-events-none fixed inset-x-0 bottom-[calc(var(--uxe-bottom-nav-height)+1rem)] z-[60] flex flex-col items-center gap-2 px-4 sm:bottom-6 sm:right-6 sm:left-auto sm:items-end"
+      className="pointer-events-none fixed inset-x-0 bottom-[calc(var(--uxe-bottom-nav-height)+1rem)] z-[60] flex flex-col items-center gap-2 px-4 sm:right-6 sm:bottom-6 sm:left-auto sm:items-end"
     >
       {toasts.map((toast) => (
         <div
@@ -458,7 +482,7 @@ function ToastViewport({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id:
           role={toast.tone === 'error' ? 'alert' : 'status'}
           className={cn(
             'pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-[var(--uxe-radius-card)] border p-3.5',
-            'shadow-[var(--uxe-shadow-lg)] animate-[uxe-fade-in_var(--uxe-duration)_var(--uxe-ease)]',
+            'animate-[uxe-fade-in_var(--uxe-duration)_var(--uxe-ease)] shadow-[var(--uxe-shadow-lg)]',
             TOAST_TONES[toast.tone],
           )}
         >

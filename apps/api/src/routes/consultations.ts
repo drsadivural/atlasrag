@@ -30,43 +30,48 @@ export function consultationRoutes(deps: AppDeps) {
   /* List and create                                                        */
   /* ---------------------------------------------------------------------- */
 
-  app.get('/', requirePermission('consultation:read'), validateQuery(ConsultationsQuery), async (c) => {
-    const tenant = c.get('tenant');
-    if (!tenant) throw ApiError.unauthenticated();
-    const params = query<typeof ConsultationsQuery._output>(c);
+  app.get(
+    '/',
+    requirePermission('consultation:read'),
+    validateQuery(ConsultationsQuery),
+    async (c) => {
+      const tenant = c.get('tenant');
+      if (!tenant) throw ApiError.unauthenticated();
+      const params = query<typeof ConsultationsQuery._output>(c);
 
-    const { items, total } = await deps.repos.consultations.list(tenant, params);
-    const owners = new Map<string, string>();
-    for (const item of items) {
-      if (owners.has(item.ownerUserId)) continue;
-      const user = await deps.repos.identity.findUserById(item.ownerUserId);
-      owners.set(item.ownerUserId, user?.fullName ?? 'Unknown');
-    }
+      const { items, total } = await deps.repos.consultations.list(tenant, params);
+      const owners = new Map<string, string>();
+      for (const item of items) {
+        if (owners.has(item.ownerUserId)) continue;
+        const user = await deps.repos.identity.findUserById(item.ownerUserId);
+        owners.set(item.ownerUserId, user?.fullName ?? 'Unknown');
+      }
 
-    const summaries: ConsultationSummary[] = items.map((item) => ({
-      id: item.id,
-      title: item.title,
-      status: item.status as ConsultationSummary['status'],
-      taskMode: item.taskMode as ConsultationSummary['taskMode'],
-      documentCount: item.documentCount,
-      sourceCount: item.sourceCount,
-      complianceScore: item.complianceScore,
-      pinned: item.pinned,
-      ownerId: item.ownerUserId,
-      ownerName: owners.get(item.ownerUserId) ?? 'Unknown',
-      lastMessageAt: item.lastMessageAt?.toISOString() ?? null,
-      updatedAt: item.updatedAt.toISOString(),
-      createdAt: item.createdAt.toISOString(),
-    }));
+      const summaries: ConsultationSummary[] = items.map((item) => ({
+        id: item.id,
+        title: item.title,
+        status: item.status as ConsultationSummary['status'],
+        taskMode: item.taskMode as ConsultationSummary['taskMode'],
+        documentCount: item.documentCount,
+        sourceCount: item.sourceCount,
+        complianceScore: item.complianceScore,
+        pinned: item.pinned,
+        ownerId: item.ownerUserId,
+        ownerName: owners.get(item.ownerUserId) ?? 'Unknown',
+        lastMessageAt: item.lastMessageAt?.toISOString() ?? null,
+        updatedAt: item.updatedAt.toISOString(),
+        createdAt: item.createdAt.toISOString(),
+      }));
 
-    return c.json({
-      items: summaries,
-      total,
-      page: params.page,
-      pageSize: params.pageSize,
-      totalPages: Math.ceil(total / params.pageSize),
-    });
-  });
+      return c.json({
+        items: summaries,
+        total,
+        page: params.page,
+        pageSize: params.pageSize,
+        totalPages: Math.ceil(total / params.pageSize),
+      });
+    },
+  );
 
   app.post(
     '/',
@@ -79,7 +84,12 @@ export function consultationRoutes(deps: AppDeps) {
 
       const consultation = await deps.repos.consultations.create(tenant, input);
       if (input.sourceIds.length > 0) {
-        await deps.repos.consultations.setSources(tenant, consultation.id, input.sourceIds, 'governing');
+        await deps.repos.consultations.setSources(
+          tenant,
+          consultation.id,
+          input.sourceIds,
+          'governing',
+        );
       }
 
       await deps.repos.audit.record({
@@ -119,7 +129,14 @@ export function consultationRoutes(deps: AppDeps) {
       const input = body<typeof UpdateConsultationRequest._output>(c);
 
       const patch: Record<string, unknown> = {};
-      for (const key of ['title', 'status', 'taskMode', 'pinned', 'answerStyle', 'outputFormat'] as const) {
+      for (const key of [
+        'title',
+        'status',
+        'taskMode',
+        'pinned',
+        'answerStyle',
+        'outputFormat',
+      ] as const) {
         if (input[key] !== undefined) patch[key] = input[key];
       }
       if (input.evidenceDetail !== undefined) patch.evidenceDetail = input.evidenceDetail;
@@ -192,7 +209,11 @@ export function consultationRoutes(deps: AppDeps) {
       });
 
       if (input.attachmentIds.length > 0) {
-        await deps.repos.consultations.bindAttachmentsToMessage(tenant, userMessage.id, input.attachmentIds);
+        await deps.repos.consultations.bindAttachmentsToMessage(
+          tenant,
+          userMessage.id,
+          input.attachmentIds,
+        );
       }
 
       // The assistant row is created up front and left empty. Persisting the result onto a
@@ -233,14 +254,18 @@ export function consultationRoutes(deps: AppDeps) {
     },
   );
 
-  app.post('/:id/messages/:messageId/feedback', requirePermission('consultation:update'), async (c) => {
-    const tenant = c.get('tenant');
-    if (!tenant) throw ApiError.unauthenticated();
-    const messageId = requireId(c, 'messageId');
-    const input = (await c.req.json()) as { feedback?: 'up' | 'down' | null };
-    await deps.repos.consultations.setFeedback(tenant, messageId, input.feedback ?? null);
-    return c.json({ ok: true as const });
-  });
+  app.post(
+    '/:id/messages/:messageId/feedback',
+    requirePermission('consultation:update'),
+    async (c) => {
+      const tenant = c.get('tenant');
+      if (!tenant) throw ApiError.unauthenticated();
+      const messageId = requireId(c, 'messageId');
+      const input = (await c.req.json()) as { feedback?: 'up' | 'down' | null };
+      await deps.repos.consultations.setFeedback(tenant, messageId, input.feedback ?? null);
+      return c.json({ ok: true as const });
+    },
+  );
 
   app.post('/:id/cancel', requirePermission('consultation:update'), async (c) => {
     const tenant = c.get('tenant');
@@ -269,7 +294,11 @@ export function consultationRoutes(deps: AppDeps) {
       const tickets = [];
       for (const file of input.files) {
         if (file.sizeBytes > deps.env.MAX_UPLOAD_BYTES) {
-          throw new ApiError(413, 'payload_too_large', `${file.fileName} exceeds the upload limit.`);
+          throw new ApiError(
+            413,
+            'payload_too_large',
+            `${file.fileName} exceeds the upload limit.`,
+          );
         }
 
         // Consultation uploads are inputs, NOT knowledge. `promotedToKnowledge` stays false
@@ -323,84 +352,99 @@ export function consultationRoutes(deps: AppDeps) {
   /* Reviews, reports, corrections                                          */
   /* ---------------------------------------------------------------------- */
 
-  app.post('/:id/reviews', requirePermission('review:create'), validateJson(CreateReviewRequest), async (c) => {
-    const tenant = c.get('tenant');
-    if (!tenant) throw ApiError.unauthenticated();
-    const id = requireId(c, 'id');
-    const input = body<typeof CreateReviewRequest._output>(c);
+  app.post(
+    '/:id/reviews',
+    requirePermission('review:create'),
+    validateJson(CreateReviewRequest),
+    async (c) => {
+      const tenant = c.get('tenant');
+      if (!tenant) throw ApiError.unauthenticated();
+      const id = requireId(c, 'id');
+      const input = body<typeof CreateReviewRequest._output>(c);
 
-    await deps.repos.consultations.getById(tenant, id);
-    await deps.repos.sources.assertAllVisible(tenant, [
-      ...input.projectSourceIds,
-      ...input.governingSourceIds,
-    ]);
+      await deps.repos.consultations.getById(tenant, id);
+      await deps.repos.sources.assertAllVisible(tenant, [
+        ...input.projectSourceIds,
+        ...input.governingSourceIds,
+      ]);
 
-    // Pin the versions in use so the review remains reproducible even if a source updates.
-    await deps.repos.consultations.setSources(tenant, id, input.governingSourceIds, 'governing');
-    await deps.repos.consultations.setSources(tenant, id, input.projectSourceIds, 'project');
+      // Pin the versions in use so the review remains reproducible even if a source updates.
+      await deps.repos.consultations.setSources(tenant, id, input.governingSourceIds, 'governing');
+      await deps.repos.consultations.setSources(tenant, id, input.projectSourceIds, 'project');
 
-    const review = await deps.repos.consultations.createReview(tenant, {
-      consultationId: id,
-      projectSourceIds: input.projectSourceIds,
-      governingSourceIds: input.governingSourceIds,
-      scopeNote: input.scopeNote ?? null,
-    });
-
-    const assistantMessage = await deps.repos.consultations.appendMessage(tenant, {
-      consultationId: id,
-      role: 'assistant',
-      text: '',
-      taskMode: 'check_compliance',
-      answerStyle: input.answerStyle,
-    });
-
-    const { job } = await deps.repos.jobs.enqueue(tenant, {
-      kind: 'compliance_review',
-      idempotencyKey: input.idempotencyKey,
-      payload: {
+      const review = await deps.repos.consultations.createReview(tenant, {
         consultationId: id,
-        reviewId: review.id,
-        assistantMessageId: assistantMessage.id,
-        answerStyle: input.answerStyle,
+        projectSourceIds: input.projectSourceIds,
+        governingSourceIds: input.governingSourceIds,
         scopeNote: input.scopeNote ?? null,
-      },
-      targetType: 'consultation',
-      targetId: id,
-      priority: 8,
-    });
+      });
 
-    return c.json({ job: toJobView(job), reviewId: review.id, messageId: assistantMessage.id }, 202);
-  });
-
-  app.post('/:id/reports', requirePermission('report:create'), validateJson(CreateReportRequest), async (c) => {
-    const tenant = c.get('tenant');
-    if (!tenant) throw ApiError.unauthenticated();
-    const id = requireId(c, 'id');
-    const input = body<typeof CreateReportRequest._output>(c);
-    await deps.repos.consultations.getById(tenant, id);
-
-    if (!input.reviewId && !input.messageId) {
-      throw ApiError.badRequest('Choose the review or the answer this report should be built from.');
-    }
-
-    const { job } = await deps.repos.jobs.enqueue(tenant, {
-      kind: 'report_generate',
-      idempotencyKey: input.idempotencyKey,
-      payload: {
+      const assistantMessage = await deps.repos.consultations.appendMessage(tenant, {
         consultationId: id,
-        reviewId: input.reviewId,
-        messageId: input.messageId,
-        format: input.format,
-        kind: input.kind,
-        title: input.title ?? null,
-      },
-      targetType: 'consultation',
-      targetId: id,
-      priority: 3,
-    });
+        role: 'assistant',
+        text: '',
+        taskMode: 'check_compliance',
+        answerStyle: input.answerStyle,
+      });
 
-    return c.json({ job: toJobView(job) }, 202);
-  });
+      const { job } = await deps.repos.jobs.enqueue(tenant, {
+        kind: 'compliance_review',
+        idempotencyKey: input.idempotencyKey,
+        payload: {
+          consultationId: id,
+          reviewId: review.id,
+          assistantMessageId: assistantMessage.id,
+          answerStyle: input.answerStyle,
+          scopeNote: input.scopeNote ?? null,
+        },
+        targetType: 'consultation',
+        targetId: id,
+        priority: 8,
+      });
+
+      return c.json(
+        { job: toJobView(job), reviewId: review.id, messageId: assistantMessage.id },
+        202,
+      );
+    },
+  );
+
+  app.post(
+    '/:id/reports',
+    requirePermission('report:create'),
+    validateJson(CreateReportRequest),
+    async (c) => {
+      const tenant = c.get('tenant');
+      if (!tenant) throw ApiError.unauthenticated();
+      const id = requireId(c, 'id');
+      const input = body<typeof CreateReportRequest._output>(c);
+      await deps.repos.consultations.getById(tenant, id);
+
+      if (!input.reviewId && !input.messageId) {
+        throw ApiError.badRequest(
+          'Choose the review or the answer this report should be built from.',
+        );
+      }
+
+      const { job } = await deps.repos.jobs.enqueue(tenant, {
+        kind: 'report_generate',
+        idempotencyKey: input.idempotencyKey,
+        payload: {
+          consultationId: id,
+          reviewId: input.reviewId,
+          messageId: input.messageId,
+          format: input.format,
+          kind: input.kind,
+          title: input.title ?? null,
+        },
+        targetType: 'consultation',
+        targetId: id,
+        priority: 3,
+      });
+
+      return c.json({ job: toJobView(job) }, 202);
+    },
+  );
 
   app.post(
     '/:id/corrections',
@@ -500,7 +544,10 @@ export function consultationRoutes(deps: AppDeps) {
         if (active.length === 0 && deliveredMessages.size > 0) {
           await stream.writeSSE({
             event: 'done',
-            data: JSON.stringify({ type: 'done', messageId: [...deliveredMessages].at(-1) ?? null }),
+            data: JSON.stringify({
+              type: 'done',
+              messageId: [...deliveredMessages].at(-1) ?? null,
+            }),
           });
           break;
         }
@@ -556,7 +603,9 @@ async function buildDetail(
   const messageViews: ConsultationMessage[] = [];
   for (const message of messages) {
     const job = jobByMessage.get(message.id);
-    messageViews.push(await toMessageView(deps, tenant, message, job?.id ?? null, job?.status ?? null));
+    messageViews.push(
+      await toMessageView(deps, tenant, message, job?.id ?? null, job?.status ?? null),
+    );
   }
 
   const participantViews = await Promise.all(
@@ -636,7 +685,8 @@ async function toMessageView(
     consultationId: message.consultationId,
     role: message.role as ConsultationMessage['role'],
     authorName: author?.fullName ?? (message.role === 'assistant' ? 'Ayumi' : 'System'),
-    authorAvatarUrl: author?.avatarUrl ?? (message.role === 'assistant' ? '/assets/consultantgirl.png' : null),
+    authorAvatarUrl:
+      author?.avatarUrl ?? (message.role === 'assistant' ? '/assets/consultantgirl.png' : null),
     text: message.text,
     taskMode: (message.taskMode as ConsultationMessage['taskMode']) ?? null,
     answer: (message.answer as ConsultationMessage['answer']) ?? null,

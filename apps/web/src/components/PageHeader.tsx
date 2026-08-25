@@ -27,7 +27,7 @@ export function PageHeader({
           </span>
         )}
         <div className="min-w-0">
-          <h1 className="text-[26px] font-bold leading-tight text-[var(--uxe-text)] sm:text-[30px]">
+          <h1 className="text-[26px] leading-tight font-bold text-[var(--uxe-text)] sm:text-[30px]">
             {title}
           </h1>
           {subtitle && (

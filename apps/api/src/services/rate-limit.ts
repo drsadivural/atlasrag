@@ -20,7 +20,10 @@ export interface RateLimiter {
  * timestamp. This is the same approach Cloudflare's own rate limiter uses.
  */
 export class MemoryRateLimiter implements RateLimiter {
-  private readonly windows = new Map<string, { windowStart: number; count: number; previous: number }>();
+  private readonly windows = new Map<
+    string,
+    { windowStart: number; count: number; previous: number }
+  >();
   private lastSweep = Date.now();
 
   async check(bucket: string, limit: number, windowSeconds: number): Promise<RateLimitResult> {
@@ -67,6 +70,11 @@ export class MemoryRateLimiter implements RateLimiter {
       resetAt,
       retryAfterSeconds: 0,
     };
+  }
+
+  /** Test-only: clears every window so one case cannot rate-limit the next. */
+  resetAll(): void {
+    this.windows.clear();
   }
 
   async reset(bucket: string): Promise<void> {

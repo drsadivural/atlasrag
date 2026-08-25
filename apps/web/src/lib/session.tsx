@@ -45,10 +45,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     [query.data?.permissions],
   );
 
-  const can = useCallback(
-    (permission: Permission) => permissions.has(permission),
-    [permissions],
-  );
+  const can = useCallback((permission: Permission) => permissions.has(permission), [permissions]);
 
   const refresh = useCallback(async () => {
     await queryClient.invalidateQueries({ queryKey: ['session'] });

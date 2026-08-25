@@ -68,19 +68,40 @@ function buildUserPrompt(input: ComposeInput): string {
   ].join('\n');
 }
 
-function parseComposeResult(raw: string, validCitationIds: Set<string>): ComposeResult['statements'] extends never ? never : { headline: string; summary: string; statements: Array<{ text: string; citationIds: string[] }> } {
+function parseComposeResult(
+  raw: string,
+  validCitationIds: Set<string>,
+): ComposeResult['statements'] extends never
+  ? never
+  : {
+      headline: string;
+      summary: string;
+      statements: Array<{ text: string; citationIds: string[] }>;
+    } {
   // Models sometimes wrap JSON in a fenced block; take the outermost object.
   const start = raw.indexOf('{');
   const end = raw.lastIndexOf('}');
   if (start === -1 || end <= start) {
-    throw new ProviderError('The provider did not return JSON.', 'invalid_response', true, null, raw.slice(0, 300));
+    throw new ProviderError(
+      'The provider did not return JSON.',
+      'invalid_response',
+      true,
+      null,
+      raw.slice(0, 300),
+    );
   }
 
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw.slice(start, end + 1));
   } catch {
-    throw new ProviderError('The provider returned malformed JSON.', 'invalid_response', true, null, raw.slice(0, 300));
+    throw new ProviderError(
+      'The provider returned malformed JSON.',
+      'invalid_response',
+      true,
+      null,
+      raw.slice(0, 300),
+    );
   }
 
   const obj = parsed as {
@@ -99,8 +120,9 @@ function parseComposeResult(raw: string, validCitationIds: Set<string>): Compose
       .map((s) => ({
         text: s.text.trim(),
         // Silently discard citation IDs the model invented; they were never in the evidence.
-        citationIds: (Array.isArray(s.citationIds) ? s.citationIds : [])
-          .filter((id): id is string => typeof id === 'string' && validCitationIds.has(id)),
+        citationIds: (Array.isArray(s.citationIds) ? s.citationIds : []).filter(
+          (id): id is string => typeof id === 'string' && validCitationIds.has(id),
+        ),
       }))
       .filter((s) => s.text.length > 0)
       .slice(0, 12),
@@ -148,7 +170,10 @@ export class AnthropicChatProvider implements ChatProvider {
       content?: Array<{ type: string; text?: string }>;
       usage?: { input_tokens?: number; output_tokens?: number };
     };
-    const text = (json.content ?? []).filter((c) => c.type === 'text').map((c) => c.text ?? '').join('');
+    const text = (json.content ?? [])
+      .filter((c) => c.type === 'text')
+      .map((c) => c.text ?? '')
+      .join('');
     const parsed = parseComposeResult(text, validIds);
 
     return {
@@ -161,7 +186,8 @@ export class AnthropicChatProvider implements ChatProvider {
   }
 
   async health(): Promise<ProviderHealth> {
-    if (!this.apiKey) return { status: 'unconfigured', detail: 'No API key configured', latencyMs: null };
+    if (!this.apiKey)
+      return { status: 'unconfigured', detail: 'No API key configured', latencyMs: null };
     const started = Date.now();
     try {
       const response = await withTimeout(
@@ -182,8 +208,15 @@ export class AnthropicChatProvider implements ChatProvider {
       );
       const latencyMs = Date.now() - started;
       if (response.ok) return { status: 'healthy', detail: null, latencyMs };
-      const error = ProviderError.fromStatus(response.status, await response.text().catch(() => ''));
-      return { status: error.retryable ? 'degraded' : 'unconfigured', detail: error.message, latencyMs };
+      const error = ProviderError.fromStatus(
+        response.status,
+        await response.text().catch(() => ''),
+      );
+      return {
+        status: error.retryable ? 'degraded' : 'unconfigured',
+        detail: error.message,
+        latencyMs,
+      };
     } catch (error) {
       return {
         status: 'degraded',
@@ -246,7 +279,8 @@ export class OpenAIChatProvider implements ChatProvider {
   }
 
   async health(): Promise<ProviderHealth> {
-    if (!this.apiKey) return { status: 'unconfigured', detail: 'No API key configured', latencyMs: null };
+    if (!this.apiKey)
+      return { status: 'unconfigured', detail: 'No API key configured', latencyMs: null };
     const started = Date.now();
     try {
       const response = await withTimeout(
@@ -257,8 +291,15 @@ export class OpenAIChatProvider implements ChatProvider {
       );
       const latencyMs = Date.now() - started;
       if (response.ok) return { status: 'healthy', detail: null, latencyMs };
-      const error = ProviderError.fromStatus(response.status, await response.text().catch(() => ''));
-      return { status: error.retryable ? 'degraded' : 'unconfigured', detail: error.message, latencyMs };
+      const error = ProviderError.fromStatus(
+        response.status,
+        await response.text().catch(() => ''),
+      );
+      return {
+        status: error.retryable ? 'degraded' : 'unconfigured',
+        detail: error.message,
+        latencyMs,
+      };
     } catch (error) {
       return {
         status: 'degraded',
@@ -276,7 +317,8 @@ async function withTimeout(promise: Promise<Response>, ms: number): Promise<Resp
       promise,
       new Promise<Response>((_, reject) => {
         timer = setTimeout(
-          () => reject(new ProviderError(`Provider did not respond within ${ms}ms.`, 'timeout', true)),
+          () =>
+            reject(new ProviderError(`Provider did not respond within ${ms}ms.`, 'timeout', true)),
           ms,
         );
       }),

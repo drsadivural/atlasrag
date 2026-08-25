@@ -16,7 +16,13 @@ export interface JobStageRecord {
 export const INGEST_STAGES: JobStageRecord[] = [
   { key: 'malware_scan', label: 'Malware scan', state: 'pending', detail: null, percent: null },
   { key: 'extraction', label: 'Extraction / OCR', state: 'pending', detail: null, percent: null },
-  { key: 'structure_analysis', label: 'Structure analysis', state: 'pending', detail: null, percent: null },
+  {
+    key: 'structure_analysis',
+    label: 'Structure analysis',
+    state: 'pending',
+    detail: null,
+    percent: null,
+  },
   { key: 'chunking', label: 'Chunking', state: 'pending', detail: null, percent: null },
   { key: 'embeddings', label: 'Embeddings', state: 'pending', detail: null, percent: null },
   { key: 'lexical_index', label: 'Lexical index', state: 'pending', detail: null, percent: null },
@@ -25,32 +31,104 @@ export const INGEST_STAGES: JobStageRecord[] = [
 ];
 
 export const ANSWER_STAGES: JobStageRecord[] = [
-  { key: 'permissions', label: 'Resolving permissions', state: 'pending', detail: null, percent: null },
+  {
+    key: 'permissions',
+    label: 'Resolving permissions',
+    state: 'pending',
+    detail: null,
+    percent: null,
+  },
   { key: 'retrieval', label: 'Hybrid retrieval', state: 'pending', detail: null, percent: null },
   { key: 'rerank', label: 'Reranking evidence', state: 'pending', detail: null, percent: null },
   { key: 'analysis', label: 'Analysis', state: 'pending', detail: null, percent: null },
-  { key: 'verification', label: 'Citation verification', state: 'pending', detail: null, percent: null },
+  {
+    key: 'verification',
+    label: 'Citation verification',
+    state: 'pending',
+    detail: null,
+    percent: null,
+  },
   { key: 'assembly', label: 'Assembling answer', state: 'pending', detail: null, percent: null },
 ];
 
 export const REVIEW_STAGES: JobStageRecord[] = [
-  { key: 'permissions', label: 'Resolving permissions', state: 'pending', detail: null, percent: null },
-  { key: 'requirements', label: 'Building requirement set', state: 'pending', detail: null, percent: null },
-  { key: 'evidence', label: 'Testing requirements against documents', state: 'pending', detail: null, percent: null },
-  { key: 'conflicts', label: 'Conflict and exception checks', state: 'pending', detail: null, percent: null },
-  { key: 'verification', label: 'Citation verification', state: 'pending', detail: null, percent: null },
-  { key: 'scoring', label: 'Coverage and confidence', state: 'pending', detail: null, percent: null },
+  {
+    key: 'permissions',
+    label: 'Resolving permissions',
+    state: 'pending',
+    detail: null,
+    percent: null,
+  },
+  {
+    key: 'requirements',
+    label: 'Building requirement set',
+    state: 'pending',
+    detail: null,
+    percent: null,
+  },
+  {
+    key: 'evidence',
+    label: 'Testing requirements against documents',
+    state: 'pending',
+    detail: null,
+    percent: null,
+  },
+  {
+    key: 'conflicts',
+    label: 'Conflict and exception checks',
+    state: 'pending',
+    detail: null,
+    percent: null,
+  },
+  {
+    key: 'verification',
+    label: 'Citation verification',
+    state: 'pending',
+    detail: null,
+    percent: null,
+  },
+  {
+    key: 'scoring',
+    label: 'Coverage and confidence',
+    state: 'pending',
+    detail: null,
+    percent: null,
+  },
 ];
 
 export const CORRECTION_STAGES: JobStageRecord[] = [
   { key: 'plan', label: 'Reading accepted changes', state: 'pending', detail: null, percent: null },
-  { key: 'generate', label: 'Writing derivative document', state: 'pending', detail: null, percent: null },
-  { key: 'validate', label: 'Re-opening and validating output', state: 'pending', detail: null, percent: null },
-  { key: 'store', label: 'Storing artifact and change log', state: 'pending', detail: null, percent: null },
+  {
+    key: 'generate',
+    label: 'Writing derivative document',
+    state: 'pending',
+    detail: null,
+    percent: null,
+  },
+  {
+    key: 'validate',
+    label: 'Re-opening and validating output',
+    state: 'pending',
+    detail: null,
+    percent: null,
+  },
+  {
+    key: 'store',
+    label: 'Storing artifact and change log',
+    state: 'pending',
+    detail: null,
+    percent: null,
+  },
 ];
 
 export const REPORT_STAGES: JobStageRecord[] = [
-  { key: 'collect', label: 'Collecting verified evidence', state: 'pending', detail: null, percent: null },
+  {
+    key: 'collect',
+    label: 'Collecting verified evidence',
+    state: 'pending',
+    detail: null,
+    percent: null,
+  },
   { key: 'render', label: 'Rendering document', state: 'pending', detail: null, percent: null },
   { key: 'validate', label: 'Validating output', state: 'pending', detail: null, percent: null },
   { key: 'store', label: 'Storing artifact', state: 'pending', detail: null, percent: null },
@@ -167,9 +245,7 @@ export class JobRepository {
    * processes can drain the queue concurrently without ever handling the same job twice.
    */
   async claimNext(kinds?: string[]): Promise<typeof processingJobs.$inferSelect | null> {
-    const kindFilter = kinds?.length
-      ? sql`AND kind = ANY(${sql.param(kinds)}::text[])`
-      : sql``;
+    const kindFilter = kinds?.length ? sql`AND kind = ANY(${sql.param(kinds)}::text[])` : sql``;
 
     const rows = await this.db.execute(sql`
       UPDATE processing_jobs SET
@@ -213,9 +289,13 @@ export class JobRepository {
       nextAttemptAt: r.next_attempt_at ? new Date(String(r.next_attempt_at)) : null,
       error: (r.error ?? null) as Record<string, unknown> | null,
       resultRef: (r.result_ref ?? null) as { kind: string; id: string } | null,
-      targetType: r.target_type === null || r.target_type === undefined ? null : String(r.target_type),
+      targetType:
+        r.target_type === null || r.target_type === undefined ? null : String(r.target_type),
       targetId: r.target_id === null || r.target_id === undefined ? null : String(r.target_id),
-      createdByUserId: r.created_by_user_id === null || r.created_by_user_id === undefined ? null : String(r.created_by_user_id),
+      createdByUserId:
+        r.created_by_user_id === null || r.created_by_user_id === undefined
+          ? null
+          : String(r.created_by_user_id),
       startedAt: r.started_at ? new Date(String(r.started_at)) : null,
       finishedAt: r.finished_at ? new Date(String(r.finished_at)) : null,
       version: Number(r.version),
@@ -268,7 +348,11 @@ export class JobRepository {
     return { stages, percent: overall, stage: stages.find((s) => s.key === stageKey) ?? null };
   }
 
-  async succeed(jobId: string, resultRef: { kind: string; id: string } | null, metrics: Record<string, unknown> = {}) {
+  async succeed(
+    jobId: string,
+    resultRef: { kind: string; id: string } | null,
+    metrics: Record<string, unknown> = {},
+  ) {
     const now = new Date();
     const [job] = await this.db
       .select()
@@ -277,16 +361,31 @@ export class JobRepository {
       .limit(1);
     if (!job) return;
 
-    const stages = job.stages.map((s) => (s.state === 'pending' || s.state === 'running' ? { ...s, state: 'complete' as const } : s));
+    const stages = job.stages.map((s) =>
+      s.state === 'pending' || s.state === 'running' ? { ...s, state: 'complete' as const } : s,
+    );
 
     await this.db
       .update(processingJobs)
-      .set({ status: 'succeeded', percent: 100, stages, resultRef, finishedAt: now, error: null, updatedAt: now })
+      .set({
+        status: 'succeeded',
+        percent: 100,
+        stages,
+        resultRef,
+        finishedAt: now,
+        error: null,
+        updatedAt: now,
+      })
       .where(eq(processingJobs.id, jobId));
 
     await this.db
       .update(jobAttempts)
-      .set({ status: 'succeeded', finishedAt: now, metrics, durationMs: now.getTime() - job.createdAt.getTime() })
+      .set({
+        status: 'succeeded',
+        finishedAt: now,
+        metrics,
+        durationMs: now.getTime() - job.createdAt.getTime(),
+      })
       .where(and(eq(jobAttempts.jobId, jobId), eq(jobAttempts.attempt, job.attempt)));
   }
 
@@ -310,9 +409,13 @@ export class JobRepository {
     const canRetry = error.retryable && job.attempt < job.maxAttempts;
     const backoffSeconds = Math.min(600, 2 ** job.attempt * 5);
     const jitter = backoffSeconds * 0.25 * jitterSeed;
-    const nextAttemptAt = canRetry ? new Date(now.getTime() + (backoffSeconds + jitter) * 1000) : null;
+    const nextAttemptAt = canRetry
+      ? new Date(now.getTime() + (backoffSeconds + jitter) * 1000)
+      : null;
 
-    const stages = job.stages.map((s) => (s.state === 'running' ? { ...s, state: 'failed' as const, detail: error.message } : s));
+    const stages = job.stages.map((s) =>
+      s.state === 'running' ? { ...s, state: 'failed' as const, detail: error.message } : s,
+    );
 
     await this.db
       .update(processingJobs)

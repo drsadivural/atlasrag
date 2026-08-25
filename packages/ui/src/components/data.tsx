@@ -1,7 +1,7 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Fragment, type ReactNode } from 'react';
 import { cn } from '../utils.js';
-import { Button } from './primitives.js';
+import { Button, LoadingRegion, Skeleton } from './primitives.js';
 
 /* -------------------------------------------------------------------------- */
 /* Responsive table                                                           */
@@ -32,6 +32,8 @@ export interface DataTableProps<T> {
     onToggle: (id: string) => void;
     onToggleAll: () => void;
     renderCheckbox: (checked: boolean, onChange: () => void, label: string) => ReactNode;
+    /** Names the row in its checkbox label, so the choices are distinguishable by ear. */
+    rowLabel?: (row: T) => string;
   };
   empty?: ReactNode;
   loading?: boolean;
@@ -57,7 +59,9 @@ export function DataTable<T>({
   loading,
   className,
 }: DataTableProps<T>) {
-  const allSelected = selection ? rows.length > 0 && rows.every((r) => selection.selected.has(rowKey(r))) : false;
+  const allSelected = selection
+    ? rows.length > 0 && rows.every((r) => selection.selected.has(rowKey(r)))
+    : false;
   const primary = columns.find((c) => c.primary) ?? columns[0];
   /**
    * `table-fixed` makes the declared widths authoritative. Applied only when a column
@@ -68,6 +72,20 @@ export function DataTable<T>({
 
   if (!loading && rows.length === 0 && empty) {
     return <div className={className}>{empty}</div>;
+  }
+
+  if (loading && rows.length === 0) {
+    // Headers over an empty body read as "no results". A skeleton of the shape that is
+    // coming, announced politely, reads as "not yet".
+    return (
+      <LoadingRegion label={`Loading ${caption}`}>
+        <div className={cn('flex flex-col gap-2', className)}>
+          {Array.from({ length: 5 }).map((_, index) => (
+            <Skeleton key={index} className="h-12 w-full" />
+          ))}
+        </div>
+      </LoadingRegion>
+    );
   }
 
   return (
@@ -89,7 +107,7 @@ export function DataTable<T>({
                   scope="col"
                   style={column.width ? { width: column.width } : undefined}
                   className={cn(
-                    'px-3 py-2.5 text-[12px] font-semibold uppercase tracking-wide text-[var(--uxe-text-secondary)]',
+                    'px-3 py-2.5 text-[12px] font-semibold tracking-wide text-[var(--uxe-text-secondary)] uppercase',
                     column.align === 'right' && 'text-right',
                     column.align === 'center' && 'text-center',
                     column.sticky && 'sticky left-0 z-10 bg-[var(--uxe-surface)]',
@@ -117,7 +135,13 @@ export function DataTable<T>({
                 >
                   {selection && (
                     <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
-                      {selection.renderCheckbox(isSelected, () => selection.onToggle(id), `Select ${caption} row`)}
+                      {selection.renderCheckbox(
+                        isSelected,
+                        () => selection.onToggle(id),
+                        selection.rowLabel
+                          ? `Select ${selection.rowLabel(row)}`
+                          : `Select ${caption} row`,
+                      )}
                     </td>
                   )}
                   {columns.map((column) => (
@@ -131,7 +155,27 @@ export function DataTable<T>({
                         column.sticky && 'sticky left-0 z-10 bg-inherit',
                       )}
                     >
-                      {column.render(row)}
+                      {onRowClick && column === primary ? (
+                        // A row that only responds to a click is unreachable by keyboard.
+                        // The primary cell carries a real control, so the row has one
+                        // focusable, named activator without breaking table semantics.
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onRowClick(row);
+                          }}
+                          className={cn(
+                            'w-full min-w-0 text-left',
+                            'focus-visible:outline-2 focus-visible:outline-offset-2',
+                            'rounded-[var(--uxe-radius-control)] focus-visible:outline-[var(--uxe-cobalt)]',
+                          )}
+                        >
+                          {column.render(row)}
+                        </button>
+                      ) : (
+                        column.render(row)
+                      )}
                     </td>
                   ))}
                 </tr>
@@ -148,8 +192,11 @@ export function DataTable<T>({
           const isSelected = selection?.selected.has(id) ?? false;
           return (
             <li key={id}>
+              {/*
+                No card-level click handler: the title is a real button, so activation is
+                keyboard-reachable and the card does not need to fake interactivity.
+              */}
               <div
-                onClick={onRowClick ? () => onRowClick(row) : undefined}
                 className={cn(
                   'rounded-[var(--uxe-radius-card)] border border-[var(--uxe-border)]',
                   'bg-[var(--uxe-surface)] p-3.5 shadow-[var(--uxe-shadow-xs)]',
@@ -158,11 +205,28 @@ export function DataTable<T>({
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1 text-[15px] font-medium text-[var(--uxe-text)]">
-                    {primary?.render(row)}
+                    {onRowClick ? (
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onRowClick(row);
+                        }}
+                        className="w-full min-w-0 text-left"
+                      >
+                        {primary?.render(row)}
+                      </button>
+                    ) : (
+                      primary?.render(row)
+                    )}
                   </div>
                   {selection && (
-                    <div onClick={(e) => e.stopPropagation()}>
-                      {selection.renderCheckbox(isSelected, () => selection.onToggle(id), 'Select row')}
+                    <div>
+                      {selection.renderCheckbox(
+                        isSelected,
+                        () => selection.onToggle(id),
+                        selection.rowLabel ? `Select ${selection.rowLabel(row)}` : 'Select row',
+                      )}
                     </div>
                   )}
                 </div>
@@ -171,10 +235,12 @@ export function DataTable<T>({
                     .filter((c) => c !== primary && !c.hideOnMobile)
                     .map((column) => (
                       <Fragment key={column.key}>
-                        <dt className="text-[11px] font-semibold uppercase tracking-wide text-[var(--uxe-text-secondary)]">
+                        <dt className="text-[11px] font-semibold tracking-wide text-[var(--uxe-text-secondary)] uppercase">
                           {column.header}
                         </dt>
-                        <dd className="text-right text-[13px] text-[var(--uxe-text)]">{column.render(row)}</dd>
+                        <dd className="text-right text-[13px] text-[var(--uxe-text)]">
+                          {column.render(row)}
+                        </dd>
                       </Fragment>
                     ))}
                 </dl>
@@ -240,7 +306,11 @@ export function Pagination({
         </Button>
         {pages.map((entry, index) =>
           entry === 'gap' ? (
-            <span key={`gap-${index}`} aria-hidden className="px-1.5 text-[13px] text-[var(--uxe-text-tertiary)]">
+            <span
+              key={`gap-${index}`}
+              aria-hidden
+              className="px-1.5 text-[13px] text-[var(--uxe-text-tertiary)]"
+            >
               …
             </span>
           ) : (
@@ -336,7 +406,9 @@ export function AreaChart({
     ...point,
   }));
 
-  const line = coords.map((c, i) => `${i === 0 ? 'M' : 'L'}${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(' ');
+  const line = coords
+    .map((c, i) => `${i === 0 ? 'M' : 'L'}${c.x.toFixed(1)},${c.y.toFixed(1)}`)
+    .join(' ');
   const area = `${line} L${(coords.at(-1)?.x ?? padding.left).toFixed(1)},${padding.top + innerHeight} L${padding.left},${padding.top + innerHeight} Z`;
 
   const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => Math.round(axisMax * f));
@@ -370,7 +442,13 @@ export function AreaChart({
                 strokeWidth="1"
                 strokeDasharray={tick === 0 ? undefined : '3 4'}
               />
-              <text x={padding.left - 8} y={y + 4} textAnchor="end" fontSize="10" fill="var(--uxe-text-tertiary)">
+              <text
+                x={padding.left - 8}
+                y={y + 4}
+                textAnchor="end"
+                fontSize="10"
+                fill="var(--uxe-text-tertiary)"
+              >
                 {tick}
               </text>
             </g>
@@ -378,11 +456,26 @@ export function AreaChart({
         })}
 
         <path d={area} fill="url(#uxe-area-fill)" />
-        <path d={line} fill="none" stroke="var(--uxe-cobalt)" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+        <path
+          d={line}
+          fill="none"
+          stroke="var(--uxe-cobalt)"
+          strokeWidth="2.5"
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
 
         {coords.map((c, index) =>
           index % labelEvery === 0 || index === coords.length - 1 ? (
-            <circle key={c.label} cx={c.x} cy={c.y} r="3.5" fill="var(--uxe-surface)" stroke="var(--uxe-cobalt)" strokeWidth="2" />
+            <circle
+              key={c.label}
+              cx={c.x}
+              cy={c.y}
+              r="3.5"
+              fill="var(--uxe-surface)"
+              stroke="var(--uxe-cobalt)"
+              strokeWidth="2"
+            />
           ) : null,
         )}
 
@@ -407,8 +500,18 @@ export function AreaChart({
           <caption className="sr-only">{ariaLabel} — data table</caption>
           <thead>
             <tr className="border-b border-[var(--uxe-border)]">
-              <th scope="col" className="py-1.5 pr-3 font-semibold text-[var(--uxe-text-secondary)]">Date</th>
-              <th scope="col" className="py-1.5 text-right font-semibold text-[var(--uxe-text-secondary)]">{valueLabel}</th>
+              <th
+                scope="col"
+                className="py-1.5 pr-3 font-semibold text-[var(--uxe-text-secondary)]"
+              >
+                Date
+              </th>
+              <th
+                scope="col"
+                className="py-1.5 text-right font-semibold text-[var(--uxe-text-secondary)]"
+              >
+                {valueLabel}
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -450,24 +553,32 @@ export function DonutChart({
   const circumference = 2 * Math.PI * radius;
   const safeTotal = total || 1;
 
-  let offset = 0;
-  const arcs = segments.map((segment) => {
+  // Each arc starts where the preceding ones ended. Computed from the segments rather than
+  // by mutating a running total during render.
+  const arcs = segments.map((segment, index) => {
     const fraction = segment.value / safeTotal;
-    const arc = {
+    const priorFraction =
+      segments.slice(0, index).reduce((sum, previous) => sum + previous.value, 0) / safeTotal;
+    return {
       ...segment,
       dash: fraction * circumference,
-      offset: -offset * circumference,
+      offset: -priorFraction * circumference,
       percent: fraction * 100,
     };
-    offset += fraction;
-    return arc;
   });
 
   return (
     <div className="flex flex-wrap items-center gap-6">
       <div className="relative shrink-0" style={{ width: size, height: size }}>
         <svg width={size} height={size} className="-rotate-90" role="img" aria-label={ariaLabel}>
-          <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="var(--uxe-surface-sunken)" strokeWidth={strokeWidth} />
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            fill="none"
+            stroke="var(--uxe-surface-sunken)"
+            strokeWidth={strokeWidth}
+          />
           {arcs.map((arc) => (
             <circle
               key={arc.label}
@@ -483,8 +594,10 @@ export function DonutChart({
           ))}
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-[24px] font-bold leading-none text-[var(--uxe-text)]">{total}</span>
-          {centerLabel && <span className="mt-1 text-[12px] text-[var(--uxe-text-secondary)]">{centerLabel}</span>}
+          <span className="text-[24px] leading-none font-bold text-[var(--uxe-text)]">{total}</span>
+          {centerLabel && (
+            <span className="mt-1 text-[12px] text-[var(--uxe-text-secondary)]">{centerLabel}</span>
+          )}
         </div>
       </div>
 
@@ -492,10 +605,14 @@ export function DonutChart({
         {segments.map((segment) => (
           <li key={segment.label} className="flex items-center justify-between gap-3 text-[13px]">
             <span className="flex min-w-0 items-center gap-2">
-              <span aria-hidden className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: segment.color }} />
+              <span
+                aria-hidden
+                className="h-2.5 w-2.5 shrink-0 rounded-full"
+                style={{ background: segment.color }}
+              />
               <span className="truncate text-[var(--uxe-text)]">{segment.label}</span>
             </span>
-            <span className="shrink-0 tabular-nums text-[var(--uxe-text-secondary)]">
+            <span className="shrink-0 text-[var(--uxe-text-secondary)] tabular-nums">
               {segment.value} ({Math.round((segment.value / safeTotal) * 100)}%)
             </span>
           </li>

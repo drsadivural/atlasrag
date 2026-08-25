@@ -20,7 +20,10 @@ export function validateJson<T extends z.ZodTypeAny>(schema: T): MiddlewareHandl
 
     const result = schema.safeParse(raw);
     if (!result.success) {
-      throw ApiError.badRequest('Please correct the highlighted fields.', fieldErrors(result.error));
+      throw ApiError.badRequest(
+        'Please correct the highlighted fields.',
+        fieldErrors(result.error),
+      );
     }
 
     // Stashed under a symbol-free key the route reads via `validated()`.
@@ -34,7 +37,10 @@ export function validateQuery<T extends z.ZodTypeAny>(schema: T): MiddlewareHand
     const raw = Object.fromEntries(new URL(c.req.url).searchParams.entries());
     const result = schema.safeParse(raw);
     if (!result.success) {
-      throw ApiError.badRequest('One or more query parameters are invalid.', fieldErrors(result.error));
+      throw ApiError.badRequest(
+        'One or more query parameters are invalid.',
+        fieldErrors(result.error),
+      );
     }
     (c.req as unknown as { valid_query?: unknown }).valid_query = result.data;
     await next();

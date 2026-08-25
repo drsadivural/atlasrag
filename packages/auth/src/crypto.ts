@@ -35,7 +35,10 @@ export function toBase64Url(bytes: Uint8Array): string {
 }
 
 export function fromBase64Url(value: string): Uint8Array {
-  const padded = value.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(value.length / 4) * 4, '=');
+  const padded = value
+    .replace(/-/g, '+')
+    .replace(/_/g, '/')
+    .padEnd(Math.ceil(value.length / 4) * 4, '=');
   const binary = atob(padded);
   const out = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i += 1) out[i] = binary.charCodeAt(i);
@@ -103,7 +106,10 @@ export async function hmacSha256(secret: string, message: string): Promise<strin
 const PBKDF2_ITERATIONS = 600_000;
 const PBKDF2_KEY_LENGTH = 64;
 
-export async function hashPassword(password: string, iterations = PBKDF2_ITERATIONS): Promise<string> {
+export async function hashPassword(
+  password: string,
+  iterations = PBKDF2_ITERATIONS,
+): Promise<string> {
   const salt = randomBytes(16);
   const derived = await pbkdf2(password, salt, iterations);
   return `pbkdf2-sha512$${iterations}$${toBase64Url(salt)}$${toBase64Url(derived)}`;
@@ -115,7 +121,10 @@ export interface PasswordVerification {
   needsRehash: boolean;
 }
 
-export async function verifyPassword(password: string, stored: string): Promise<PasswordVerification> {
+export async function verifyPassword(
+  password: string,
+  stored: string,
+): Promise<PasswordVerification> {
   const parts = stored.split('$');
   if (parts.length !== 4 || parts[0] !== 'pbkdf2-sha512') {
     return { valid: false, needsRehash: false };
@@ -160,7 +169,11 @@ async function pbkdf2(password: string, salt: Uint8Array, iterations: number): P
  * prefixed so a future key rotation can decrypt old values while writing new ones under
  * the new key.
  */
-export async function encryptSecret(plaintext: string, base64Key: string, keyId = 'k1'): Promise<string> {
+export async function encryptSecret(
+  plaintext: string,
+  base64Key: string,
+  keyId = 'k1',
+): Promise<string> {
   const key = await importAesKey(base64Key);
   const iv = randomBytes(12);
   const ciphertext = await crypto.subtle.encrypt(
@@ -190,5 +203,8 @@ async function importAesKey(base64Key: string): Promise<SubtleKey> {
   if (raw.length !== 32) {
     throw new Error('ENCRYPTION_KEY must decode to exactly 32 bytes');
   }
-  return crypto.subtle.importKey('raw', raw as BinaryInput, 'AES-GCM', false, ['encrypt', 'decrypt']);
+  return crypto.subtle.importKey('raw', raw as BinaryInput, 'AES-GCM', false, [
+    'encrypt',
+    'decrypt',
+  ]);
 }

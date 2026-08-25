@@ -45,7 +45,7 @@ export function RegisterPage() {
   return (
     <div className="min-h-dvh bg-[var(--uxe-bg)]">
       <div className="mx-auto grid min-h-dvh w-full max-w-[1600px] grid-cols-1 lg:grid-cols-[55fr_45fr]">
-        <section className="relative hidden overflow-hidden bg-[linear-gradient(160deg,#FFFFFF_0%,#F4F7FF_55%,#EEF2FF_100%)] px-14 pt-12 dark:bg-[linear-gradient(160deg,#0E1320_0%,#131829_55%,#161D33_100%)] lg:block">
+        <section className="relative hidden overflow-hidden bg-[linear-gradient(160deg,#FFFFFF_0%,#F4F7FF_55%,#EEF2FF_100%)] px-14 pt-12 lg:block dark:bg-[linear-gradient(160deg,#0E1320_0%,#131829_55%,#161D33_100%)]">
           <BrandLockup size="lg" />
           <p className="mt-3 max-w-xl text-[17px] font-medium text-[var(--uxe-text-secondary)]">
             {t('app.promise')}
@@ -71,7 +71,9 @@ export function RegisterPage() {
                 >
                   <Mail className="h-6 w-6" />
                 </span>
-                <h1 className="mt-4 text-[22px] font-bold text-[var(--uxe-text)]">{t('auth.checkInbox')}</h1>
+                <h1 className="mt-4 text-[22px] font-bold text-[var(--uxe-text)]">
+                  {t('auth.checkInbox')}
+                </h1>
                 <p className="mt-2 text-[14px] text-[var(--uxe-text-secondary)]">
                   {t('auth.verifyEmailSent', { email: form.email })}
                 </p>
@@ -81,7 +83,9 @@ export function RegisterPage() {
               </div>
             ) : (
               <>
-                <h1 className="text-[26px] font-bold text-[var(--uxe-text)]">{t('auth.createAccount')}</h1>
+                <h1 className="text-[26px] font-bold text-[var(--uxe-text)]">
+                  {t('auth.createAccount')}
+                </h1>
                 <p className="mt-1.5 text-[14px] text-[var(--uxe-text-secondary)]">
                   Create your workspace. You will be its Owner.
                 </p>
@@ -96,7 +100,12 @@ export function RegisterPage() {
                 )}
 
                 <form onSubmit={submit} className="mt-6 flex flex-col gap-4" noValidate>
-                  <Field label={t('auth.fullName')} htmlFor="fullName" error={fieldErrors.fullName?.[0]} required>
+                  <Field
+                    label={t('auth.fullName')}
+                    htmlFor="fullName"
+                    error={fieldErrors.fullName?.[0]}
+                    required
+                  >
                     <Input
                       id="fullName"
                       autoComplete="name"
@@ -108,7 +117,12 @@ export function RegisterPage() {
                     />
                   </Field>
 
-                  <Field label={t('auth.workEmail')} htmlFor="email" error={fieldErrors.email?.[0]} required>
+                  <Field
+                    label={t('auth.workEmail')}
+                    htmlFor="email"
+                    error={fieldErrors.email?.[0]}
+                    required
+                  >
                     <Input
                       id="email"
                       type="email"
@@ -161,10 +175,16 @@ export function RegisterPage() {
                           variant="ghost"
                           size="icon-sm"
                           onClick={() => setShowPassword((v) => !v)}
-                          aria-label={showPassword ? t('auth.hidePassword') : t('auth.showPassword')}
+                          aria-label={
+                            showPassword ? t('auth.hidePassword') : t('auth.showPassword')
+                          }
                           aria-pressed={showPassword}
                         >
-                          {showPassword ? <EyeOff className="h-4 w-4" aria-hidden /> : <Eye className="h-4 w-4" aria-hidden />}
+                          {showPassword ? (
+                            <EyeOff className="h-4 w-4" aria-hidden />
+                          ) : (
+                            <Eye className="h-4 w-4" aria-hidden />
+                          )}
                         </Button>
                       }
                     />
@@ -181,14 +201,24 @@ export function RegisterPage() {
                     </p>
                   )}
 
-                  <Button type="submit" variant="primary" size="xl" full className="mt-2" loading={submitting}>
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    size="xl"
+                    full
+                    className="mt-2"
+                    loading={submitting}
+                  >
                     {t('auth.createAccount')}
                   </Button>
                 </form>
 
                 <p className="mt-6 text-center text-[14px] text-[var(--uxe-text-secondary)]">
                   {t('auth.haveAccount')}{' '}
-                  <Link to="/login" className="font-semibold text-[var(--uxe-cobalt)] hover:underline">
+                  <Link
+                    to="/login"
+                    className="font-semibold text-[var(--uxe-cobalt)] hover:underline"
+                  >
                     {t('auth.signIn')}
                   </Link>
                 </p>

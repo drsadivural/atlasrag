@@ -48,7 +48,19 @@ export type LoginRequest = z.infer<typeof LoginRequest>;
 
 export const MfaVerifyRequest = z.object({
   challengeId: Id,
-  code: z.string().trim().regex(/^\d{6}$/, 'Enter the 6-digit code'),
+  /** Returned by the sign-in response; only its hash is stored server-side. */
+  challengeToken: z.string().min(20),
+  /**
+   * A six-digit authenticator code or one of the account's recovery codes. Both are
+   * accepted here because both are offered on the sign-in screen.
+   */
+  code: z
+    .string()
+    .trim()
+    .regex(
+      /^(?:\d{6}|[A-Za-z2-9]{5}-?[A-Za-z2-9]{5})$/,
+      'Enter the 6-digit code from your authenticator, or a recovery code',
+    ),
   trustDevice: z.boolean().default(false),
 });
 
@@ -58,6 +70,31 @@ export const ResetPasswordRequest = z.object({
   password: Password,
 });
 export const VerifyEmailRequest = z.object({ token: z.string().min(20) });
+
+/**
+ * Accepting a workspace invitation.
+ *
+ * A password is required only when the invited address has no account yet; an existing
+ * user simply joins the new workspace.
+ */
+export const AcceptInvitationRequest = z.object({
+  token: z.string().min(20),
+  fullName: z.string().trim().min(2).max(120).optional(),
+  password: Password.optional(),
+});
+export type AcceptInvitationRequest = z.infer<typeof AcceptInvitationRequest>;
+
+export const InvitationPreview = z.object({
+  email: Email,
+  workspaceName: z.string(),
+  role: Role,
+  invitedByName: z.string(),
+  /** True when the invited address already has an account and only needs to sign in. */
+  hasAccount: z.boolean(),
+  message: z.string().nullable(),
+  expiresAt: Timestamp,
+});
+export type InvitationPreview = z.infer<typeof InvitationPreview>;
 export const MagicLinkRequest = z.object({ email: Email });
 
 export const SessionUser = z.object({
@@ -101,6 +138,8 @@ export const LoginResponse = z.discriminatedUnion('status', [
     status: z.literal('mfa_required'),
     challengeId: Id,
     methods: z.array(z.enum(['totp', 'webauthn'])),
+    /** Single-use; must be echoed back to /auth/mfa/verify. */
+    challengeToken: z.string(),
   }),
   z.object({ status: z.literal('email_verification_required'), email: Email }),
 ]);
@@ -199,6 +238,7 @@ export type DashboardResponse = z.infer<typeof DashboardResponse>;
 /* -------------------------------------------------------------------------- */
 
 export const SourceAccessScope = z.enum(['workspace', 'group', 'users']);
+export type SourceAccessScope = z.infer<typeof SourceAccessScope>;
 
 export const SourceSummary = z.object({
   id: Id,
@@ -222,6 +262,8 @@ export const SourceSummary = z.object({
   processingPercent: z.number().min(0).max(100).nullable(),
   isPromotedUpload: z.boolean(),
   effectiveDate: Timestamp.nullable(),
+  /** Optimistic-concurrency token; echo it back on PATCH. */
+  version: z.number().int().min(0),
 });
 export type SourceSummary = z.infer<typeof SourceSummary>;
 
@@ -231,7 +273,9 @@ export const SourcesQuery = PageQuery.extend({
   documentType: z.union([DocumentType, z.literal('all')]).default('all'),
   tag: z.string().optional(),
   ownerId: Id.optional(),
-  sort: z.enum(['updated_desc', 'updated_asc', 'title_asc', 'title_desc', 'status']).default('updated_desc'),
+  sort: z
+    .enum(['updated_desc', 'updated_asc', 'title_asc', 'title_desc', 'status'])
+    .default('updated_desc'),
 });
 export type SourcesQuery = z.infer<typeof SourcesQuery>;
 
@@ -828,7 +872,13 @@ export const UpdateUserRequest = z.object({
   revokeSessions: z.boolean().optional(),
 });
 
-export const ModelCapability = z.enum(['chat', 'embedding', 'ocr', 'rerank', 'document_generation']);
+export const ModelCapability = z.enum([
+  'chat',
+  'embedding',
+  'ocr',
+  'rerank',
+  'document_generation',
+]);
 
 export const ModelConfiguration = z.object({
   id: Id,

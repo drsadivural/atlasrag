@@ -18,7 +18,7 @@ import {
   formatDateTime,
 } from '@uxe/ui';
 import type { AuditEvent, Paginated } from '@uxe/contracts';
-import { ApiError, api } from '../lib/api.js';
+import { type ApiError, api } from '../lib/api.js';
 import { useI18n } from '../lib/i18n.js';
 import { useSession } from '../lib/session.js';
 import { PageHeader } from '../components/PageHeader.js';
@@ -88,7 +88,11 @@ export function ActivityPage() {
       />
 
       <div className="mt-5 flex flex-wrap items-center gap-2">
-        <div role="group" aria-label="Filter by category" className="flex min-w-0 flex-1 flex-wrap gap-2">
+        <div
+          role="group"
+          aria-label="Filter by category"
+          className="flex min-w-0 flex-1 flex-wrap gap-2"
+        >
           {CATEGORIES.map((value) => (
             <FilterChip
               key={value}
@@ -117,7 +121,11 @@ export function ActivityPage() {
             </div>
           </LoadingRegion>
         ) : query.error ? (
-          <ErrorState message={query.error.message} traceId={query.error.traceId} onRetry={() => void query.refetch()} />
+          <ErrorState
+            message={query.error.message}
+            traceId={query.error.traceId}
+            onRetry={() => void query.refetch()}
+          />
         ) : (
           <>
             <DataTable
@@ -148,7 +156,9 @@ export function ActivityPage() {
                         )}
                       </span>
                       <span className="min-w-0">
-                        <span className="block text-[14px] text-[var(--uxe-text)]">{row.summary}</span>
+                        <span className="block text-[14px] text-[var(--uxe-text)]">
+                          {row.summary}
+                        </span>
                         <span className="block font-[family-name:var(--uxe-font-mono)] text-[11px] text-[var(--uxe-text-tertiary)]">
                           {row.action}
                         </span>
@@ -189,13 +199,15 @@ export function ActivityPage() {
                   header: t('activity.trace'),
                   hideOnMobile: true,
                   render: (row) => (
-                    <Tooltip content={`Trace ${row.traceId}${row.ipAddress ? ` · ${row.ipAddress}` : ''}`}>
-                      <span
-                        tabIndex={0}
+                    <Tooltip
+                      content={`Trace ${row.traceId}${row.ipAddress ? ` · ${row.ipAddress}` : ''}`}
+                    >
+                      <button
+                        type="button"
                         className="cursor-help font-[family-name:var(--uxe-font-mono)] text-[11px] text-[var(--uxe-text-tertiary)]"
                       >
                         {row.traceId.slice(0, 8)}
-                      </span>
+                      </button>
                     </Tooltip>
                   ),
                 },

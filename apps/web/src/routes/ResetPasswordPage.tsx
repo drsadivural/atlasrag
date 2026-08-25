@@ -71,13 +71,21 @@ export function ResetPasswordPage() {
           <h1 className="text-[24px] font-bold text-[var(--uxe-text)]">{t('auth.setPassword')}</h1>
 
           {error && (
-            <p role="alert" className="mt-4 rounded-[var(--uxe-radius-control)] border border-[var(--uxe-danger-border)] bg-[var(--uxe-danger-bg)] px-3 py-2.5 text-[13px] text-[var(--uxe-danger)]">
+            <p
+              role="alert"
+              className="mt-4 rounded-[var(--uxe-radius-control)] border border-[var(--uxe-danger-border)] bg-[var(--uxe-danger-bg)] px-3 py-2.5 text-[13px] text-[var(--uxe-danger)]"
+            >
               {error}
             </p>
           )}
 
           <form onSubmit={submit} className="mt-6 flex flex-col gap-4" noValidate>
-            <Field label={t('auth.newPassword')} htmlFor="password" error={fieldErrors.password?.[0]} required>
+            <Field
+              label={t('auth.newPassword')}
+              htmlFor="password"
+              error={fieldErrors.password?.[0]}
+              required
+            >
               <Input
                 id="password"
                 type={show ? 'text' : 'password'}
@@ -95,13 +103,22 @@ export function ResetPasswordPage() {
                     onClick={() => setShow((v) => !v)}
                     aria-label={show ? t('auth.hidePassword') : t('auth.showPassword')}
                   >
-                    {show ? <EyeOff className="h-4 w-4" aria-hidden /> : <Eye className="h-4 w-4" aria-hidden />}
+                    {show ? (
+                      <EyeOff className="h-4 w-4" aria-hidden />
+                    ) : (
+                      <Eye className="h-4 w-4" aria-hidden />
+                    )}
                   </Button>
                 }
               />
             </Field>
 
-            <Field label={t('auth.confirmPassword')} htmlFor="confirm" error={fieldErrors.confirm?.[0]} required>
+            <Field
+              label={t('auth.confirmPassword')}
+              htmlFor="confirm"
+              error={fieldErrors.confirm?.[0]}
+              required
+            >
               <Input
                 id="confirm"
                 type={show ? 'text' : 'password'}
@@ -114,7 +131,14 @@ export function ResetPasswordPage() {
               />
             </Field>
 
-            <Button type="submit" variant="primary" size="xl" full className="mt-2" loading={submitting}>
+            <Button
+              type="submit"
+              variant="primary"
+              size="xl"
+              full
+              className="mt-2"
+              loading={submitting}
+            >
               {t('auth.setPassword')}
             </Button>
           </form>

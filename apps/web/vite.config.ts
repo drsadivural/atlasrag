@@ -64,7 +64,11 @@ export default defineConfig(({ mode }) => ({
          */
         manualChunks: (id: string) => {
           if (!id.includes('node_modules')) return undefined;
-          if (/[\\/]node_modules[\\/](react|react-dom|react-router|react-router-dom|scheduler)[\\/]/.test(id)) {
+          if (
+            /[\\/]node_modules[\\/](react|react-dom|react-router|react-router-dom|scheduler)[\\/]/.test(
+              id,
+            )
+          ) {
             return 'react';
           }
           if (id.includes('@tanstack')) return 'query';

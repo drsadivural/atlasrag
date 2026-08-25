@@ -82,7 +82,8 @@ export function chunkSections(sections: DetectedSection[], options: ChunkOptions
       !body.toLowerCase().startsWith(section.title.toLowerCase())
         ? `${section.title}\n`
         : '';
-    const headingLine = section.headingPath.length > 0 ? section.headingPath.join(' > ') : section.title;
+    const headingLine =
+      section.headingPath.length > 0 ? section.headingPath.join(' > ') : section.title;
     const headingText = opts.includeHeadingContext ? headingLine : '';
 
     const base = {

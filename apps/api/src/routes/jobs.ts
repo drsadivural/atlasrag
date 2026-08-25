@@ -32,7 +32,10 @@ export function toJobView(job: JobRow): JobView {
         }
       : null,
     resultRef: job.resultRef
-      ? { kind: job.resultRef.kind as JobView['resultRef'] extends null ? never : 'message', id: job.resultRef.id }
+      ? {
+          kind: job.resultRef.kind as JobView['resultRef'] extends null ? never : 'message',
+          id: job.resultRef.id,
+        }
       : null,
     createdAt: job.createdAt.toISOString(),
     startedAt: job.startedAt?.toISOString() ?? null,
@@ -83,12 +86,15 @@ export function jobRoutes(deps: AppDeps) {
 
     const existing = await deps.repos.jobs.getById(tenant, id);
     if (existing.status === 'succeeded') {
-      throw ApiError.conflict('That job already completed successfully; there is nothing to retry.');
+      throw ApiError.conflict(
+        'That job already completed successfully; there is nothing to retry.',
+      );
     }
     if (existing.createdByUserId && existing.createdByUserId !== tenant.userId) {
       // Retrying somebody else's job is an admin action.
       const canManage = ['owner', 'admin'].includes(tenant.role);
-      if (!canManage) throw ApiError.forbidden('Only the job owner or an admin can retry this job.');
+      if (!canManage)
+        throw ApiError.forbidden('Only the job owner or an admin can retry this job.');
     }
 
     const job = await deps.repos.jobs.retry(tenant, id);

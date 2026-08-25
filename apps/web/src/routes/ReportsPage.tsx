@@ -19,7 +19,7 @@ import {
   useToast,
 } from '@uxe/ui';
 import type { ArtifactSummary, Paginated } from '@uxe/contracts';
-import { ApiError, api } from '../lib/api.js';
+import { type ApiError, api } from '../lib/api.js';
 import { useI18n } from '../lib/i18n.js';
 import { useSession } from '../lib/session.js';
 import { PageHeader } from '../components/PageHeader.js';
@@ -53,7 +53,8 @@ export function ReportsPage() {
 
   const query = useQuery<Paginated<ArtifactSummary>, ApiError>({
     queryKey: ['artifacts', { kind, page }],
-    queryFn: () => api.get<Paginated<ArtifactSummary>>(`/artifacts?kind=${kind}&page=${page}&pageSize=20`),
+    queryFn: () =>
+      api.get<Paginated<ArtifactSummary>>(`/artifacts?kind=${kind}&page=${page}&pageSize=20`),
   });
 
   const download = useMutation({
@@ -78,7 +79,8 @@ export function ReportsPage() {
       push({ tone: 'success', title: 'Artifact archived' });
       void queryClient.invalidateQueries({ queryKey: ['artifacts'] });
     },
-    onError: (error: ApiError) => push({ tone: 'error', title: 'Could not archive', description: error.message }),
+    onError: (error: ApiError) =>
+      push({ tone: 'error', title: 'Could not archive', description: error.message }),
   });
 
   return (
@@ -89,8 +91,19 @@ export function ReportsPage() {
         subtitle={t('reports.subtitle')}
       />
 
-      <div role="group" aria-label="Filter by kind" className="mt-5 flex flex-wrap items-center gap-2">
-        {['all', 'compliance_report', 'summary', 'evidence_matrix', 'corrected_document', 'redline'].map((value) => (
+      <div
+        role="group"
+        aria-label="Filter by kind"
+        className="mt-5 flex flex-wrap items-center gap-2"
+      >
+        {[
+          'all',
+          'compliance_report',
+          'summary',
+          'evidence_matrix',
+          'corrected_document',
+          'redline',
+        ].map((value) => (
           <FilterChip
             key={value}
             active={kind === value}
@@ -174,14 +187,20 @@ export function ReportsPage() {
                 {
                   key: 'format',
                   header: 'Format',
-                  render: (row) => <span className="uppercase text-[var(--uxe-text-secondary)]">{row.documentType}</span>,
+                  render: (row) => (
+                    <span className="text-[var(--uxe-text-secondary)] uppercase">
+                      {row.documentType}
+                    </span>
+                  ),
                 },
                 {
                   key: 'size',
                   header: 'Size',
                   align: 'right',
                   render: (row) => (
-                    <span className="tabular-nums text-[var(--uxe-text-secondary)]">{formatBytes(row.sizeBytes)}</span>
+                    <span className="text-[var(--uxe-text-secondary)] tabular-nums">
+                      {formatBytes(row.sizeBytes)}
+                    </span>
                   ),
                 },
                 {
@@ -198,11 +217,15 @@ export function ReportsPage() {
                           </ul>
                         }
                       >
-                        <span tabIndex={0}>
-                          <Badge tone="warning" size="sm" icon={<Info className="h-3 w-3" aria-hidden />}>
+                        <button type="button" className="cursor-help">
+                          <Badge
+                            tone="warning"
+                            size="sm"
+                            icon={<Info className="h-3 w-3" aria-hidden />}
+                          >
                             {row.disclosures.length}
                           </Badge>
-                        </span>
+                        </button>
                       </Tooltip>
                     ) : (
                       <span className="text-[var(--uxe-text-tertiary)]">—</span>
@@ -226,7 +249,11 @@ export function ReportsPage() {
                     <DropdownMenu
                       label={`Actions for ${row.title}`}
                       trigger={
-                        <Button variant="ghost" size="icon-sm" aria-label={`Actions for ${row.title}`}>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label={`Actions for ${row.title}`}
+                        >
                           <Download className="h-4 w-4" aria-hidden />
                         </Button>
                       }
@@ -237,7 +264,9 @@ export function ReportsPage() {
                           onSelect: () => download.mutate(row.id),
                           disabled: !can('artifact:download') || row.status !== 'ready',
                           disabledReason:
-                            row.status !== 'ready' ? 'Still generating' : 'Your role cannot download artifacts',
+                            row.status !== 'ready'
+                              ? 'Still generating'
+                              : 'Your role cannot download artifacts',
                         },
                         {
                           label: t('reports.archive'),

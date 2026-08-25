@@ -107,7 +107,8 @@ export function rerank(
     const proximity = computeProximity(contentTokensList, querySet);
 
     // 4. Exact phrase presence is a very strong signal and cheap to test.
-    const phraseBonus = normalizedQuery.length > 12 && normalizedContent.includes(normalizedQuery) ? 1 : 0;
+    const phraseBonus =
+      normalizedQuery.length > 12 && normalizedContent.includes(normalizedQuery) ? 1 : 0;
 
     // 5. Locator match: asking about "6.4.2" should surface clause 6.4.2 above all else.
     const locatorMatch = locators.some(
@@ -126,11 +127,20 @@ export function rerank(
 
     // 7. Structural fit: clause- and table-kind chunks are better evidence than loose prose.
     const structural =
-      candidate.clause !== null ? 1 : candidate.kind === 'table' ? 0.8 : candidate.section !== null ? 0.6 : 0.3;
+      candidate.clause !== null
+        ? 1
+        : candidate.kind === 'table'
+          ? 0.8
+          : candidate.section !== null
+            ? 0.6
+            : 0.3;
 
     // 8. Recency of the governing document, decayed over ten years.
     const recency = candidate.effectiveDate
-      ? Math.max(0, 1 - (now.getTime() - candidate.effectiveDate.getTime()) / (10 * 365 * 86_400_000))
+      ? Math.max(
+          0,
+          1 - (now.getTime() - candidate.effectiveDate.getTime()) / (10 * 365 * 86_400_000),
+        )
       : 0.5;
 
     // 9. Length sanity: very short chunks rarely stand alone as evidence; very long ones
@@ -166,7 +176,9 @@ export function rerank(
 /** Pulls clause-like references out of a natural-language question. */
 export function extractLocators(query: string): string[] {
   const out = new Set<string>();
-  for (const m of query.matchAll(/\b(?:clause|section|article|chapter|annex|table|part)\s+([0-9A-Z]+(?:\.\d+)*)/gi)) {
+  for (const m of query.matchAll(
+    /\b(?:clause|section|article|chapter|annex|table|part)\s+([0-9A-Z]+(?:\.\d+)*)/gi,
+  )) {
     if (m[1]) out.add(m[1]);
   }
   // A bare dotted number in a question is almost always a clause reference.

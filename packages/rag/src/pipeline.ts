@@ -41,7 +41,12 @@ import {
   scoreRequirementEvidence,
   type RequirementDraft,
 } from './compliance.js';
-import { assembleAnswer, buildExtractiveClaims, extractiveSummary, type DocumentReviewed } from './answer.js';
+import {
+  assembleAnswer,
+  buildExtractiveClaims,
+  extractiveSummary,
+  type DocumentReviewed,
+} from './answer.js';
 import { detectInjection, shouldQuarantine } from './injection.js';
 import { normalizeForMatch, normalizeWhitespace } from './text.js';
 
@@ -339,14 +344,20 @@ export async function answerQuestion(
     })
     .filter((e): e is EvidenceForComposition => e !== null);
 
-  let composed = { headline: '', summary: '', statements: [] as Array<{ text: string; citationIds: string[] }>, usage: { inputTokens: 0, outputTokens: 0 } };
+  let composed = {
+    headline: '',
+    summary: '',
+    statements: [] as Array<{ text: string; citationIds: string[] }>,
+    usage: { inputTokens: 0, outputTokens: 0 },
+  };
   if (evidence.length > 0) {
     composed = await deps.chat.compose({
       task: options.task === 'correct_document' ? 'ask' : options.task,
       question,
       evidence,
       nonce: options.nonce,
-      maxWords: options.answerStyle === 'yes_no' ? 60 : options.answerStyle === 'optimal' ? 300 : 800,
+      maxWords:
+        options.answerStyle === 'yes_no' ? 60 : options.answerStyle === 'optimal' ? 300 : 800,
       locale: options.locale,
       consultantName: options.consultantName,
     });
@@ -463,7 +474,9 @@ function deriveAskDecision(
   scope: SourceScope[],
 ): 'yes' | 'no' | 'unable_to_determine' | null {
   const isPolar =
-    /^\s*(does|do|is|are|can|may|must|shall|should|will|has|have|did|was|were)\b/i.test(question.trim());
+    /^\s*(does|do|is|are|can|may|must|shall|should|will|has|have|did|was|were)\b/i.test(
+      question.trim(),
+    );
   if (!isPolar) return null;
 
   const supported = claims.filter((c) => c.supported);
@@ -475,7 +488,9 @@ function deriveAskDecision(
   const numeric = crossCheckQuantities(citations, scope);
   if (numeric === 'violated') return 'no';
 
-  const contradicting = citations.filter((c) => c.verified && c.entailment === 'contradicts').length;
+  const contradicting = citations.filter(
+    (c) => c.verified && c.entailment === 'contradicts',
+  ).length;
   const supporting = citations.filter((c) => c.verified && c.entailment === 'supports').length;
 
   if (contradicting > supporting) return 'no';
@@ -525,7 +540,10 @@ function buildFollowUp(scope: SourceScope[]): string {
   if (scope.length === 0) {
     return 'Which knowledge-base sources should I use to answer this? None are currently selected.';
   }
-  const titles = scope.slice(0, 3).map((s) => s.title).join(', ');
+  const titles = scope
+    .slice(0, 3)
+    .map((s) => s.title)
+    .join(', ');
   return `I searched ${titles} and found no passage that settles this. Can you point me at the document or clause that covers it, or upload it as a consultation input?`;
 }
 
@@ -718,7 +736,9 @@ export async function runComplianceReview(
         citationIds: c.evidenceIndexes
           .map((i) => {
             const candidate = evidence[i]?.candidate;
-            return candidate ? projectCitations.citationIdByChunk.get(candidate.chunkId) : undefined;
+            return candidate
+              ? projectCitations.citationIdByChunk.get(candidate.chunkId)
+              : undefined;
           })
           .filter((id): id is string => typeof id === 'string'),
       })),
@@ -851,14 +871,20 @@ function buildAssumptions(
   }
   for (const source of governing) {
     if (!source.effectiveDate) {
-      out.push(`${source.title} carries no recorded effective date, so recency could not be weighted for it.`);
+      out.push(
+        `${source.title} carries no recorded effective date, so recency could not be weighted for it.`,
+      );
     }
     if (source.superseded) {
-      out.push(`${source.title} is marked superseded; its provisions were treated as low authority.`);
+      out.push(
+        `${source.title} is marked superseded; its provisions were treated as low authority.`,
+      );
     }
   }
   if (project.length === 0) {
-    out.push('No project documents were supplied, so every requirement is unproven rather than failed.');
+    out.push(
+      'No project documents were supplied, so every requirement is unproven rather than failed.',
+    );
   }
   return out;
 }

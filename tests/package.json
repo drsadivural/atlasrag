@@ -6,27 +6,31 @@
   "scripts": {
     "e2e": "playwright test --config e2e/playwright.config.ts",
     "a11y": "playwright test --config accessibility/playwright.config.ts",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.node.json --noEmit"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.13.0",
     "@playwright/test": "1.62.1",
+    "@tanstack/react-query": "5.102.3",
+    "@testing-library/jest-dom": "7.0.1",
+    "@testing-library/react": "16.3.2",
+    "@testing-library/user-event": "14.6.6",
+    "@types/react": "19.2.18",
     "@uxe/api": "workspace:*",
     "@uxe/auth": "workspace:*",
     "@uxe/config": "workspace:*",
     "@uxe/contracts": "workspace:*",
     "@uxe/db": "workspace:*",
+    "@uxe/observability": "workspace:*",
     "@uxe/rag": "workspace:*",
     "@uxe/ui": "workspace:*",
-    "@testing-library/jest-dom": "7.0.1",
-    "@testing-library/react": "16.3.2",
-    "@testing-library/user-event": "14.6.6",
-    "@types/react": "19.2.18",
+    "@uxe/web": "workspace:*",
     "axe-core": "4.13.0",
     "dotenv": "17.4.2",
     "jsdom": "30.0.1",
     "react": "19.2.8",
     "react-dom": "19.2.8",
+    "react-router-dom": "7.18.2",
     "typescript": "5.9.3",
     "vitest": "4.1.11"
   }

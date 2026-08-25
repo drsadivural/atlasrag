@@ -1,5 +1,6 @@
 import { mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
+import type { Page } from '@playwright/test';
 import { expect, signIn, test, waitForSettled } from './fixtures.js';
 
 const ROOT = fileURLToPath(new URL('../..', import.meta.url));
@@ -26,7 +27,9 @@ test.describe('@visual primary screens', () => {
   test('dashboard', async ({ page }, testInfo) => {
     await signIn(page);
     await waitForSettled(page);
-    await expect(page.getByRole('button', { name: 'Start consultation', exact: true })).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: 'Start consultation', exact: true }),
+    ).toBeVisible();
     await capture(page, testInfo.project.name, '02-dashboard');
   });
 
@@ -66,11 +69,7 @@ test.describe('@visual primary screens', () => {
   });
 });
 
-async function capture(
-  page: import('@playwright/test').Page,
-  project: string,
-  name: string,
-): Promise<void> {
+async function capture(page: Page, project: string, name: string): Promise<void> {
   await page.screenshot({
     path: `${ROOT}/artifacts/screenshots/${name}-${project}.png`,
     // Full-page for the delivery screenshots so nothing below the fold is hidden.

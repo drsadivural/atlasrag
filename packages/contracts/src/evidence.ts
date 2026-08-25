@@ -67,10 +67,21 @@ export type Citation = z.infer<typeof Citation>;
  * "Ch. 6 · §6.4.2 · p. 214" or "Sheet Budget · B12:D40".
  * Kept in the contract so web, reports and exports never drift apart.
  */
-export function formatLocator(c: Pick<
-  Citation,
-  'chapter' | 'section' | 'clause' | 'pageNumber' | 'sheetName' | 'cellRange' | 'slideNumber' | 'headingPath' | 'paragraphIndex' | 'urlFragment'
->): string {
+export function formatLocator(
+  c: Pick<
+    Citation,
+    | 'chapter'
+    | 'section'
+    | 'clause'
+    | 'pageNumber'
+    | 'sheetName'
+    | 'cellRange'
+    | 'slideNumber'
+    | 'headingPath'
+    | 'paragraphIndex'
+    | 'urlFragment'
+  >,
+): string {
   const parts: string[] = [];
   if (c.chapter) parts.push(`Ch. ${c.chapter}`);
   if (c.clause) parts.push(`§${c.clause}`);
@@ -130,12 +141,14 @@ export const Finding = z.object({
   governingCitationIds: z.array(Id).default([]),
   /** Explicitly recorded when nothing in the project documents addresses the requirement. */
   missingEvidence: z.array(z.string()).default([]),
-  conflicts: z.array(
-    z.object({
-      description: z.string(),
-      citationIds: z.array(Id),
-    }),
-  ).default([]),
+  conflicts: z
+    .array(
+      z.object({
+        description: z.string(),
+        citationIds: z.array(Id),
+      }),
+    )
+    .default([]),
   recommendedAction: z.string().nullable(),
   confidence: z.number().min(0).max(1),
 });
@@ -204,45 +217,53 @@ export const StructuredAnswer = z.object({
   decisiveReason: z.string().nullable(),
   summary: z.string(),
   scope: z.string().nullable(),
-  documentsReviewed: z.array(
-    z.object({
-      sourceId: Id,
-      sourceVersionId: Id,
-      title: z.string(),
-      version: z.string(),
-      role: z.enum(['governing', 'project']),
-      pages: z.number().int().min(0).nullable(),
-    }),
-  ).default([]),
+  documentsReviewed: z
+    .array(
+      z.object({
+        sourceId: Id,
+        sourceVersionId: Id,
+        title: z.string(),
+        version: z.string(),
+        role: z.enum(['governing', 'project']),
+        pages: z.number().int().min(0).nullable(),
+      }),
+    )
+    .default([]),
   assumptions: z.array(z.string()).default([]),
   keyFindings: z.array(z.string()).default([]),
   claims: z.array(Claim).default([]),
   requirements: z.array(Requirement).default([]),
   findings: z.array(Finding).default([]),
-  calculations: z.array(
-    z.object({
-      label: z.string(),
-      expression: z.string(),
-      value: z.string(),
-      citationIds: z.array(Id).default([]),
-    }),
-  ).default([]),
-  conflicts: z.array(
-    z.object({
-      description: z.string(),
-      citationIds: z.array(Id),
-    }),
-  ).default([]),
+  calculations: z
+    .array(
+      z.object({
+        label: z.string(),
+        expression: z.string(),
+        value: z.string(),
+        citationIds: z.array(Id).default([]),
+      }),
+    )
+    .default([]),
+  conflicts: z
+    .array(
+      z.object({
+        description: z.string(),
+        citationIds: z.array(Id),
+      }),
+    )
+    .default([]),
   missingEvidence: z.array(z.string()).default([]),
   uncertainties: z.array(z.string()).default([]),
   followUpQuestion: z.string().nullable(),
-  recommendedActions: z.array(
-    z.object({
-      action: z.string(),
-      priority: z.enum(['critical', 'high', 'medium', 'low']),
-      requirementIds: z.array(Id).default([]),
-    }),
-  ).default([]),
+  recommendedActions: z
+    .array(
+      z.object({
+        action: z.string(),
+        priority: z.enum(['critical', 'high', 'medium', 'low']),
+        requirementIds: z.array(Id).default([]),
+      }),
+    )
+    .default([]),
   riskLevel: RiskLevel,
   coverage: EvidenceCoverage,
   confidence: ConfidenceBreakdown,
@@ -250,9 +271,11 @@ export const StructuredAnswer = z.object({
   /** True when general-model fallback contributed any sentence; drives a visible label. */
   usedGeneralModel: z.boolean().default(false),
   /** Populated when a source tried to inject instructions; the UI shows a warning banner. */
-  injectionWarnings: z.array(
-    z.object({ sourceId: Id, sourceTitle: z.string(), pattern: z.string(), excerpt: z.string() }),
-  ).default([]),
+  injectionWarnings: z
+    .array(
+      z.object({ sourceId: Id, sourceTitle: z.string(), pattern: z.string(), excerpt: z.string() }),
+    )
+    .default([]),
   generatedAt: Timestamp,
   modelConfigurationId: Id.nullable(),
   modelDescriptor: z.string(),

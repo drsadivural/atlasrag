@@ -49,7 +49,9 @@ export function correctionRoutes(deps: AppDeps) {
 
       await deps.repos.corrections.decide(tenant, planId, input.version, input.decisions);
 
-      const accepted = input.decisions.filter((d) => d.status === 'accepted' || d.status === 'edited').length;
+      const accepted = input.decisions.filter(
+        (d) => d.status === 'accepted' || d.status === 'edited',
+      ).length;
       const rejected = input.decisions.filter((d) => d.status === 'rejected').length;
 
       await deps.repos.audit.record({
@@ -159,7 +161,9 @@ async function buildPlanView(
     createdAt: plan.createdAt.toISOString(),
     generatedArtifactId: plan.generatedArtifactId,
     changes: changes.map((change) => {
-      const row = change.governingCitationId ? citationById.get(change.governingCitationId) : undefined;
+      const row = change.governingCitationId
+        ? citationById.get(change.governingCitationId)
+        : undefined;
       const citation = row ? toCitationView(row, tenant.organizationId) : null;
       return {
         id: change.id,

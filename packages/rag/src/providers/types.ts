@@ -97,7 +97,9 @@ export class ProviderError extends Error {
     if (status === 429) {
       const quota = /quota|billing|credit|insufficient_quota/i.test(body);
       return new ProviderError(
-        quota ? 'The provider account has exhausted its quota.' : 'The provider is rate limiting this workspace.',
+        quota
+          ? 'The provider account has exhausted its quota.'
+          : 'The provider is rate limiting this workspace.',
         quota ? 'quota_exhausted' : 'rate_limited',
         !quota,
         status,

@@ -16,7 +16,12 @@ export interface SignedUrl {
 
 export interface StorageDriver {
   readonly id: 'filesystem' | 's3';
-  put(bucket: 'originals' | 'artifacts', key: string, body: Uint8Array, contentType: string): Promise<PutResult>;
+  put(
+    bucket: 'originals' | 'artifacts',
+    key: string,
+    body: Uint8Array,
+    contentType: string,
+  ): Promise<PutResult>;
   get(bucket: 'originals' | 'artifacts', key: string): Promise<Uint8Array | null>;
   delete(bucket: 'originals' | 'artifacts', key: string): Promise<boolean>;
   exists(bucket: 'originals' | 'artifacts', key: string): Promise<boolean>;
@@ -74,7 +79,12 @@ export class FilesystemStorage implements StorageDriver {
     return target;
   }
 
-  async put(bucket: 'originals' | 'artifacts', key: string, body: Uint8Array, _contentType: string) {
+  async put(
+    bucket: 'originals' | 'artifacts',
+    key: string,
+    body: Uint8Array,
+    _contentType: string,
+  ) {
     const target = this.pathFor(bucket, key);
     await mkdir(dirname(target), { recursive: true });
     await writeFile(target, body);
@@ -207,7 +217,9 @@ export class S3Storage implements StorageDriver {
 
     const response = await this.fetchImpl(url, { method: 'PUT', headers, body });
     if (!response.ok) {
-      throw new Error(`Storage PUT failed: ${response.status} ${await response.text().catch(() => '')}`);
+      throw new Error(
+        `Storage PUT failed: ${response.status} ${await response.text().catch(() => '')}`,
+      );
     }
     return { key, sizeBytes: body.byteLength, sha256: payloadHash };
   }
@@ -285,7 +297,9 @@ export class S3Storage implements StorageDriver {
 
   async health() {
     try {
-      const url = new URL(`${this.config.endpoint.replace(/\/$/, '')}/${this.config.bucketOriginals}`);
+      const url = new URL(
+        `${this.config.endpoint.replace(/\/$/, '')}/${this.config.bucketOriginals}`,
+      );
       const headers = await signRequest({
         method: 'HEAD',
         url,
@@ -345,12 +359,9 @@ async function signRequest(params: SignParams): Promise<Record<string, string>> 
   ].join('\n');
 
   const scope = `${dateStamp}/${params.region}/s3/aws4_request`;
-  const stringToSign = [
-    'AWS4-HMAC-SHA256',
-    amzDate,
-    scope,
-    await hexSha256(canonicalRequest),
-  ].join('\n');
+  const stringToSign = ['AWS4-HMAC-SHA256', amzDate, scope, await hexSha256(canonicalRequest)].join(
+    '\n',
+  );
 
   const signature = await deriveSignature(
     params.secretAccessKey,
@@ -392,8 +403,15 @@ async function presignUrl(params: {
     'UNSIGNED-PAYLOAD',
   ].join('\n');
 
-  const stringToSign = ['AWS4-HMAC-SHA256', amzDate, scope, await hexSha256(canonicalRequest)].join('\n');
-  const signature = await deriveSignature(params.secretAccessKey, dateStamp, params.region, stringToSign);
+  const stringToSign = ['AWS4-HMAC-SHA256', amzDate, scope, await hexSha256(canonicalRequest)].join(
+    '\n',
+  );
+  const signature = await deriveSignature(
+    params.secretAccessKey,
+    dateStamp,
+    params.region,
+    stringToSign,
+  );
   url.searchParams.set('X-Amz-Signature', signature);
   return url.toString();
 }
@@ -406,11 +424,17 @@ function canonicalQuery(searchParams: URLSearchParams): string {
 }
 
 function encodeRfc3986(value: string): string {
-  return encodeURIComponent(value).replace(/[!'()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
+  return encodeURIComponent(value).replace(
+    /[!'()*]/g,
+    (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
 }
 
 async function hexSha256(input: string): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(input) as ArrayBufferView);
+  const digest = await crypto.subtle.digest(
+    'SHA-256',
+    new TextEncoder().encode(input) as ArrayBufferView,
+  );
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
@@ -423,7 +447,11 @@ async function hmacRaw(key: Uint8Array, message: string): Promise<Uint8Array> {
     ['sign'],
   );
   return new Uint8Array(
-    await crypto.subtle.sign('HMAC', cryptoKey, new TextEncoder().encode(message) as ArrayBufferView),
+    await crypto.subtle.sign(
+      'HMAC',
+      cryptoKey,
+      new TextEncoder().encode(message) as ArrayBufferView,
+    ),
   );
 }
 
@@ -449,6 +477,15 @@ export function buildStorageKey(parts: {
   id: string;
   fileName: string;
 }): string {
-  const safeName = parts.fileName.replace(/[^A-Za-z0-9._-]/g, '_').slice(-120);
+  // Take the basename first: a client-supplied "../../etc/passwd" must not contribute
+  // path separators, and the surviving dot runs are collapsed so no segment can ever be
+  // `..` once the key is joined.
+  const basename = parts.fileName.split(/[\\/]/).pop() ?? '';
+  const safeName =
+    basename
+      .replace(/[^A-Za-z0-9._-]/g, '_')
+      .replace(/\.{2,}/g, '.')
+      .slice(-120)
+      .replace(/^[._-]+/, '') || 'file';
   return `${parts.organizationId}/${parts.workspaceId}/${parts.kind}/${parts.id}/${safeName}`;
 }

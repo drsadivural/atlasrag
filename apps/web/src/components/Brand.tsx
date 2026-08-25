@@ -26,7 +26,13 @@ export function BrandMark({ size = 40, className }: { size?: number; className?:
 }
 
 /** Wordmark: "UXE" in ink, "Consulting AI" in the brand gradient. */
-export function BrandWordmark({ className, size = 'md' }: { className?: string; size?: 'sm' | 'md' | 'lg' }) {
+export function BrandWordmark({
+  className,
+  size = 'md',
+}: {
+  className?: string;
+  size?: 'sm' | 'md' | 'lg';
+}) {
   const scale = { sm: 'text-[17px]', md: 'text-[19px]', lg: 'text-[40px] sm:text-[52px]' }[size];
   return (
     <span className={cn('font-bold tracking-[-0.02em] text-[var(--uxe-text)]', scale, className)}>
@@ -35,7 +41,13 @@ export function BrandWordmark({ className, size = 'md' }: { className?: string; 
   );
 }
 
-export function BrandLockup({ size = 'md', className }: { size?: 'sm' | 'md' | 'lg'; className?: string }) {
+export function BrandLockup({
+  size = 'md',
+  className,
+}: {
+  size?: 'sm' | 'md' | 'lg';
+  className?: string;
+}) {
   const markSize = { sm: 32, md: 40, lg: 76 }[size];
   return (
     <span className={cn('inline-flex items-center gap-3', className)}>
@@ -65,7 +77,12 @@ export function Ayumi({
   priority?: boolean;
 }) {
   const { t } = useI18n();
-  const base = variant === 'lg' ? 'consultantgirl' : variant === 'md' ? 'consultantgirl-md' : 'consultantgirl-sm';
+  const base =
+    variant === 'lg'
+      ? 'consultantgirl'
+      : variant === 'md'
+        ? 'consultantgirl-md'
+        : 'consultantgirl-sm';
   const alt = decorative ? '' : t('app.consultantAlt');
 
   return (

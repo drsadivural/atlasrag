@@ -65,13 +65,35 @@ export async function runJob(deps: AppDeps, job: JobRecord): Promise<RunResult> 
       kind: job.kind,
       outcome: 'error',
     });
-    logger.error('job.failed', { code: classified.code, message: classified.message, retryable: classified.retryable });
+    logger.error('job.failed', {
+      code: classified.code,
+      message: classified.message,
+      retryable: classified.retryable,
+    });
 
     // The user's input is never discarded: the assistant row keeps the error so the UI can
     // show a recoverable state with a Retry action instead of an empty bubble.
     const assistantMessageId = job.payload.assistantMessageId;
     if (typeof assistantMessageId === 'string') {
       await deps.repos.consultations.completeMessage(assistantMessageId, { error: classified });
+    }
+
+    // The same rule for documents. Without this the source sits at "Pending" for ever: no
+    // reason, no Retry, and nothing to tell the user the file will never be indexed.
+    const sourceId = job.payload.sourceId;
+    const isFinalAttempt = !classified.retryable || job.attempt >= job.maxAttempts;
+    if (
+      typeof sourceId === 'string' &&
+      isFinalAttempt &&
+      ['source_ingest', 'source_reprocess', 'source_sync'].includes(job.kind)
+    ) {
+      await deps.repos.sources
+        .setSourceStatus(sourceId, { status: 'failed', failureReason: classified.message })
+        .catch((statusError: unknown) => {
+          logger.error('job.source_status_update_failed', {
+            message: statusError instanceof Error ? statusError.message : String(statusError),
+          });
+        });
     }
 
     if (!classified.retryable || job.attempt >= job.maxAttempts) {
@@ -114,7 +136,11 @@ async function dispatch(
 /* Ingestion                                                                  */
 /* -------------------------------------------------------------------------- */
 
-async function runIngestJob(deps: AppDeps, tenant: TenantContext, job: JobRecord): Promise<RunResult> {
+async function runIngestJob(
+  deps: AppDeps,
+  tenant: TenantContext,
+  job: JobRecord,
+): Promise<RunResult> {
   const payload = job.payload as {
     sourceId: string;
     sourceVersionId: string;
@@ -143,7 +169,11 @@ async function runIngestJob(deps: AppDeps, tenant: TenantContext, job: JobRecord
 /* Answering                                                                  */
 /* -------------------------------------------------------------------------- */
 
-async function runAnswerJob(deps: AppDeps, tenant: TenantContext, job: JobRecord): Promise<RunResult> {
+async function runAnswerJob(
+  deps: AppDeps,
+  tenant: TenantContext,
+  job: JobRecord,
+): Promise<RunResult> {
   const payload = job.payload as {
     consultationId: string;
     assistantMessageId: string;
@@ -183,13 +213,21 @@ async function runAnswerJob(deps: AppDeps, tenant: TenantContext, job: JobRecord
     payload.taskMode === 'summarize'
       ? await summarizeSources(
           tenant,
-          { repo: deps.repos.retrieval, embedder: deps.services.embeddings, chat: deps.services.chat },
+          {
+            repo: deps.repos.retrieval,
+            embedder: deps.services.embeddings,
+            chat: deps.services.chat,
+          },
           scope,
           { ...options, format: 'executive' },
         )
       : await answerQuestion(
           tenant,
-          { repo: deps.repos.retrieval, embedder: deps.services.embeddings, chat: deps.services.chat },
+          {
+            repo: deps.repos.retrieval,
+            embedder: deps.services.embeddings,
+            chat: deps.services.chat,
+          },
           payload.question,
           scope,
           options,
@@ -217,7 +255,9 @@ async function runAnswerJob(deps: AppDeps, tenant: TenantContext, job: JobRecord
     status: 'active',
   });
 
-  deps.metrics.observe('uxe_evidence_coverage', result.answer.coverage.score, { task: payload.taskMode });
+  deps.metrics.observe('uxe_evidence_coverage', result.answer.coverage.score, {
+    task: payload.taskMode,
+  });
   deps.metrics.observe(
     'uxe_citation_verification_rate',
     result.answer.citations.length === 0
@@ -242,7 +282,11 @@ async function runAnswerJob(deps: AppDeps, tenant: TenantContext, job: JobRecord
 /* Compliance review                                                          */
 /* -------------------------------------------------------------------------- */
 
-async function runReviewJob(deps: AppDeps, tenant: TenantContext, job: JobRecord): Promise<RunResult> {
+async function runReviewJob(
+  deps: AppDeps,
+  tenant: TenantContext,
+  job: JobRecord,
+): Promise<RunResult> {
   const payload = job.payload as {
     consultationId: string;
     reviewId: string;
@@ -400,7 +444,9 @@ async function runReviewJob(deps: AppDeps, tenant: TenantContext, job: JobRecord
     complianceScore,
   });
 
-  deps.metrics.observe('uxe_evidence_coverage', review.answer.coverage.score, { task: 'check_compliance' });
+  deps.metrics.observe('uxe_evidence_coverage', review.answer.coverage.score, {
+    task: 'check_compliance',
+  });
 
   return {
     ok: true,
@@ -419,7 +465,11 @@ async function runReviewJob(deps: AppDeps, tenant: TenantContext, job: JobRecord
 /* Reports                                                                    */
 /* -------------------------------------------------------------------------- */
 
-async function runReportJob(deps: AppDeps, tenant: TenantContext, job: JobRecord): Promise<RunResult> {
+async function runReportJob(
+  deps: AppDeps,
+  tenant: TenantContext,
+  job: JobRecord,
+): Promise<RunResult> {
   const payload = job.payload as {
     consultationId: string;
     reviewId: string | null;
@@ -440,7 +490,12 @@ async function runReportJob(deps: AppDeps, tenant: TenantContext, job: JobRecord
   if (!answer) throw new Error('That answer has not finished generating yet.');
 
   const details = renderDetails(answer);
-  await deps.repos.jobs.updateStage(job.id, 'collect', 'complete', `${details.evidenceRows.length} row(s)`);
+  await deps.repos.jobs.updateStage(
+    job.id,
+    'collect',
+    'complete',
+    `${details.evidenceRows.length} row(s)`,
+  );
 
   await deps.repos.jobs.updateStage(job.id, 'render', 'running');
   const generated = await deps.services.documentWorker.report({
@@ -477,7 +532,9 @@ async function runReportJob(deps: AppDeps, tenant: TenantContext, job: JobRecord
       `Generated by ${answer.modelDescriptor}.`,
       'Every row is traceable to the source version pinned to this consultation.',
       ...(details.evidenceRows.some((r) => !r.verified)
-        ? ['Rows marked UNVERIFIED could not be re-located in the stored source text and must be checked manually.']
+        ? [
+            'Rows marked UNVERIFIED could not be re-located in the stored source text and must be checked manually.',
+          ]
         : []),
     ],
   });
@@ -498,7 +555,12 @@ async function runReportJob(deps: AppDeps, tenant: TenantContext, job: JobRecord
     id: artifactId,
     fileName: `${title}.${generated.extension}`,
   });
-  const stored = await deps.services.storage.put('artifacts', storageKey, bytes, generated.contentType);
+  const stored = await deps.services.storage.put(
+    'artifacts',
+    storageKey,
+    bytes,
+    generated.contentType,
+  );
 
   const artifact = await deps.repos.artifacts.create(tenant, {
     kind: payload.kind,
@@ -512,7 +574,10 @@ async function runReportJob(deps: AppDeps, tenant: TenantContext, job: JobRecord
     reviewId: payload.reviewId,
     generatorDescriptor: answer.modelDescriptor,
     disclosures: [],
-    validation: { rows: details.evidenceRows.length, verifiedRows: details.evidenceRows.filter((r) => r.verified).length },
+    validation: {
+      rows: details.evidenceRows.length,
+      verifiedRows: details.evidenceRows.filter((r) => r.verified).length,
+    },
     status: 'ready',
   });
 
@@ -582,7 +647,9 @@ async function runCorrectionPlanJob(
   // are permitted to read.
   const findings = payload.reviewId
     ? (await deps.repos.consultations.listFindings(tenant, payload.reviewId))
-        .filter((row) => payload.findingIds.length === 0 || payload.findingIds.includes(row.finding.id))
+        .filter(
+          (row) => payload.findingIds.length === 0 || payload.findingIds.includes(row.finding.id),
+        )
         .map(({ finding, requirement }) => ({
           findingId: finding.id,
           requirementId: finding.requirementId,
@@ -601,7 +668,9 @@ async function runCorrectionPlanJob(
     : [];
 
   const citations = payload.reviewId
-    ? (await deps.repos.consultations.listCitationsForReview(tenant, payload.reviewId)).map(toCitation)
+    ? (await deps.repos.consultations.listCitationsForReview(tenant, payload.reviewId)).map(
+        toCitation,
+      )
     : [];
 
   const changes = buildChangePlan({
@@ -620,14 +689,23 @@ async function runCorrectionPlanJob(
   );
   // Generation is a separate, explicitly-authorised step: nothing is written until a
   // reviewer has accepted individual changes.
-  await deps.repos.jobs.updateStage(job.id, 'generate', 'skipped', 'Awaiting review of proposed changes');
+  await deps.repos.jobs.updateStage(
+    job.id,
+    'generate',
+    'skipped',
+    'Awaiting review of proposed changes',
+  );
   await deps.repos.jobs.updateStage(job.id, 'validate', 'skipped');
   await deps.repos.jobs.updateStage(job.id, 'store', 'skipped');
 
   return {
     ok: true,
     resultRef: { kind: 'plan', id: plan.id },
-    metrics: { changes: changes.length, strategy: decision.strategy, limitations: decision.limitations.length },
+    metrics: {
+      changes: changes.length,
+      strategy: decision.strategy,
+      limitations: decision.limitations.length,
+    },
   };
 }
 
@@ -657,7 +735,12 @@ async function runCorrectionGenerateJob(
 
   const original = await deps.services.storage.get('originals', version.storageKey);
   if (!original) throw new Error('The original file could not be read from storage.');
-  await deps.repos.jobs.updateStage(job.id, 'plan', 'complete', `${accepted.length} accepted change(s)`);
+  await deps.repos.jobs.updateStage(
+    job.id,
+    'plan',
+    'complete',
+    `${accepted.length} accepted change(s)`,
+  );
 
   await deps.repos.jobs.updateStage(job.id, 'generate', 'running');
   const citations = plan.reviewId
@@ -674,7 +757,9 @@ async function runCorrectionGenerateJob(
     includeRedline: payload.includeRedline,
     disclosures: [...plan.limitations, ...(plan.signatureNotice ? [plan.signatureNotice] : [])],
     changes: accepted.map((change) => {
-      const citation = change.governingCitationId ? citationById.get(change.governingCitationId) : undefined;
+      const citation = change.governingCitationId
+        ? citationById.get(change.governingCitationId)
+        : undefined;
       return {
         ordinal: change.ordinal,
         pageNumber: change.pageNumber,
@@ -686,7 +771,9 @@ async function runCorrectionGenerateJob(
         currentContent: change.currentContent,
         proposedContent: change.editedContent ?? change.proposedContent,
         reason: change.reason,
-        citation: citation ? `${citation.documentTitle} - ${citation.clause ?? citation.section ?? ''}` : null,
+        citation: citation
+          ? `${citation.documentTitle} - ${citation.clause ?? citation.section ?? ''}`
+          : null,
       };
     }),
   });
@@ -698,7 +785,8 @@ async function runCorrectionGenerateJob(
   const validation = validateDerivative({
     original: {
       pages: version.pages,
-      textLength: Number(metadata.textLength ?? 0) || (await originalTextLength(deps, tenant, version.id)),
+      textLength:
+        Number(metadata.textLength ?? 0) || (await originalTextLength(deps, tenant, version.id)),
       mediaCount: Number(metadata.mediaCount ?? 0),
       pageSizes: (metadata.pageSizes as Array<{ w: number; h: number }> | undefined) ?? [],
     },
@@ -715,7 +803,12 @@ async function runCorrectionGenerateJob(
 
   if (!validation.ok) {
     const failed = validation.checks.filter((check) => !check.passed);
-    await deps.repos.jobs.updateStage(job.id, 'validate', 'failed', failed[0]?.detail ?? 'Validation failed');
+    await deps.repos.jobs.updateStage(
+      job.id,
+      'validate',
+      'failed',
+      failed[0]?.detail ?? 'Validation failed',
+    );
     await deps.repos.corrections.setPlanStatus(payload.planId, 'failed');
     // Release is blocked rather than shipping a quietly broken document.
     throw new Error(
@@ -1077,7 +1170,9 @@ function toCitation(row: Record<string, unknown>): Citation {
     verificationMethod: String(row.verificationMethod) as never,
     effectiveDate: row.effectiveDate ? new Date(String(row.effectiveDate)).toISOString() : null,
     supersededBy: null,
-    createdAt: row.createdAt ? new Date(String(row.createdAt)).toISOString() : new Date().toISOString(),
+    createdAt: row.createdAt
+      ? new Date(String(row.createdAt)).toISOString()
+      : new Date().toISOString(),
   };
 }
 
@@ -1093,10 +1188,20 @@ function classify(
   traceId: string,
 ): { code: string; message: string; retryable: boolean; traceId: string } {
   if (error instanceof ProviderError) {
-    return { code: `provider_${error.code}`, message: error.message, retryable: error.retryable, traceId };
+    return {
+      code: `provider_${error.code}`,
+      message: error.message,
+      retryable: error.retryable,
+      traceId,
+    };
   }
   if (error instanceof DocumentWorkerError) {
-    return { code: `worker_${error.code}`, message: error.message, retryable: error.retryable, traceId };
+    return {
+      code: `worker_${error.code}`,
+      message: error.message,
+      retryable: error.retryable,
+      traceId,
+    };
   }
   if (error instanceof Error) {
     // A message written for the user (thrown deliberately above) is passed through; an
@@ -1131,7 +1236,11 @@ async function notifyCompletion(
   const settings = await settingsFor(deps, tenant);
   if (!settings.notifications.jobCompletion) return;
   // Only long-running, user-visible work is worth an email.
-  if (!['compliance_review', 'report_generate', 'correction_generate', 'source_ingest'].includes(job.kind)) {
+  if (
+    !['compliance_review', 'report_generate', 'correction_generate', 'source_ingest'].includes(
+      job.kind,
+    )
+  ) {
     return;
   }
 

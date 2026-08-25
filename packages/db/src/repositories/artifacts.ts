@@ -16,7 +16,12 @@ import {
   sources,
 } from '../schema/index.js';
 import { newId } from '../ids.js';
-import { NotFoundError, VersionConflictError, requirePermission, type TenantContext } from '../tenant.js';
+import {
+  NotFoundError,
+  VersionConflictError,
+  requirePermission,
+  type TenantContext,
+} from '../tenant.js';
 
 export class ArtifactRepository {
   constructor(private readonly db: Database) {}
@@ -108,7 +113,8 @@ export class ArtifactRepository {
       eq(generatedArtifacts.workspaceId, ctx.workspaceId),
       isNull(generatedArtifacts.deletedAt),
     ];
-    if (params.kind && params.kind !== 'all') filters.push(eq(generatedArtifacts.kind, params.kind));
+    if (params.kind && params.kind !== 'all')
+      filters.push(eq(generatedArtifacts.kind, params.kind));
     if (params.status && params.status !== 'all') {
       filters.push(eq(generatedArtifacts.status, params.status));
     }
@@ -425,7 +431,8 @@ export class AuditRepository {
       filters.push(eq(auditEvents.category, params.category));
     }
     if (params.actorId) filters.push(eq(auditEvents.actorUserId, params.actorId));
-    if (params.result && params.result !== 'all') filters.push(eq(auditEvents.result, params.result));
+    if (params.result && params.result !== 'all')
+      filters.push(eq(auditEvents.result, params.result));
     if (params.from) filters.push(gte(auditEvents.createdAt, params.from));
     if (params.to) filters.push(lte(auditEvents.createdAt, params.to));
     if (params.q?.trim()) {
@@ -541,7 +548,12 @@ export class SettingsRepository {
           isFallback: input.isFallback,
           enabled: input.enabled,
           credentialEncrypted: input.credentialEncrypted,
-          health: input.provider === 'deterministic' ? 'healthy' : input.credentialEncrypted ? 'unknown' : 'unconfigured',
+          health:
+            input.provider === 'deterministic'
+              ? 'healthy'
+              : input.credentialEncrypted
+                ? 'unknown'
+                : 'unconfigured',
         })
         .onConflictDoUpdate({
           target: [
@@ -555,7 +567,9 @@ export class SettingsRepository {
             isFallback: input.isFallback,
             enabled: input.enabled,
             // A null credential on update means "leave the stored key alone".
-            ...(input.credentialEncrypted ? { credentialEncrypted: input.credentialEncrypted } : {}),
+            ...(input.credentialEncrypted
+              ? { credentialEncrypted: input.credentialEncrypted }
+              : {}),
             updatedAt: new Date(),
           },
         })
@@ -730,7 +744,6 @@ export class IdempotencyRepository {
     return rows.length;
   }
 }
-
 
 export class UploadTicketRepository {
   constructor(private readonly db: Database) {}

@@ -43,11 +43,20 @@ export interface AssembleInput {
   uncertainties?: string[];
   conflicts?: Array<{ description: string; citationIds: string[] }>;
   calculations?: Array<{ label: string; expression: string; value: string; citationIds: string[] }>;
-  recommendedActions?: Array<{ action: string; priority: 'critical' | 'high' | 'medium' | 'low'; requirementIds: string[] }>;
+  recommendedActions?: Array<{
+    action: string;
+    priority: 'critical' | 'high' | 'medium' | 'low';
+    requirementIds: string[];
+  }>;
   followUpQuestion?: string | null;
   abstainReason?: string | null;
   usedGeneralModel?: boolean;
-  injectionWarnings?: Array<{ sourceId: string; sourceTitle: string; pattern: string; excerpt: string }>;
+  injectionWarnings?: Array<{
+    sourceId: string;
+    sourceTitle: string;
+    pattern: string;
+    excerpt: string;
+  }>;
   modelDescriptor: string;
   modelConfigurationId?: string | null;
   scope?: string | null;
@@ -122,7 +131,8 @@ function buildHeadline(
     if (critical > 0) {
       return `${critical} ${critical === 1 ? 'gap requires' : 'critical gaps require'} correction`;
     }
-    if (gaps > 0) return `${gaps} ${gaps === 1 ? 'requirement needs' : 'requirements need'} evidence`;
+    if (gaps > 0)
+      return `${gaps} ${gaps === 1 ? 'requirement needs' : 'requirements need'} evidence`;
     return 'All reviewed requirements are met';
   }
 
@@ -170,7 +180,9 @@ function buildKeyFindings(input: AssembleInput, findings: Finding[]): string[] {
     return findings
       .filter((f) => f.result !== 'compliant')
       .slice(0, 6)
-      .map((f) => `${f.requirementReference} - ${labelResult(f.result)}: ${truncate(f.finding, 180)}`);
+      .map(
+        (f) => `${f.requirementReference} - ${labelResult(f.result)}: ${truncate(f.finding, 180)}`,
+      );
   }
   return input.claims
     .filter((c) => c.supported)
@@ -178,11 +190,7 @@ function buildKeyFindings(input: AssembleInput, findings: Finding[]): string[] {
     .map((c) => truncate(c.text, 200));
 }
 
-function buildSummary(
-  input: AssembleInput,
-  findings: Finding[],
-  keyFindings: string[],
-): string {
+function buildSummary(input: AssembleInput, findings: Finding[], keyFindings: string[]): string {
   if (input.abstainReason) {
     return [
       input.abstainReason,
@@ -215,10 +223,14 @@ function buildSummary(
 
 function labelResult(result: Finding['result']): string {
   switch (result) {
-    case 'compliant': return 'Compliant';
-    case 'non_compliant': return 'Non-compliant';
-    case 'needs_evidence': return 'Needs evidence';
-    default: return 'Not assessed';
+    case 'compliant':
+      return 'Compliant';
+    case 'non_compliant':
+      return 'Non-compliant';
+    case 'needs_evidence':
+      return 'Needs evidence';
+    default:
+      return 'Not assessed';
   }
 }
 
@@ -259,7 +271,9 @@ export function buildExtractiveClaims(input: ClaimBuildInput): Claim[] {
         const terms = contentTokens(sentence).map(lightStem);
         const hits = terms.filter((t) => queryTerms.has(t)).length;
         const density = terms.length === 0 ? 0 : hits / Math.sqrt(terms.length);
-        const obligation = /\b(shall|must|shall not|must not|required|prohibited)\b/i.test(sentence) ? 0.3 : 0;
+        const obligation = /\b(shall|must|shall not|must not|required|prohibited)\b/i.test(sentence)
+          ? 0.3
+          : 0;
         return { sentence: normalizeWhitespace(sentence), score: density + obligation };
       })
       // A heading fragment is not a claim; require enough substance to stand alone.
@@ -299,7 +313,8 @@ export function extractiveSummary(
   const maxSentences = options.maxSentences ?? 8;
 
   const documentFrequency = new Map<string, number>();
-  const all: Array<{ heading: string | null; sentence: string; index: number; terms: string[] }> = [];
+  const all: Array<{ heading: string | null; sentence: string; index: number; terms: string[] }> =
+    [];
   let index = 0;
 
   for (const passage of passages) {
@@ -320,7 +335,8 @@ export function extractiveSummary(
     const centrality =
       terms.length === 0
         ? 0
-        : terms.reduce((sum, t) => sum + (documentFrequency.get(t) ?? 0), 0) / (terms.length * all.length);
+        : terms.reduce((sum, t) => sum + (documentFrequency.get(t) ?? 0), 0) /
+          (terms.length * all.length);
     // Early sentences in a section usually carry the topic statement.
     const positionBonus = 1 / (1 + item.index * 0.02);
     const obligation = /\b(shall|must|required|prohibited)\b/i.test(item.sentence) ? 0.15 : 0;
@@ -402,7 +418,9 @@ export function renderOptimal(answer: StructuredAnswer): OptimalView {
     return {
       requirement: finding.requirementTitle || finding.requirementReference,
       result: finding.result,
-      locator: citation ? `${citation.documentTitle} - ${formatLocator(citation)}` : 'No located evidence',
+      locator: citation
+        ? `${citation.documentTitle} - ${formatLocator(citation)}`
+        : 'No located evidence',
       citationId,
     };
   });

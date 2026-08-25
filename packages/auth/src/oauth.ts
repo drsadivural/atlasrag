@@ -66,7 +66,10 @@ export async function buildAuthorizationRequest(
   const codeVerifier = randomToken(48);
   const challenge = toBase64Url(
     new Uint8Array(
-      await crypto.subtle.digest('SHA-256', new TextEncoder().encode(codeVerifier) as ArrayBufferView),
+      await crypto.subtle.digest(
+        'SHA-256',
+        new TextEncoder().encode(codeVerifier) as ArrayBufferView,
+      ),
     ),
   );
 
@@ -97,7 +100,12 @@ export interface TokenResponse {
 export class OAuthError extends Error {
   constructor(
     message: string,
-    readonly code: 'invalid_state' | 'exchange_failed' | 'profile_failed' | 'unverified_email' | 'domain_not_allowed',
+    readonly code:
+      | 'invalid_state'
+      | 'exchange_failed'
+      | 'profile_failed'
+      | 'unverified_email'
+      | 'domain_not_allowed',
     readonly detail: string | null = null,
   ) {
     super(message);
@@ -189,8 +197,7 @@ export async function fetchProfile(
     email: email ? email.toLowerCase() : null,
     // Microsoft's OIDC userinfo omits email_verified; a work account email is verified by
     // the directory itself, so treat a returned address as verified for that provider only.
-    emailVerified:
-      provider === 'microsoft' ? email !== null : json.email_verified === true,
+    emailVerified: provider === 'microsoft' ? email !== null : json.email_verified === true,
     fullName: typeof json.name === 'string' ? json.name : null,
     avatarUrl: typeof json.picture === 'string' ? json.picture : null,
   };

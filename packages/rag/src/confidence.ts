@@ -1,4 +1,10 @@
-import type { Citation, ConfidenceBreakdown, EvidenceCoverage, Finding, Claim } from '@uxe/contracts';
+import type {
+  Citation,
+  ConfidenceBreakdown,
+  EvidenceCoverage,
+  Finding,
+  Claim,
+} from '@uxe/contracts';
 
 /**
  * Evidence coverage and confidence are computed from observable facts about the retrieval
@@ -41,7 +47,8 @@ export function computeEvidenceCoverage(input: CoverageInput): EvidenceCoverage 
       (f) =>
         f.result !== 'not_assessed' &&
         (f.projectEvidenceCitationIds.some((id) => verifiedIds.has(id)) ||
-          (f.result === 'needs_evidence' && f.governingCitationIds.some((id) => verifiedIds.has(id)))),
+          (f.result === 'needs_evidence' &&
+            f.governingCitationIds.some((id) => verifiedIds.has(id)))),
     ).length;
   }
 
@@ -93,9 +100,7 @@ export function computeConfidence(input: ConfidenceInput): ConfidenceBreakdown {
 
   // 2. How strong the retrieval was for the passages that were used.
   const retrievalQuality =
-    input.retrievalScores.length === 0
-      ? 0
-      : clamp01(mean(input.retrievalScores));
+    input.retrievalScores.length === 0 ? 0 : clamp01(mean(input.retrievalScores));
 
   // 3. What fraction of citations survived verbatim verification. This is weighted
   //    heavily: it is the difference between real and invented evidence.

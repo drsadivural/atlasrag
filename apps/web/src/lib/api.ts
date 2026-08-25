@@ -70,7 +70,8 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     // Same-origin in dev (via the Vite proxy) and in production, so the HttpOnly session
     // cookie travels without CORS credentials games.
     credentials: 'same-origin',
-    body: options.rawBody ?? (options.body === undefined ? undefined : JSON.stringify(options.body)),
+    body:
+      options.rawBody ?? (options.body === undefined ? undefined : JSON.stringify(options.body)),
     signal: options.signal ?? null,
   });
 
@@ -127,7 +128,13 @@ export function uploadFile(
     onProgress?: (percent: number) => void;
     signal?: AbortSignal;
   } = {},
-): Promise<{ sourceId: string; versionId: string; duplicate: boolean; message?: string; job: unknown }> {
+): Promise<{
+  sourceId: string;
+  versionId: string;
+  duplicate: boolean;
+  message?: string;
+  job: unknown;
+}> {
   return new Promise((resolve, reject) => {
     const request = new XMLHttpRequest();
     request.open('PUT', url, true);
@@ -142,7 +149,7 @@ export function uploadFile(
     });
 
     request.addEventListener('load', () => {
-      let body: Record<string, unknown> = {};
+      let body: Record<string, unknown>;
       try {
         body = JSON.parse(request.responseText) as Record<string, unknown>;
       } catch {
@@ -167,7 +174,9 @@ export function uploadFile(
     });
 
     request.addEventListener('error', () =>
-      reject(new ApiError(0, 'network_error', 'The upload could not reach the server.', {}, '', true)),
+      reject(
+        new ApiError(0, 'network_error', 'The upload could not reach the server.', {}, '', true),
+      ),
     );
     request.addEventListener('abort', () =>
       reject(new ApiError(0, 'cancelled', 'The upload was cancelled.', {}, '', false)),

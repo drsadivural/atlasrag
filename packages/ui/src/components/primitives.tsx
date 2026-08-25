@@ -1,11 +1,14 @@
 import { Slot } from '@radix-ui/react-slot';
 import { cva, type VariantProps } from 'class-variance-authority';
 import {
+  cloneElement,
   forwardRef,
+  isValidElement,
   useId,
   type ButtonHTMLAttributes,
   type HTMLAttributes,
   type InputHTMLAttributes,
+  type ReactElement,
   type ReactNode,
   type TextareaHTMLAttributes,
 } from 'react';
@@ -31,7 +34,8 @@ const buttonVariants = cva(
           'text-[var(--uxe-text-on-brand)] shadow-[var(--uxe-shadow-brand)] [background-image:var(--uxe-gradient)] hover:brightness-[1.06]',
         secondary:
           'border border-[var(--uxe-border)] bg-[var(--uxe-surface)] text-[var(--uxe-text)] shadow-[var(--uxe-shadow-xs)] hover:bg-[var(--uxe-surface-hover)]',
-        ghost: 'text-[var(--uxe-text-secondary)] hover:bg-[var(--uxe-surface-hover)] hover:text-[var(--uxe-text)]',
+        ghost:
+          'text-[var(--uxe-text-secondary)] hover:bg-[var(--uxe-surface-hover)] hover:text-[var(--uxe-text)]',
         danger: 'bg-[var(--uxe-danger)] text-white hover:brightness-105',
         success: 'bg-[var(--uxe-success)] text-white hover:brightness-105',
         outline:
@@ -55,8 +59,7 @@ const buttonVariants = cva(
 );
 
 export interface ButtonProps
-  extends ButtonHTMLAttributes<HTMLButtonElement>,
-    VariantProps<typeof buttonVariants> {
+  extends ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonVariants> {
   asChild?: boolean;
   loading?: boolean;
   /** Announced to screen readers while `loading` is true. */
@@ -66,7 +69,20 @@ export interface ButtonProps
 }
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
-  { className, variant, size, full, asChild, loading, loadingLabel, iconLeft, iconRight, children, disabled, ...props },
+  {
+    className,
+    variant,
+    size,
+    full,
+    asChild,
+    loading,
+    loadingLabel,
+    iconLeft,
+    iconRight,
+    children,
+    disabled,
+    ...props
+  },
   ref,
 ) {
   const classes = cn(buttonVariants({ variant, size, full }), className);
@@ -112,29 +128,40 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
 /* Card                                                                       */
 /* -------------------------------------------------------------------------- */
 
-export const Card = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement> & { flush?: boolean }>(
-  function Card({ className, flush, ...props }, ref) {
-    return (
-      <div
-        ref={ref}
-        className={cn(
-          'rounded-[var(--uxe-radius-card)] border border-[var(--uxe-border)]',
-          'bg-[var(--uxe-surface)] shadow-[var(--uxe-shadow-sm)]',
-          !flush && 'p-5',
-          className,
-        )}
-        {...props}
-      />
-    );
-  },
-);
+export const Card = forwardRef<
+  HTMLDivElement,
+  HTMLAttributes<HTMLDivElement> & { flush?: boolean }
+>(function Card({ className, flush, ...props }, ref) {
+  return (
+    <div
+      ref={ref}
+      className={cn(
+        'rounded-[var(--uxe-radius-card)] border border-[var(--uxe-border)]',
+        'bg-[var(--uxe-surface)] shadow-[var(--uxe-shadow-sm)]',
+        !flush && 'p-5',
+        className,
+      )}
+      {...props}
+    />
+  );
+});
 
 export function CardHeader({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn('mb-4 flex items-start justify-between gap-3', className)} {...props} />;
+  return (
+    <div className={cn('mb-4 flex items-start justify-between gap-3', className)} {...props} />
+  );
 }
 
-export function CardTitle({ className, ...props }: HTMLAttributes<HTMLHeadingElement>) {
-  return <h2 className={cn('text-[16px] font-semibold text-[var(--uxe-text)]', className)} {...props} />;
+export function CardTitle({
+  className,
+  children,
+  ...props
+}: HTMLAttributes<HTMLHeadingElement> & { children: ReactNode }) {
+  return (
+    <h2 className={cn('text-[16px] font-semibold text-[var(--uxe-text)]', className)} {...props}>
+      {children}
+    </h2>
+  );
 }
 
 export function CardDescription({ className, ...props }: HTMLAttributes<HTMLParagraphElement>) {
@@ -162,12 +189,28 @@ export interface FieldProps {
  * the input itself, so a validation failure is announced rather than only being visible.
  */
 export function Field({ label, htmlFor, error, hint, required, children, className }: FieldProps) {
+  const generatedId = useId();
+  const hintId = hint ? `${generatedId}-hint` : undefined;
+  const errorId = error ? `${generatedId}-error` : undefined;
+
+  // The control is wired here rather than at each of the call sites: a visible red border
+  // is not an accessible error, and every form in the product goes through this component.
+  const control = isValidElement(children)
+    ? cloneElement(children as ReactElement<Record<string, unknown>>, {
+        'aria-invalid': error ? true : (children.props as Record<string, unknown>)['aria-invalid'],
+        'aria-required': required
+          ? true
+          : (children.props as Record<string, unknown>)['aria-required'],
+        'aria-describedby':
+          [(children.props as Record<string, unknown>)['aria-describedby'], errorId, hintId]
+            .filter(Boolean)
+            .join(' ') || undefined,
+      })
+    : children;
+
   return (
     <div className={cn('flex flex-col gap-1.5', className)}>
-      <label
-        htmlFor={htmlFor}
-        className="text-[13px] font-medium text-[var(--uxe-text)]"
-      >
+      <label htmlFor={htmlFor} className="text-[13px] font-medium text-[var(--uxe-text)]">
         {label}
         {required && (
           <span className="ml-0.5 text-[var(--uxe-danger)]" aria-hidden>
@@ -175,12 +218,21 @@ export function Field({ label, htmlFor, error, hint, required, children, classNa
           </span>
         )}
       </label>
-      {children}
-      {hint && !error && (
-        <p className="text-[12px] text-[var(--uxe-text-secondary)]">{hint}</p>
+      {control}
+      {hint && (
+        <p
+          id={hintId}
+          className={cn('text-[12px] text-[var(--uxe-text-secondary)]', error && 'sr-only')}
+        >
+          {hint}
+        </p>
       )}
       {error && (
-        <p role="alert" className="flex items-start gap-1 text-[12px] font-medium text-[var(--uxe-danger)]">
+        <p
+          id={errorId}
+          role="alert"
+          className="flex items-start gap-1 text-[12px] font-medium text-[var(--uxe-danger)]"
+        >
           {error}
         </p>
       )}
@@ -201,7 +253,10 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
   return (
     <div className="relative flex items-center">
       {iconLeft && (
-        <span aria-hidden className="pointer-events-none absolute left-3 flex text-[var(--uxe-text-tertiary)]">
+        <span
+          aria-hidden
+          className="pointer-events-none absolute left-3 flex text-[var(--uxe-text-tertiary)]"
+        >
           {iconLeft}
         </span>
       )}
@@ -213,7 +268,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
           'text-[14px] text-[var(--uxe-text)] shadow-[var(--uxe-shadow-xs)]',
           'placeholder:text-[var(--uxe-text-tertiary)]',
           'transition-[border-color,box-shadow] duration-[var(--uxe-duration-fast)]',
-          'focus:border-[var(--uxe-border-focus)] focus:outline-none focus:ring-2 focus:ring-[var(--uxe-cobalt)]/25',
+          'focus:border-[var(--uxe-border-focus)] focus:ring-2 focus:ring-[var(--uxe-cobalt)]/25 focus:outline-none',
           'disabled:cursor-not-allowed disabled:bg-[var(--uxe-surface-sunken)] disabled:opacity-70',
           // Longhand on both sides rather than `px-3` plus an override: Tailwind emits the
           // shorthand after the longhand, so `px-3` would win and the icon would sit on
@@ -232,25 +287,26 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
   );
 });
 
-export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<HTMLTextAreaElement> & { invalid?: boolean }>(
-  function Textarea({ className, invalid, ...props }, ref) {
-    return (
-      <textarea
-        ref={ref}
-        aria-invalid={invalid || undefined}
-        className={cn(
-          'w-full rounded-[var(--uxe-radius-control)] border bg-[var(--uxe-surface)] p-3',
-          'text-[14px] leading-relaxed text-[var(--uxe-text)] shadow-[var(--uxe-shadow-xs)]',
-          'placeholder:text-[var(--uxe-text-tertiary)]',
-          'focus:border-[var(--uxe-border-focus)] focus:outline-none focus:ring-2 focus:ring-[var(--uxe-cobalt)]/25',
-          invalid ? 'border-[var(--uxe-danger)]' : 'border-[var(--uxe-border)]',
-          className,
-        )}
-        {...props}
-      />
-    );
-  },
-);
+export const Textarea = forwardRef<
+  HTMLTextAreaElement,
+  TextareaHTMLAttributes<HTMLTextAreaElement> & { invalid?: boolean }
+>(function Textarea({ className, invalid, ...props }, ref) {
+  return (
+    <textarea
+      ref={ref}
+      aria-invalid={invalid || undefined}
+      className={cn(
+        'w-full rounded-[var(--uxe-radius-control)] border bg-[var(--uxe-surface)] p-3',
+        'text-[14px] leading-relaxed text-[var(--uxe-text)] shadow-[var(--uxe-shadow-xs)]',
+        'placeholder:text-[var(--uxe-text-tertiary)]',
+        'focus:border-[var(--uxe-border-focus)] focus:ring-2 focus:ring-[var(--uxe-cobalt)]/25 focus:outline-none',
+        invalid ? 'border-[var(--uxe-danger)]' : 'border-[var(--uxe-border)]',
+        className,
+      )}
+      {...props}
+    />
+  );
+});
 
 /* -------------------------------------------------------------------------- */
 /* Badge                                                                      */
@@ -279,7 +335,8 @@ const badgeVariants = cva(
   },
 );
 
-export interface BadgeProps extends HTMLAttributes<HTMLSpanElement>, VariantProps<typeof badgeVariants> {
+export interface BadgeProps
+  extends HTMLAttributes<HTMLSpanElement>, VariantProps<typeof badgeVariants> {
   /**
    * Icon shown alongside the label. Status is never conveyed by colour alone, so every
    * status badge in the app passes one.
@@ -290,7 +347,11 @@ export interface BadgeProps extends HTMLAttributes<HTMLSpanElement>, VariantProp
 export function Badge({ className, tone, size, icon, children, ...props }: BadgeProps) {
   return (
     <span className={cn(badgeVariants({ tone, size }), className)} {...props}>
-      {icon && <span aria-hidden className="flex shrink-0">{icon}</span>}
+      {icon && (
+        <span aria-hidden className="flex shrink-0">
+          {icon}
+        </span>
+      )}
       {children}
     </span>
   );
@@ -307,7 +368,7 @@ export function Skeleton({ className, ...props }: HTMLAttributes<HTMLDivElement>
       className={cn(
         'rounded-[var(--uxe-radius-control)]',
         'bg-[linear-gradient(90deg,var(--uxe-surface-sunken)_25%,var(--uxe-surface-hover)_50%,var(--uxe-surface-sunken)_75%)]',
-        'bg-[length:200%_100%] animate-[uxe-shimmer_1.6s_ease-in-out_infinite]',
+        'animate-[uxe-shimmer_1.6s_ease-in-out_infinite] bg-[length:200%_100%]',
         className,
       )}
       {...props}
@@ -341,9 +402,18 @@ export interface EmptyStateProps {
   className?: string;
 }
 
-export function EmptyState({ icon, title, description, action, secondaryAction, className }: EmptyStateProps) {
+export function EmptyState({
+  icon,
+  title,
+  description,
+  action,
+  secondaryAction,
+  className,
+}: EmptyStateProps) {
   return (
-    <div className={cn('flex flex-col items-center justify-center px-6 py-14 text-center', className)}>
+    <div
+      className={cn('flex flex-col items-center justify-center px-6 py-14 text-center', className)}
+    >
       {icon && (
         <div
           aria-hidden
@@ -380,7 +450,14 @@ export interface ErrorStateProps {
  * when there is one — a user reporting a problem can then quote something the operator can
  * actually look up.
  */
-export function ErrorState({ title, message, traceId, onRetry, retrying, className }: ErrorStateProps) {
+export function ErrorState({
+  title,
+  message,
+  traceId,
+  onRetry,
+  retrying,
+  className,
+}: ErrorStateProps) {
   return (
     <div
       role="alert"
@@ -438,10 +515,16 @@ export function ProgressBar({
       aria-valuemin={0}
       aria-valuemax={100}
       aria-label={label}
-      className={cn('h-1.5 w-full overflow-hidden rounded-full bg-[var(--uxe-surface-sunken)]', className)}
+      className={cn(
+        'h-1.5 w-full overflow-hidden rounded-full bg-[var(--uxe-surface-sunken)]',
+        className,
+      )}
     >
       <div
-        className={cn('h-full rounded-full transition-[width] duration-[var(--uxe-duration-slow)] ease-[var(--uxe-ease)]', fill)}
+        className={cn(
+          'h-full rounded-full transition-[width] duration-[var(--uxe-duration-slow)] ease-[var(--uxe-ease)]',
+          fill,
+        )}
         style={{ width: `${clamped}%` }}
       />
     </div>
@@ -521,7 +604,9 @@ export function Gauge({
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         {children ?? (
-          <span className="text-[18px] font-bold text-[var(--uxe-text)]">{Math.round(clamped)}%</span>
+          <span className="text-[18px] font-bold text-[var(--uxe-text)]">
+            {Math.round(clamped)}%
+          </span>
         )}
       </div>
     </div>
@@ -556,7 +641,10 @@ export function Avatar({
   ) : (
     <span
       aria-hidden
-      className={cn('flex shrink-0 items-center justify-center rounded-full font-semibold text-white', className)}
+      className={cn(
+        'flex shrink-0 items-center justify-center rounded-full font-semibold text-white',
+        className,
+      )}
       style={{ width: size, height: size, background: avatarTint(name), fontSize: size * 0.38 }}
     >
       {initialsOf(name)}
@@ -569,7 +657,9 @@ export function Avatar({
 /* -------------------------------------------------------------------------- */
 
 export function Divider({ className, ...props }: HTMLAttributes<HTMLHRElement>) {
-  return <hr className={cn('border-0 border-t border-[var(--uxe-border)]', className)} {...props} />;
+  return (
+    <hr className={cn('border-0 border-t border-[var(--uxe-border)]', className)} {...props} />
+  );
 }
 
 /** Visually hidden but reachable by screen readers and keyboard focus. */
@@ -583,7 +673,7 @@ export function SkipLink({ href = '#main', children }: { href?: string; children
     <a
       href={href}
       className={cn(
-        'sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100]',
+        'sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[100]',
         'focus:rounded-[var(--uxe-radius-control)] focus:bg-[var(--uxe-surface)] focus:px-4 focus:py-2',
         'focus:text-[14px] focus:font-semibold focus:shadow-[var(--uxe-shadow-lg)]',
       )}

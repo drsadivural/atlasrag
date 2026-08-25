@@ -5,11 +5,7 @@ import { extractQuantities, selectExcerpt } from './citations.js';
 import { normalizeWhitespace, splitSentences } from './text.js';
 
 export type OutputStrategy =
-  | 'in_place_text'
-  | 'tracked_changes'
-  | 'overlay'
-  | 'ocr_rebuild'
-  | 'revised_edition';
+  'in_place_text' | 'tracked_changes' | 'overlay' | 'ocr_rebuild' | 'revised_edition';
 
 export interface DocumentCapabilities {
   documentType: DocumentType;
@@ -79,7 +75,12 @@ export function decideOutputStrategy(caps: DocumentCapabilities): StrategyDecisi
       }
       if (caps.isSigned) {
         // Never overlay onto signed bytes; produce a clean derivative instead.
-        return { strategy: 'revised_edition', limitations, signatureNotice, isDerivativeEdition: true };
+        return {
+          strategy: 'revised_edition',
+          limitations,
+          signatureNotice,
+          isDerivativeEdition: true,
+        };
       }
       return { strategy: 'overlay', limitations, signatureNotice, isDerivativeEdition: false };
 
@@ -87,16 +88,31 @@ export function decideOutputStrategy(caps: DocumentCapabilities): StrategyDecisi
       limitations.push(
         'Formulas, named ranges, validations and charts are preserved. Cell values that are the result of a formula are corrected by editing the formula, not by overwriting the computed value.',
       );
-      return { strategy: 'in_place_text', limitations, signatureNotice, isDerivativeEdition: false };
+      return {
+        strategy: 'in_place_text',
+        limitations,
+        signatureNotice,
+        isDerivativeEdition: false,
+      };
 
     case 'pptx':
-      return { strategy: 'in_place_text', limitations, signatureNotice, isDerivativeEdition: false };
+      return {
+        strategy: 'in_place_text',
+        limitations,
+        signatureNotice,
+        isDerivativeEdition: false,
+      };
 
     default:
       limitations.push(
         `In-place correction is not available for ${caps.documentType} input. A professionally formatted revised edition is produced instead, together with an exact change report.`,
       );
-      return { strategy: 'revised_edition', limitations, signatureNotice, isDerivativeEdition: true };
+      return {
+        strategy: 'revised_edition',
+        limitations,
+        signatureNotice,
+        isDerivativeEdition: true,
+      };
   }
 }
 
@@ -211,7 +227,9 @@ export function draftReplacement(input: {
 
   // A quantity conflict has an exact, checkable fix: restate the required value.
   const requiredQuantities = obligation ? extractQuantities(obligation) : new Map<string, number>();
-  const currentQuantities = currentContent ? extractQuantities(currentContent) : new Map<string, number>();
+  const currentQuantities = currentContent
+    ? extractQuantities(currentContent)
+    : new Map<string, number>();
 
   if (currentContent && requiredQuantities.size > 0 && currentQuantities.size > 0) {
     const rewritten = rewriteQuantities(currentContent, requiredQuantities, obligation);
@@ -219,9 +237,7 @@ export function draftReplacement(input: {
   }
 
   if (!currentContent) {
-    const statement = obligation
-      ? firstObligationSentence(obligation)
-      : finding.finding;
+    const statement = obligation ? firstObligationSentence(obligation) : finding.finding;
     return `${statement}\n\n[Added to satisfy ${reference}.]`;
   }
 
@@ -266,7 +282,12 @@ function rewriteQuantities(
 
 function canonicalUnitOf(unit: string): string {
   if (['mm', 'cm', 'm', 'km', 'in', 'ft'].includes(unit)) return 'length_m';
-  if (['s', 'sec', 'second', 'seconds', 'min', 'minute', 'minutes', 'h', 'hour', 'hours'].includes(unit)) return 'time_s';
+  if (
+    ['s', 'sec', 'second', 'seconds', 'min', 'minute', 'minutes', 'h', 'hour', 'hours'].includes(
+      unit,
+    )
+  )
+    return 'time_s';
   if (['kg', 'g', 'lb'].includes(unit)) return 'mass_kg';
   if (['%', 'percent'].includes(unit)) return 'percent';
   if (['lux', 'lx'].includes(unit)) return 'illuminance_lx';
@@ -278,21 +299,39 @@ function canonicalUnitOf(unit: string): string {
 function displayInUnit(canonicalValue: number, unit: string): string {
   const converted = (() => {
     switch (unit) {
-      case 'mm': return canonicalValue * 1000;
-      case 'cm': return canonicalValue * 100;
-      case 'km': return canonicalValue / 1000;
-      case 'in': return canonicalValue / 0.0254;
-      case 'ft': return canonicalValue / 0.3048;
-      case 'min': case 'minute': case 'minutes': return canonicalValue / 60;
-      case 'h': case 'hour': case 'hours': return canonicalValue / 3600;
-      case 'g': return canonicalValue * 1000;
-      case 'lb': return canonicalValue / 0.453592;
-      case 'kpa': return canonicalValue / 1000;
-      case 'bar': return canonicalValue / 100000;
-      default: return canonicalValue;
+      case 'mm':
+        return canonicalValue * 1000;
+      case 'cm':
+        return canonicalValue * 100;
+      case 'km':
+        return canonicalValue / 1000;
+      case 'in':
+        return canonicalValue / 0.0254;
+      case 'ft':
+        return canonicalValue / 0.3048;
+      case 'min':
+      case 'minute':
+      case 'minutes':
+        return canonicalValue / 60;
+      case 'h':
+      case 'hour':
+      case 'hours':
+        return canonicalValue / 3600;
+      case 'g':
+        return canonicalValue * 1000;
+      case 'lb':
+        return canonicalValue / 0.453592;
+      case 'kpa':
+        return canonicalValue / 1000;
+      case 'bar':
+        return canonicalValue / 100000;
+      default:
+        return canonicalValue;
     }
   })();
-  return Number.isInteger(converted) ? String(converted) : converted.toFixed(2).replace(/\.?0+$/, '');
+  return Number.isInteger(converted)
+    ? String(converted)
+    : converted.toFixed(2).replace(/\.?0+$/, '');
 }
 
 function escapeRegex(value: string): string {
@@ -321,8 +360,19 @@ export interface ValidationReport {
  * shipping a quietly broken document.
  */
 export function validateDerivative(input: {
-  original: { pages: number | null; textLength: number; mediaCount: number; pageSizes: Array<{ w: number; h: number }> };
-  generated: { opened: boolean; pages: number | null; textLength: number; mediaCount: number; pageSizes: Array<{ w: number; h: number }> };
+  original: {
+    pages: number | null;
+    textLength: number;
+    mediaCount: number;
+    pageSizes: Array<{ w: number; h: number }>;
+  };
+  generated: {
+    opened: boolean;
+    pages: number | null;
+    textLength: number;
+    mediaCount: number;
+    pageSizes: Array<{ w: number; h: number }>;
+  };
   acceptedChangeCount: number;
   /** Pages the generator deliberately appended (e.g. an addendum for inserted provisions). */
   allowedExtraPages?: number;
@@ -332,7 +382,9 @@ export function validateDerivative(input: {
   checks.push({
     name: 'opens',
     passed: input.generated.opened,
-    detail: input.generated.opened ? 'The generated file re-opened successfully.' : 'The generated file could not be re-opened.',
+    detail: input.generated.opened
+      ? 'The generated file re-opened successfully.'
+      : 'The generated file could not be re-opened.',
   });
 
   // Losing a page is content loss and blocks release. Gaining exactly the pages the

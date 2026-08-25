@@ -203,17 +203,21 @@ export function session(deps: AppDeps): MiddlewareHandler<AppBindings> {
 }
 
 async function workspaceSecurity(deps: AppDeps, workspaceId: string | null) {
-  const fallback = { sessionIdleMinutes: 60 * 8, sessionAbsoluteHours: 24 * 30, mfaPolicy: 'optional' as const };
+  const fallback = {
+    sessionIdleMinutes: 60 * 8,
+    sessionAbsoluteHours: 24 * 30,
+    mfaPolicy: 'optional' as const,
+  };
   if (!workspaceId) return fallback;
   const workspace = await deps.repos.identity.getWorkspace(workspaceId);
   if (!workspace) return fallback;
   const security = (workspace.settings as Record<string, unknown>).security as
-    | { sessionIdleMinutes?: number; sessionAbsoluteHours?: number; mfaPolicy?: string }
-    | undefined;
+    { sessionIdleMinutes?: number; sessionAbsoluteHours?: number; mfaPolicy?: string } | undefined;
   return {
     sessionIdleMinutes: security?.sessionIdleMinutes ?? fallback.sessionIdleMinutes,
     sessionAbsoluteHours: security?.sessionAbsoluteHours ?? fallback.sessionAbsoluteHours,
-    mfaPolicy: (security?.mfaPolicy ?? 'optional') as 'optional' | 'required_admins' | 'required_all',
+    mfaPolicy: (security?.mfaPolicy ?? 'optional') as
+      'optional' | 'required_admins' | 'required_all',
   };
 }
 
@@ -239,7 +243,11 @@ export function csrf(deps: AppDeps): MiddlewareHandler<AppBindings> {
     const cookies = parseCookies(c.req.header('cookie'));
     const ok = await verifyCsrf(sess.csrfSecret, c.req.header(CSRF_HEADER), cookies[CSRF_COOKIE]);
     if (!ok) {
-      throw new ApiError(403, 'forbidden', 'Your session token is missing or stale. Refresh the page and try again.');
+      throw new ApiError(
+        403,
+        'csrf_failed',
+        'Your session token is missing or stale. Refresh the page and try again.',
+      );
     }
 
     await next();
@@ -346,7 +354,11 @@ export function rateLimit(deps: AppDeps): MiddlewareHandler<AppBindings> {
     const ip = clientIp(c);
     const bucket = sess ? RateLimitBuckets.apiByUser(sess.userId) : RateLimitBuckets.apiByIp(ip);
 
-    const result = await deps.services.rateLimiter.check(bucket, deps.env.RATE_LIMIT_API_PER_MINUTE, 60);
+    const result = await deps.services.rateLimiter.check(
+      bucket,
+      deps.env.RATE_LIMIT_API_PER_MINUTE,
+      60,
+    );
     c.header('x-ratelimit-limit', String(result.limit));
     c.header('x-ratelimit-remaining', String(result.remaining));
     c.header('x-ratelimit-reset', String(Math.floor(result.resetAt.getTime() / 1000)));

@@ -18,6 +18,8 @@ export const ignores = [
   '**/drizzle/**',
   'artifacts/**',
   'docs/product/**',
+  // Local throwaway scripts; gitignored and never shipped.
+  '.scratch/**',
   '**/*.d.ts',
 ];
 
@@ -42,18 +44,14 @@ const sharedRules = {
   'no-console': ['error', { allow: ['warn', 'error'] }],
 };
 
-export const baseConfig = tseslint.config(
-  js.configs.recommended,
-  ...tseslint.configs.recommended,
-  {
-    languageOptions: {
-      ecmaVersion: 2023,
-      sourceType: 'module',
-      globals: { ...globals.node, ...globals.es2023 },
-    },
-    rules: sharedRules,
+export const baseConfig = tseslint.config(js.configs.recommended, ...tseslint.configs.recommended, {
+  languageOptions: {
+    ecmaVersion: 2023,
+    sourceType: 'module',
+    globals: { ...globals.node, ...globals.es2023 },
   },
-);
+  rules: sharedRules,
+});
 
 export const reactRules = {
   files: ['**/*.tsx'],
@@ -84,6 +82,9 @@ export const toolingOverrides = {
     '**/*.spec.{ts,tsx}',
     '**/src/env.ts',
     '**/seed.ts',
+    // Command-line entry points whose output IS their user interface.
+    '**/src/migrate.ts',
+    '**/src/reset.ts',
   ],
   rules: {
     'no-console': 'off',

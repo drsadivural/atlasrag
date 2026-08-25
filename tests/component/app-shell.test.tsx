@@ -1,0 +1,247 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { MemoryRouter } from 'react-router-dom';
+import type { SessionResponse } from '@uxe/contracts';
+import { ROLE_PERMISSIONS, type Role } from '@uxe/contracts';
+import { ToastProvider, TooltipProvider } from '@uxe/ui';
+import { AppShell } from '../../apps/web/src/components/AppShell.js';
+import { I18nProvider } from '../../apps/web/src/lib/i18n.js';
+import { SessionProvider } from '../../apps/web/src/lib/session.js';
+import { ThemeProvider } from '../../apps/web/src/lib/theme.js';
+
+function sessionFor(role: Role): SessionResponse {
+  return {
+    user: {
+      id: 'usr-1',
+      email: 'ayumi@uxe.example',
+      fullName: 'Dr Sadi Vural',
+      avatarUrl: null,
+      title: 'Principal consultant',
+      locale: 'en',
+      theme: 'system',
+      emailVerified: true,
+      mfaEnabled: true,
+      createdAt: '2026-01-01T00:00:00.000Z',
+    },
+    workspace: {
+      id: 'ws-1',
+      organizationId: 'org-1',
+      name: 'Marina Tower',
+      slug: 'marina-tower',
+      role,
+      isDefault: true,
+    },
+    workspaces: [
+      {
+        id: 'ws-1',
+        organizationId: 'org-1',
+        name: 'Marina Tower',
+        slug: 'marina-tower',
+        role,
+        isDefault: true,
+      },
+      {
+        id: 'ws-2',
+        organizationId: 'org-1',
+        name: 'Downtown Mall',
+        slug: 'downtown-mall',
+        role,
+        isDefault: false,
+      },
+    ],
+    permissions: [...ROLE_PERMISSIONS[role]],
+    csrfToken: 'csrf-token',
+    expiresAt: '2026-09-01T00:00:00.000Z',
+  };
+}
+
+let fetchMock: ReturnType<typeof vi.fn>;
+
+function renderShell(role: Role = 'consultant', route = '/dashboard') {
+  fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+    if (String(input).includes('/auth/session')) {
+      return new Response(JSON.stringify(sessionFor(role)), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }
+    return new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } });
+  });
+  vi.stubGlobal('fetch', fetchMock);
+
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+  return render(
+    <QueryClientProvider client={client}>
+      <I18nProvider locale="en">
+        <ThemeProvider>
+          <TooltipProvider>
+            <ToastProvider>
+              <SessionProvider>
+                <MemoryRouter initialEntries={[route]}>
+                  <AppShell>
+                    <h1>Dashboard</h1>
+                  </AppShell>
+                </MemoryRouter>
+              </SessionProvider>
+            </ToastProvider>
+          </TooltipProvider>
+        </ThemeProvider>
+      </I18nProvider>
+    </QueryClientProvider>,
+  );
+}
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+describe('navigation', () => {
+  it('renders every destination a consultant may reach, and none they may not', async () => {
+    renderShell('consultant');
+    const sidebar = await screen.findByRole('navigation', { name: 'Main navigation' });
+
+    for (const label of ['Dashboard', 'Consult now', 'Knowledge base', 'Reports']) {
+      expect(within(sidebar).getByRole('link', { name: label })).toBeInTheDocument();
+    }
+    // A consultant holds no audit permission, so the activity log is not offered.
+    expect(within(sidebar).queryByRole('link', { name: 'Activity' })).not.toBeInTheDocument();
+  });
+
+  it('gives an owner the administrative destinations as well', async () => {
+    renderShell('owner');
+    const sidebar = await screen.findByRole('navigation', { name: 'Main navigation' });
+    expect(within(sidebar).getByRole('link', { name: 'Users' })).toBeInTheDocument();
+    expect(within(sidebar).getByRole('link', { name: 'Activity' })).toBeInTheDocument();
+    expect(within(sidebar).getByRole('link', { name: 'Settings' })).toBeInTheDocument();
+  });
+
+  it('offers a read-only member exactly what their permissions allow', async () => {
+    renderShell('read_only');
+    const sidebar = await screen.findByRole('navigation', { name: 'Main navigation' });
+    // read_only carries source:read, artifact:read, member:read and settings:read.
+    for (const label of [
+      'Dashboard',
+      'Consult now',
+      'Knowledge base',
+      'Reports',
+      'Users',
+      'Settings',
+    ]) {
+      expect(within(sidebar).getByRole('link', { name: label })).toBeInTheDocument();
+    }
+    // It does not carry audit:read.
+    expect(within(sidebar).queryByRole('link', { name: 'Activity' })).not.toBeInTheDocument();
+  });
+
+  it('marks the current destination for assistive technology, not with colour alone', async () => {
+    renderShell('consultant', '/knowledge');
+    const sidebar = await screen.findByRole('navigation', { name: 'Main navigation' });
+    expect(within(sidebar).getByRole('link', { name: 'Knowledge base' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    expect(within(sidebar).getByRole('link', { name: 'Dashboard' })).not.toHaveAttribute(
+      'aria-current',
+    );
+  });
+
+  it('offers a skip link to the main region as the first tab stop', async () => {
+    renderShell();
+    await screen.findByRole('navigation', { name: 'Main navigation' });
+    const skip = screen.getByRole('link', { name: /skip to (main )?content/i });
+    expect(skip).toHaveAttribute('href', '#main');
+
+    await userEvent.tab();
+    expect(skip).toHaveFocus();
+  });
+
+  it('keeps the four primary destinations plus More in the mobile bar', async () => {
+    renderShell('owner');
+    const mobile = await screen.findByRole('navigation', { name: 'Primary navigation' });
+    const links = within(mobile).getAllByRole('link');
+    expect(links.map((l) => l.textContent)).toEqual([
+      'Dashboard',
+      'Consult now',
+      'Knowledge base',
+      'Reports',
+    ]);
+    expect(within(mobile).getByRole('button', { name: /more/i })).toBeInTheDocument();
+  });
+
+  it('puts the remaining destinations behind More rather than dropping them', async () => {
+    renderShell('owner');
+    const mobile = await screen.findByRole('navigation', { name: 'Primary navigation' });
+    await userEvent.click(within(mobile).getByRole('button', { name: /more/i }));
+
+    const menu = await screen.findByRole('menu');
+    const items = within(menu)
+      .getAllByRole('menuitem')
+      .map((i) => i.textContent);
+    expect(items).toContain('Activity');
+    expect(items).toContain('Users');
+    expect(items).toContain('Settings');
+  });
+});
+
+describe('the tablet drawer', () => {
+  it('opens from the menu button, is a labelled modal, and closes on Escape', async () => {
+    renderShell();
+    await screen.findByRole('navigation', { name: 'Main navigation' });
+
+    await userEvent.click(screen.getByRole('button', { name: /open navigation menu/i }));
+    const drawer = await screen.findByRole('dialog', { name: 'Main navigation' });
+    expect(drawer).toHaveAttribute('aria-modal', 'true');
+
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog', { name: 'Main navigation' })).not.toBeInTheDocument();
+  });
+
+  it('closes when the scrim is used', async () => {
+    renderShell();
+    await screen.findByRole('navigation', { name: 'Main navigation' });
+    await userEvent.click(screen.getByRole('button', { name: /open navigation menu/i }));
+    await screen.findByRole('dialog', { name: 'Main navigation' });
+
+    await userEvent.click(screen.getAllByRole('button', { name: /close navigation menu/i })[0]!);
+    expect(screen.queryByRole('dialog', { name: 'Main navigation' })).not.toBeInTheDocument();
+  });
+});
+
+describe('workspace and account', () => {
+  it('names the signed-in user by their given name and honorific', async () => {
+    renderShell();
+    await screen.findByRole('navigation', { name: 'Main navigation' });
+    expect(screen.getAllByText(/Dr Sadi/).length).toBeGreaterThan(0);
+  });
+
+  it('shows the active workspace and offers the others', async () => {
+    renderShell();
+    await screen.findByRole('navigation', { name: 'Main navigation' });
+    expect(screen.getAllByText('Marina Tower').length).toBeGreaterThan(0);
+
+    await userEvent.click(screen.getByRole('button', { name: /Marina Tower/ }));
+    const menu = await screen.findByRole('menu');
+    expect(within(menu).getByRole('menuitem', { name: /Downtown Mall/ })).toBeInTheDocument();
+  });
+
+  it('switches workspace through the server, so the new tenant scope is authoritative', async () => {
+    renderShell();
+    await screen.findByRole('navigation', { name: 'Main navigation' });
+    await userEvent.click(screen.getByRole('button', { name: /Marina Tower/ }));
+    const menu = await screen.findByRole('menu');
+    await userEvent.click(within(menu).getByRole('menuitem', { name: /Downtown Mall/ }));
+
+    const call = fetchMock.mock.calls.find(([url]) =>
+      String(url).includes('/auth/switch-workspace'),
+    );
+    expect(call).toBeDefined();
+    expect(JSON.parse(String((call![1] as RequestInit).body))).toEqual({ workspaceId: 'ws-2' });
+  });
+
+  it('renders nothing at all until the session is known, rather than an empty chrome', () => {
+    const { container } = renderShell();
+    expect(container.textContent).not.toContain('Dashboard');
+  });
+});

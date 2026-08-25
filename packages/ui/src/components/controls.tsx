@@ -4,7 +4,7 @@ import * as SelectPrimitive from '@radix-ui/react-select';
 import * as ToggleGroupPrimitive from '@radix-ui/react-toggle-group';
 import * as TabsPrimitive from '@radix-ui/react-tabs';
 import { Check, ChevronDown, Minus } from 'lucide-react';
-import { forwardRef, useId, type ReactNode } from 'react';
+import { forwardRef, useId, type KeyboardEvent, type ReactNode } from 'react';
 import { cn } from '../utils.js';
 
 /* -------------------------------------------------------------------------- */
@@ -83,12 +83,23 @@ export interface CheckboxProps {
   label?: string;
   /** Required when no visible label is rendered, e.g. a row-selection checkbox. */
   ariaLabel?: string;
+  /** Supplied when an outer <label htmlFor> owns the visible text. */
+  id?: string;
   disabled?: boolean;
   className?: string;
 }
 
-export function Checkbox({ checked, onCheckedChange, label, ariaLabel, disabled, className }: CheckboxProps) {
-  const id = useId();
+export function Checkbox({
+  checked,
+  onCheckedChange,
+  label,
+  ariaLabel,
+  id: providedId,
+  disabled,
+  className,
+}: CheckboxProps) {
+  const generatedId = useId();
+  const id = providedId ?? generatedId;
   return (
     <div className={cn('flex items-center gap-2.5', className)}>
       <CheckboxPrimitive.Root
@@ -190,7 +201,7 @@ export function Select({
                 value={option.value}
                 disabled={option.disabled}
                 className={cn(
-                  'flex cursor-pointer select-none items-start gap-2 rounded-[var(--uxe-radius-control)]',
+                  'flex cursor-pointer items-start gap-2 rounded-[var(--uxe-radius-control)] select-none',
                   'px-2.5 py-2 text-[13px] outline-none',
                   'data-[highlighted]:bg-[var(--uxe-surface-hover)]',
                   'data-[state=checked]:bg-[var(--uxe-surface-selected)] data-[state=checked]:text-[var(--uxe-cobalt)]',
@@ -252,6 +263,39 @@ export function SegmentedControl({
   full?: boolean;
   className?: string;
 }) {
+  // The group renders as a radiogroup, and in a radiogroup an arrow key is expected to
+  // move the selection, not only the focus. Radix moves focus; this moves the value with
+  // it, so the two never drift apart.
+  const step = (delta: number) => {
+    const index = options.findIndex((option) => option.value === value);
+    if (index === -1) return;
+    const next = options[(index + delta + options.length) % options.length];
+    if (next && next.value !== value) onValueChange(next.value);
+  };
+
+  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    switch (event.key) {
+      case 'ArrowRight':
+      case 'ArrowDown':
+        step(1);
+        break;
+      case 'ArrowLeft':
+      case 'ArrowUp':
+        step(-1);
+        break;
+      case 'Home':
+        if (options[0]) onValueChange(options[0].value);
+        break;
+      case 'End': {
+        const last = options.at(-1);
+        if (last) onValueChange(last.value);
+        break;
+      }
+      default:
+        break;
+    }
+  };
+
   return (
     <ToggleGroupPrimitive.Root
       type="single"
@@ -259,6 +303,7 @@ export function SegmentedControl({
       // Radix emits '' when the active item is re-clicked; ignoring that keeps one option
       // always selected, which is what a segmented control means.
       onValueChange={(next) => next && onValueChange(next)}
+      onKeyDown={onKeyDown}
       aria-label={ariaLabel}
       className={cn(
         'inline-flex items-center gap-1 rounded-[var(--uxe-radius-control-lg)]',
@@ -285,7 +330,11 @@ export function SegmentedControl({
             'data-[state=on]:bg-[var(--uxe-cobalt)] data-[state=on]:text-white data-[state=on]:shadow-[var(--uxe-shadow-sm)]',
           )}
         >
-          {option.icon && <span aria-hidden className="flex shrink-0">{option.icon}</span>}
+          {option.icon && (
+            <span aria-hidden className="flex shrink-0">
+              {option.icon}
+            </span>
+          )}
           <span className="truncate">{option.label}</span>
         </ToggleGroupPrimitive.Item>
       ))}
@@ -315,7 +364,15 @@ export function Tabs({
   );
 }
 
-export function TabList({ children, ariaLabel, className }: { children: ReactNode; ariaLabel: string; className?: string }) {
+export function TabList({
+  children,
+  ariaLabel,
+  className,
+}: {
+  children: ReactNode;
+  ariaLabel: string;
+  className?: string;
+}) {
   return (
     <TabsPrimitive.List
       aria-label={ariaLabel}
@@ -330,12 +387,20 @@ export function TabList({ children, ariaLabel, className }: { children: ReactNod
   );
 }
 
-export function Tab({ value, children, count }: { value: string; children: ReactNode; count?: number }) {
+export function Tab({
+  value,
+  children,
+  count,
+}: {
+  value: string;
+  children: ReactNode;
+  count?: number;
+}) {
   return (
     <TabsPrimitive.Trigger
       value={value}
       className={cn(
-        'relative flex shrink-0 items-center gap-2 whitespace-nowrap px-3.5 py-2.5',
+        'relative flex shrink-0 items-center gap-2 px-3.5 py-2.5 whitespace-nowrap',
         'text-[13px] font-semibold transition-colors duration-[var(--uxe-duration-fast)]',
         'focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--uxe-cobalt)]',
         'data-[state=inactive]:text-[var(--uxe-text-secondary)] data-[state=inactive]:hover:text-[var(--uxe-text)]',
@@ -354,7 +419,15 @@ export function Tab({ value, children, count }: { value: string; children: React
   );
 }
 
-export function TabPanel({ value, children, className }: { value: string; children: ReactNode; className?: string }) {
+export function TabPanel({
+  value,
+  children,
+  className,
+}: {
+  value: string;
+  children: ReactNode;
+  className?: string;
+}) {
   return (
     <TabsPrimitive.Content
       value={value}
@@ -398,7 +471,11 @@ export const FilterChip = forwardRef<HTMLButtonElement, FilterChipProps>(functio
       )}
     >
       {dotColor && (
-        <span aria-hidden className="h-2 w-2 shrink-0 rounded-full" style={{ background: dotColor }} />
+        <span
+          aria-hidden
+          className="h-2 w-2 shrink-0 rounded-full"
+          style={{ background: dotColor }}
+        />
       )}
       {label}
       {count !== undefined && (

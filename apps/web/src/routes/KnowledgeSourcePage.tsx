@@ -8,6 +8,7 @@ import {
   Clock,
   Database,
   FileText,
+  Pencil,
   RefreshCw,
   ShieldAlert,
   Trash2,
@@ -20,8 +21,12 @@ import {
   CardHeader,
   CardTitle,
   ConfirmDialog,
+  Dialog,
   ErrorState,
+  Field,
+  Input,
   LoadingRegion,
+  Select,
   Skeleton,
   Tab,
   TabList,
@@ -32,8 +37,8 @@ import {
   formatRelative,
   useToast,
 } from '@uxe/ui';
-import type { SourceDetail } from '@uxe/contracts';
-import { ApiError, api, newIdempotencyKey } from '../lib/api.js';
+import type { SourceAccessScope, SourceDetail } from '@uxe/contracts';
+import { type ApiError, api, newIdempotencyKey } from '../lib/api.js';
 import { useI18n } from '../lib/i18n.js';
 import { useSession } from '../lib/session.js';
 import { PageHeader } from '../components/PageHeader.js';
@@ -46,13 +51,16 @@ export function KnowledgeSourcePage() {
   const { push } = useToast();
   const [tab, setTab] = useState('overview');
   const [deleting, setDeleting] = useState(false);
+  const [editing, setEditing] = useState(false);
 
   const query = useQuery<SourceDetail, ApiError>({
     queryKey: ['source', sourceId],
     queryFn: () => api.get<SourceDetail>(`/sources/${sourceId}`),
     enabled: Boolean(sourceId),
     refetchInterval: (result) =>
-      ['pending', 'scanning', 'extracting', 'indexing', 'validating'].includes(result.state.data?.status ?? '')
+      ['pending', 'scanning', 'extracting', 'indexing', 'validating'].includes(
+        result.state.data?.status ?? '',
+      )
         ? 2500
         : false,
   });
@@ -63,7 +71,8 @@ export function KnowledgeSourcePage() {
       push({ tone: 'info', title: 'Reprocessing started' });
       void queryClient.invalidateQueries({ queryKey: ['source', sourceId] });
     },
-    onError: (error: ApiError) => push({ tone: 'error', title: 'Could not reprocess', description: error.message }),
+    onError: (error: ApiError) =>
+      push({ tone: 'error', title: 'Could not reprocess', description: error.message }),
   });
 
   const remove = useMutation({
@@ -76,7 +85,8 @@ export function KnowledgeSourcePage() {
       });
       void queryClient.invalidateQueries({ queryKey: ['sources'] });
     },
-    onError: (error: ApiError) => push({ tone: 'error', title: 'Could not delete', description: error.message }),
+    onError: (error: ApiError) =>
+      push({ tone: 'error', title: 'Could not delete', description: error.message }),
   });
 
   if (query.isLoading) {
@@ -93,7 +103,11 @@ export function KnowledgeSourcePage() {
   if (query.error) {
     return (
       <div className="p-6">
-        <ErrorState message={query.error.message} traceId={query.error.traceId} onRetry={() => void query.refetch()} />
+        <ErrorState
+          message={query.error.message}
+          traceId={query.error.traceId}
+          onRetry={() => void query.refetch()}
+        />
       </div>
     );
   }
@@ -117,9 +131,19 @@ export function KnowledgeSourcePage() {
         actions={
           <>
             {can('source:reprocess') && (
-              <Button variant="secondary" onClick={() => reprocess.mutate()} loading={reprocess.isPending}>
+              <Button
+                variant="secondary"
+                onClick={() => reprocess.mutate()}
+                loading={reprocess.isPending}
+              >
                 <RefreshCw className="h-4 w-4" aria-hidden />
                 Reprocess
+              </Button>
+            )}
+            {can('source:update') && (
+              <Button variant="secondary" onClick={() => setEditing(true)}>
+                <Pencil className="h-4 w-4" aria-hidden />
+                {t('common.edit')}
               </Button>
             )}
             {can('source:delete') && (
@@ -152,7 +176,10 @@ export function KnowledgeSourcePage() {
       {source.failureReason && !source.quarantine && (
         <Card className="mt-4 border-[var(--uxe-warning-border)] bg-[var(--uxe-warning-bg)]">
           <div className="flex items-start gap-3">
-            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-[var(--uxe-warning)]" aria-hidden />
+            <AlertTriangle
+              className="mt-0.5 h-5 w-5 shrink-0 text-[var(--uxe-warning)]"
+              aria-hidden
+            />
             <p className="text-[13px] text-[var(--uxe-text)]">{source.failureReason}</p>
           </div>
         </Card>
@@ -195,9 +222,15 @@ export function KnowledgeSourcePage() {
                 <Row label="Owner">{source.ownerName}</Row>
                 <Row label="Size">{formatBytes(source.sizeBytes)}</Row>
                 <Row label="Created">{formatDateTime(source.createdAt)}</Row>
-                <Row label="Last synced">{source.lastSyncedAt ? formatRelative(source.lastSyncedAt) : '—'}</Row>
-                <Row label="Effective date">{source.effectiveDate ? formatDateTime(source.effectiveDate) : '—'}</Row>
-                <Row label="In knowledge base">{source.isPromotedUpload ? 'Yes' : 'No — consultation input'}</Row>
+                <Row label="Last synced">
+                  {source.lastSyncedAt ? formatRelative(source.lastSyncedAt) : '—'}
+                </Row>
+                <Row label="Effective date">
+                  {source.effectiveDate ? formatDateTime(source.effectiveDate) : '—'}
+                </Row>
+                <Row label="In knowledge base">
+                  {source.isPromotedUpload ? 'Yes' : 'No — consultation input'}
+                </Row>
               </dl>
               {source.tags.length > 0 && (
                 <div className="mt-3 flex flex-wrap gap-1.5">
@@ -231,13 +264,20 @@ export function KnowledgeSourcePage() {
                     <p className="flex flex-wrap items-center gap-2 text-[14px] font-medium text-[var(--uxe-text)]">
                       {version.version}
                       {version.isCurrent && (
-                        <Badge tone="success" size="sm" icon={<CheckCircle2 className="h-3 w-3" aria-hidden />}>
+                        <Badge
+                          tone="success"
+                          size="sm"
+                          icon={<CheckCircle2 className="h-3 w-3" aria-hidden />}
+                        >
                           Current
                         </Badge>
                       )}
                       {version.ocrApplied && (
                         <Badge tone="info" size="sm">
-                          OCR{version.ocrConfidence ? ` ${Math.round(version.ocrConfidence * 100)}%` : ''}
+                          OCR
+                          {version.ocrConfidence
+                            ? ` ${Math.round(version.ocrConfidence * 100)}%`
+                            : ''}
                         </Badge>
                       )}
                     </p>
@@ -258,8 +298,8 @@ export function KnowledgeSourcePage() {
             </ul>
           </Card>
           <p className="mt-3 text-[12px] text-[var(--uxe-text-secondary)]">
-            Existing consultations keep citing the exact version they used. A new version is indexed separately and
-            promoted only after validation.
+            Existing consultations keep citing the exact version they used. A new version is indexed
+            separately and promoted only after validation.
           </p>
         </TabPanel>
 
@@ -268,7 +308,9 @@ export function KnowledgeSourcePage() {
             <ul className="divide-y divide-[var(--uxe-border)]">
               {source.permissions.map((permission) => (
                 <li key={permission.id} className="flex items-center justify-between gap-3 p-4">
-                  <span className="text-[14px] text-[var(--uxe-text)]">{permission.subjectLabel}</span>
+                  <span className="text-[14px] text-[var(--uxe-text)]">
+                    {permission.subjectLabel}
+                  </span>
                   <Badge tone="neutral" size="sm">
                     {permission.capability}
                   </Badge>
@@ -301,7 +343,9 @@ export function KnowledgeSourcePage() {
                       <p className="text-[13px] font-medium text-[var(--uxe-text)]">
                         {entry.stage.replace(/_/g, ' ')} · attempt {entry.attempt}
                       </p>
-                      <p className="text-[12px] text-[var(--uxe-text-secondary)]">{entry.message}</p>
+                      <p className="text-[12px] text-[var(--uxe-text-secondary)]">
+                        {entry.message}
+                      </p>
                     </div>
                     <span className="shrink-0 text-[12px] text-[var(--uxe-text-tertiary)]">
                       {formatRelative(entry.at)}
@@ -325,7 +369,156 @@ export function KnowledgeSourcePage() {
         loading={remove.isPending}
         onConfirm={() => remove.mutate()}
       />
+
+      <EditSourceDialog open={editing} onOpenChange={setEditing} source={source} />
     </div>
+  );
+}
+
+/**
+ * Editing the source record itself — title, tags, effective date and who may read it.
+ *
+ * The stored row version travels with the request, so two people editing the same source
+ * cannot silently overwrite one another; the loser is told to reload.
+ */
+function EditSourceDialog({
+  open,
+  onOpenChange,
+  source,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  source: SourceDetail;
+}) {
+  const { t } = useI18n();
+  const queryClient = useQueryClient();
+  const { push } = useToast();
+
+  const [title, setTitle] = useState(source.title);
+  const [tags, setTags] = useState(source.tags.join(', '));
+  const [effectiveDate, setEffectiveDate] = useState(source.effectiveDate?.slice(0, 10) ?? '');
+  const [accessScope, setAccessScope] = useState<SourceAccessScope>(source.accessScope);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
+
+  // Re-seed from the server whenever the dialog is opened, so a reopened dialog never
+  // shows a stale draft of a value somebody else has since changed.
+  const [wasOpen, setWasOpen] = useState(open);
+  if (wasOpen !== open) {
+    setWasOpen(open);
+    if (open) {
+      setTitle(source.title);
+      setTags(source.tags.join(', '));
+      setEffectiveDate(source.effectiveDate?.slice(0, 10) ?? '');
+      setAccessScope(source.accessScope);
+      setFieldErrors({});
+    }
+  }
+
+  const save = useMutation({
+    mutationFn: () =>
+      api.patch(`/sources/${source.id}`, {
+        title: title.trim(),
+        tags: tags
+          .split(',')
+          .map((tag) => tag.trim())
+          .filter(Boolean),
+        effectiveDate: effectiveDate
+          ? new Date(`${effectiveDate}T00:00:00.000Z`).toISOString()
+          : null,
+        accessScope,
+        version: source.version,
+      }),
+    onSuccess: () => {
+      push({ tone: 'success', title: 'Source updated' });
+      void queryClient.invalidateQueries({ queryKey: ['source', source.id] });
+      void queryClient.invalidateQueries({ queryKey: ['sources'] });
+      onOpenChange(false);
+    },
+    onError: (error: ApiError) => {
+      setFieldErrors(error.fieldErrors);
+      push({
+        tone: 'error',
+        title:
+          error.code === 'version_conflict'
+            ? 'Somebody else changed this source'
+            : 'Could not save',
+        description:
+          error.code === 'version_conflict'
+            ? 'Reload the page to see their change before editing again.'
+            : error.message,
+      });
+    },
+  });
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Edit source"
+      description="Metadata only. The stored document and its citations are never altered here."
+      footer={
+        <>
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+            {t('common.cancel')}
+          </Button>
+          <Button variant="primary" onClick={() => save.mutate()} loading={save.isPending}>
+            {t('common.save')}
+          </Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-4">
+        <Field label="Title" htmlFor="source-title" error={fieldErrors.title?.[0]} required>
+          <Input
+            id="source-title"
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+            maxLength={300}
+          />
+        </Field>
+
+        <Field
+          label="Tags"
+          htmlFor="source-tags"
+          hint="Comma separated. Used to filter the knowledge base."
+          error={fieldErrors.tags?.[0]}
+        >
+          <Input
+            id="source-tags"
+            value={tags}
+            onChange={(event) => setTags(event.target.value)}
+            placeholder="fire, egress"
+          />
+        </Field>
+
+        <Field
+          label="Effective date"
+          htmlFor="source-effective"
+          hint="Used to rank a newer edition above an older one."
+          error={fieldErrors.effectiveDate?.[0]}
+        >
+          <Input
+            id="source-effective"
+            type="date"
+            value={effectiveDate}
+            onChange={(event) => setEffectiveDate(event.target.value)}
+          />
+        </Field>
+
+        <Field label="Who can read this" htmlFor="source-access">
+          <Select
+            ariaLabel="Who can read this"
+            value={accessScope}
+            onValueChange={(value) => setAccessScope(value as SourceAccessScope)}
+            options={[
+              { value: 'workspace', label: 'Everyone in this workspace' },
+              { value: 'group', label: 'Selected groups' },
+              { value: 'users', label: 'Selected people' },
+            ]}
+          />
+        </Field>
+      </div>
+    </Dialog>
   );
 }
 

@@ -94,7 +94,9 @@ export class ComponentErrorBoundary extends Component<
             role="alert"
             className="rounded-[var(--uxe-radius-card)] border border-[var(--uxe-danger-border)] bg-[var(--uxe-danger-bg)] p-4 text-[13px] text-[var(--uxe-text)]"
           >
-            <p className="font-semibold text-[var(--uxe-danger)]">{this.props.label} could not be displayed.</p>
+            <p className="font-semibold text-[var(--uxe-danger)]">
+              {this.props.label} could not be displayed.
+            </p>
             <p className="mt-1">The rest of the page is unaffected. Reload to try again.</p>
           </div>
         )

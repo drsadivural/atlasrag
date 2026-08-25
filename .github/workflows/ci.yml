@@ -1,0 +1,335 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '22.19.2'
+  PNPM_VERSION: '11.16.0'
+  # Values used only by the ephemeral test stack. Real secrets never appear here.
+  TEST_DATABASE_URL: postgres://uxe:uxe_ci_password@127.0.0.1:5432/uxe_test
+  DATABASE_URL: postgres://uxe:uxe_ci_password@127.0.0.1:5432/uxe_dev
+  DOCUMENT_WORKER_URL: http://127.0.0.1:8000
+  DOCUMENT_WORKER_TOKEN: ci-worker-token
+  SESSION_SECRET: ci-session-secret-value-at-least-32-bytes
+  CSRF_SECRET: ci-csrf-secret-value-at-least-32-bytes-x
+  ENCRYPTION_KEY: Cwsl0MHplUsyzT3UmxNAeaqEBNe2m4Ge0aLmXGz1NHI=
+
+jobs:
+  # -------------------------------------------------------------------------
+  # Fast feedback: everything that needs no services.
+  # -------------------------------------------------------------------------
+  static:
+    name: Format, lint, types, unit, components
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Format check
+        run: pnpm format:check
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm -r typecheck
+
+      - name: Unit tests
+        run: pnpm vitest run --project unit
+
+      - name: Component tests
+        run: pnpm vitest run --project component
+
+      - name: Build web bundle
+        run: pnpm --filter @uxe/web build
+
+      - name: Upload web bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: apps/web/dist
+          retention-days: 7
+
+  # -------------------------------------------------------------------------
+  # Dependency and secret scanning. Runs in parallel with the static job.
+  # -------------------------------------------------------------------------
+  scan:
+    name: Dependency and secret scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Audit npm dependencies
+        run: pnpm audit --audit-level high
+
+      - name: Audit Python dependencies
+        run: |
+          python -m pip install --quiet pip-audit==2.9.0
+          pip-audit --requirement services/document-worker/requirements.txt --strict
+
+      - name: Scan history for committed secrets
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # -------------------------------------------------------------------------
+  # Everything that needs a real database and a real document worker.
+  # -------------------------------------------------------------------------
+  integration:
+    name: Migrations, integration, security, RAG evaluation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: uxe
+          POSTGRES_PASSWORD: uxe_ci_password
+          POSTGRES_DB: uxe_dev
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U uxe"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Create the test database
+        run: |
+          PGPASSWORD=uxe_ci_password psql -h 127.0.0.1 -U uxe -d uxe_dev \
+            -c "CREATE DATABASE uxe_test" || true
+          for db in uxe_dev uxe_test; do
+            PGPASSWORD=uxe_ci_password psql -h 127.0.0.1 -U uxe -d "$db" \
+              -c "CREATE EXTENSION IF NOT EXISTS vector; CREATE EXTENSION IF NOT EXISTS pg_trgm;"
+          done
+
+      - name: Build the document worker image
+        run: docker build -f infra/document-worker/Dockerfile -t uxe-document-worker:ci .
+
+      - name: Start the document worker
+        run: |
+          docker run -d --name document-worker -p 8000:8000 \
+            -e DOCUMENT_WORKER_TOKEN=ci-worker-token \
+            uxe-document-worker:ci
+          for i in $(seq 1 60); do
+            if curl -sf http://127.0.0.1:8000/health > /dev/null; then
+              echo "worker ready"; exit 0
+            fi
+            sleep 2
+          done
+          echo "worker did not become healthy"; docker logs document-worker; exit 1
+
+      - name: Migrations apply cleanly from empty
+        run: pnpm --filter @uxe/db migrate
+
+      - name: Migrations are idempotent
+        run: pnpm --filter @uxe/db migrate
+
+      - name: Integration tests
+        run: pnpm vitest run --project integration
+
+      - name: Security tests
+        run: pnpm vitest run --project security
+
+      - name: RAG evaluation
+        run: pnpm vitest run --project rag-evals
+
+      - name: Worker logs on failure
+        if: failure()
+        run: docker logs document-worker
+
+  # -------------------------------------------------------------------------
+  # Browser-driven: the built bundle, the API and the worker, all real.
+  # -------------------------------------------------------------------------
+  e2e:
+    name: End-to-end, accessibility, visual regression
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    needs: [static]
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: uxe
+          POSTGRES_PASSWORD: uxe_ci_password
+          POSTGRES_DB: uxe_dev
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U uxe"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      PUBLIC_APP_URL: http://127.0.0.1:4173
+      PUBLIC_API_URL: http://127.0.0.1:8787
+      CORS_ALLOWED_ORIGINS: http://127.0.0.1:4173,http://localhost:4173
+      E2E_WEB_URL: http://127.0.0.1:4173
+      STORAGE_DRIVER: filesystem
+      STORAGE_LOCAL_PATH: ./.data/storage
+      EMAIL_DRIVER: console
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Prepare the database
+        run: |
+          PGPASSWORD=uxe_ci_password psql -h 127.0.0.1 -U uxe -d uxe_dev \
+            -c "CREATE EXTENSION IF NOT EXISTS vector; CREATE EXTENSION IF NOT EXISTS pg_trgm;"
+          pnpm --filter @uxe/db migrate
+
+      - name: Start the document worker
+        run: |
+          docker build -f infra/document-worker/Dockerfile -t uxe-document-worker:ci .
+          docker run -d --name document-worker -p 8000:8000 \
+            -e DOCUMENT_WORKER_TOKEN=ci-worker-token uxe-document-worker:ci
+          for i in $(seq 1 60); do
+            curl -sf http://127.0.0.1:8000/health > /dev/null && break
+            sleep 2
+          done
+
+      - name: Seed a demonstration workspace
+        run: pnpm --filter @uxe/db seed
+
+      - name: Start the API
+        run: |
+          pnpm --filter @uxe/api start > /tmp/api.log 2>&1 &
+          for i in $(seq 1 60); do
+            curl -sf http://127.0.0.1:8787/api/v1/health > /dev/null && break
+            sleep 1
+          done
+
+      - name: Build and serve the web bundle
+        run: |
+          pnpm --filter @uxe/web build
+          pnpm --filter @uxe/web preview > /tmp/web.log 2>&1 &
+          for i in $(seq 1 60); do
+            curl -sf http://127.0.0.1:4173 > /dev/null && break
+            sleep 1
+          done
+
+      - name: End-to-end tests
+        run: pnpm --filter @uxe/tests e2e
+
+      - name: Accessibility scan
+        run: pnpm --filter @uxe/tests a11y
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-reports
+          path: |
+            artifacts/playwright-report
+            artifacts/a11y-report
+            artifacts/screenshots
+          retention-days: 14
+
+      - name: Service logs on failure
+        if: failure()
+        run: |
+          echo '--- api ---'; tail -200 /tmp/api.log || true
+          echo '--- web ---'; tail -200 /tmp/web.log || true
+          echo '--- worker ---'; docker logs document-worker || true
+
+  # -------------------------------------------------------------------------
+  # Deployment dry run on every pull request: proves the configuration is valid
+  # without changing anything.
+  # -------------------------------------------------------------------------
+  deploy-dry-run:
+    name: Deployment dry run
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    needs: [static]
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Build web bundle
+        run: pnpm --filter @uxe/web build
+
+      - name: Validate the worker configurations
+        run: |
+          pnpm exec wrangler deploy --config infra/cloudflare/wrangler.api.toml \
+            --env staging --dry-run --outdir /tmp/api-build
+          pnpm exec wrangler deploy --config infra/cloudflare/wrangler.web.toml \
+            --env staging --dry-run --outdir /tmp/web-build
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Build the worker image
+        run: docker build -f infra/document-worker/Dockerfile -t uxe-document-worker:pr .
