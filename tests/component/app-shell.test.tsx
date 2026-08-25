@@ -228,6 +228,18 @@ describe('workspace and account', () => {
 
   it('switches workspace through the server, so the new tenant scope is authoritative', async () => {
     renderShell();
+    // The endpoint answers with a full session for the new workspace, which is what the
+    // client stores; a stub that returned less would not exercise that.
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      const session = sessionFor('consultant');
+      const body = String(input).includes('/auth/switch-workspace')
+        ? { ...session, workspace: session.workspaces[1]! }
+        : session;
+      return new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    });
     await screen.findByRole('navigation', { name: 'Main navigation' });
     await userEvent.click(screen.getByRole('button', { name: /Marina Tower/ }));
     const menu = await screen.findByRole('menu');

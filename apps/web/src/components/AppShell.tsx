@@ -295,7 +295,8 @@ function TopBar({ onOpenMenu }: { onOpenMenu: () => void }) {
 
   if (!session) return null;
 
-  const workspaceItems: MenuItem[] = session.workspaces.map((workspace) => ({
+  // Defensive: a malformed session response should not take the whole shell down with it.
+  const workspaceItems: MenuItem[] = (session.workspaces ?? []).map((workspace) => ({
     label: workspace.name,
     icon: <Building2 className="h-4 w-4" aria-hidden />,
     onSelect: () => void switchWorkspace(workspace.id),

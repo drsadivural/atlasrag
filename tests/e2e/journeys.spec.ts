@@ -106,10 +106,10 @@ test.describe('knowledge base', () => {
     await page.getByPlaceholder(/search sources/i).fill('UAE Fire');
     await page.waitForTimeout(1200);
 
-    // The list renders as a table on desktop and as cards below `md`; both are in the DOM,
-    // so the visible one is selected explicitly.
+    // The title is a link to the source. The list renders as a table on desktop and as
+    // cards below `md`, and both are in the DOM, so the visible one is selected explicitly.
     const source = page
-      .getByRole('button', { name: /UAE Fire and Life Safety Code/i })
+      .getByRole('link', { name: /UAE Fire and Life Safety Code/i })
       .filter({ visible: true })
       .first();
     await source.scrollIntoViewIfNeeded();

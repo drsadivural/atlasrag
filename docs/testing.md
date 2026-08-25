@@ -84,6 +84,20 @@ pnpm test:e2e --update-snapshots
 
 A visual diff that nobody explains is a defect, not a snapshot to bless.
 
+## Signing in
+
+Both browser suites authenticate **once**, in a `setup` project that saves the session, and
+every other test reuses it. Sign-in is rate limited per IP — deliberately, and the security
+suite asserts it — so a suite that re-authenticated 49 times would trip a control the
+product is supposed to have and report a failure that is really a success.
+
+The specs that are _about_ signing in, and the read-only permission test, start from an
+empty context instead:
+
+```ts
+test.use({ storageState: { cookies: [], origins: [] } });
+```
+
 ## Writing a new test
 
 Follow what is already there:

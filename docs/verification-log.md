@@ -67,6 +67,16 @@ now covered.
 | 25  | `pnpm db:migrate` / `db:seed` / `db:reset` failed from the repository root with "DATABASE_URL is not set"              | Following the README             | The documented setup did not work: dotenv reads the working directory, and pnpm sets that to the package.               |
 | 26  | The seed wrote source rows pointing at storage keys whose bytes were never stored                                      | Browser                          | Every operation needing the original — download, reprocess, correction — failed in the demonstration workspace.         |
 | 27  | `tsc` emitted build output into `packages/config`                                                                      | Lint                             | The shared React tsconfig set an `outDir` that resolves relative to itself, so every consumer that emitted wrote there. |
+| 28  | The CORS preflight omitted `PUT`, the method upload bytes arrive on                                                    | Browser                          | **Every browser upload failed** with a network error wherever the API is a separate origin — the production topology.   |
+| 29  | Upload tickets returned an absolute API URL, making the request cross-site                                             | Browser                          | The `SameSite=Lax` session cookie was not sent, so uploads arrived unauthenticated.                                     |
+| 30  | Sign-out left the app rendering the signed-out user's workspace                                                        | Browser                          | `queryClient.clear()` drops the session query out from under its observer without giving it a new result.               |
+| 31  | The profile button had no accessible name below 640px                                                                  | Accessibility                    | An unnamed control on every mobile screen.                                                                              |
+| 32  | Picking a conversation on tablet or mobile left the history drawer covering it                                         | Browser                          | The picker obscured the thing it had just picked.                                                                       |
+| 33  | White on the avatar tints was 3.0–3.6:1                                                                                | axe                              | Below WCAG AA on every avatar in the product.                                                                           |
+| 34  | Every status badge label was 2.0–3.4:1 on its own tint                                                                 | axe                              | Compliant / Non-compliant / Needs evidence were all below AA.                                                           |
+| 35  | Tertiary text was 2.6:1, danger text 3.9:1 and success text 3.1:1 on white                                             | axe                              | Below AA at 11–14px.                                                                                                    |
+| 36  | A button wrapped a cell that already contained a link                                                                  | axe                              | Nested interactive controls, and a 21.7px target below the 24px minimum.                                                |
+| 37  | A malformed session response crashed the whole application shell                                                       | Component                        | One missing field took down every screen instead of degrading.                                                          |
 
 ## Test results
 
@@ -131,6 +141,20 @@ seeded workspace and confirmed by inspecting the artifacts they produced:
 | Hosted model providers              | No API credentials                             | The adapters are implemented against the same interface and pass the same verification gate; the deterministic engine is the default and is fully exercised |
 | Google / Microsoft OAuth round trip | No client credentials                          | The PKCE flow, state handling and callback are implemented and unit-tested; the redirect itself is untested                                                 |
 | Managed PostgreSQL and R2           | Local Docker and a filesystem bucket were used | Both implement the identical driver interfaces the production drivers do                                                                                    |
+
+## The single gate
+
+```bash
+pnpm verify
+```
+
+Runs format check, lint, typecheck, every Vitest project and the production build. The
+browser layers are separate because they need a running stack:
+
+```bash
+pnpm test:e2e     # 49 tests across three viewports
+pnpm test:a11y    # 37 axe and keyboard-only tests, nothing skipped
+```
 
 ## Reproducing
 

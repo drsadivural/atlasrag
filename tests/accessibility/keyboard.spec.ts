@@ -1,4 +1,10 @@
-import { expect, test, waitForSettled } from '../e2e/fixtures.js';
+import {
+  expect,
+  openConsultation,
+  openEvidencePanel,
+  test,
+  waitForSettled,
+} from '../e2e/fixtures.js';
 
 /**
  * Keyboard-only smoke tests.
@@ -43,8 +49,13 @@ test('the answer-style control is operable with the arrow keys', async ({ page }
   await page.goto('/consult');
   await waitForSettled(page);
 
-  const group = page.getByRole('radiogroup', { name: /answer style/i });
-  if (!(await group.isVisible().catch(() => false))) test.skip();
+  // The control lives in the Evidence & Output panel of an open consultation, which is a
+  // drawer below 1280px. Opening it here keeps the test from skipping itself.
+  await openConsultation(page, /UAE Fire Code Review/);
+  await openEvidencePanel(page);
+
+  const group = page.getByRole('radiogroup', { name: /answer style/i }).first();
+  await expect(group).toBeVisible();
 
   const selected = group.getByRole('radio', { checked: true });
   const before = await selected.textContent();
@@ -59,9 +70,13 @@ test('the answer-style control is operable with the arrow keys', async ({ page }
 test('a citation can be opened and dismissed without a mouse', async ({ page }) => {
   await page.goto('/consult');
   await waitForSettled(page);
+  await openConsultation(page, /UAE Fire Code Review/);
 
-  const openEvidence = page.getByRole('button', { name: /open exact page/i }).first();
-  if (!(await openEvidence.isVisible().catch(() => false))) test.skip();
+  // "View all citations" is present at every answer depth, unlike the inline chips, so the
+  // test does not depend on which depth a previous case happened to leave selected.
+  const openEvidence = page.getByRole('button', { name: /view all citations/i }).first();
+  await openEvidence.scrollIntoViewIfNeeded();
+  await expect(openEvidence).toBeVisible();
 
   await openEvidence.focus();
   await page.keyboard.press('Enter');

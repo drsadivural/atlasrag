@@ -906,6 +906,9 @@ function SourceTitleCell({ source }: { source: SourceSummary }) {
       <span className="min-w-0">
         <Link
           to={`/knowledge/${source.id}`}
+          // The title truncates in a narrow column; the full text stays readable on hover
+          // and is what assistive technology announces either way.
+          title={source.title}
           onClick={(event) => event.stopPropagation()}
           // py-1 brings the target to 24px, which is the WCAG 2.2 minimum.
           className="block truncate py-1 font-medium text-[var(--uxe-text)] hover:text-[var(--uxe-cobalt)] hover:underline"
