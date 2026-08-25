@@ -37,6 +37,21 @@ export function getCsrfToken(): string | null {
   return csrfToken;
 }
 
+/**
+ * Describes field errors the form does not render itself.
+ *
+ * "Please correct the highlighted fields" with nothing highlighted is a dead end: it names
+ * a problem the user has no way to find. Anything the server rejected that the form has no
+ * input for is surfaced at form level instead.
+ */
+export function unrenderedFieldErrors(error: ApiError, rendered: string[]): string | null {
+  const shown = new Set(rendered);
+  const rest = Object.entries(error.fieldErrors)
+    .filter(([field]) => !shown.has(field))
+    .map(([field, messages]) => `${field}: ${messages.join(', ')}`);
+  return rest.length > 0 ? rest.join('; ') : null;
+}
+
 /** Called when a request returns 401 so the app can route to sign-in exactly once. */
 type UnauthorizedHandler = () => void;
 let onUnauthorized: UnauthorizedHandler = () => {};

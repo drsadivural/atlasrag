@@ -17,6 +17,7 @@ import {
   Search,
   Send,
   Settings2,
+  ClipboardCheck,
   Sparkles,
   Square,
   X,
@@ -57,6 +58,10 @@ import type {
 } from '@uxe/contracts';
 import { ApiError, api, newIdempotencyKey, uploadFile } from '../lib/api.js';
 import { subscribeToConsultation } from '../lib/stream.js';
+import {
+  CorrectionReviewDialog,
+  type CorrectionPlanSummary,
+} from '../components/CorrectionReview.js';
 import { useSyncedState } from '../lib/forms.js';
 import { useI18n } from '../lib/i18n.js';
 import { Ayumi } from '../components/Brand.js';
@@ -1257,6 +1262,27 @@ function EvidencePanel({
 
   const projectSource = consultation.sources.find((s) => s.role === 'project');
 
+  // A correction plan is built by a job, so the panel polls from the moment one is
+  // requested until the changes it produced are visible. Without that, the plan appears
+  // only after navigating away and back.
+  const [awaitingPlan, setAwaitingPlan] = useState(false);
+
+  const plans = useQuery<{ items: CorrectionPlanSummary[] }, ApiError>({
+    queryKey: ['corrections', consultation.id],
+    queryFn: () =>
+      api.get<{ items: CorrectionPlanSummary[] }>(`/corrections?consultationId=${consultation.id}`),
+    refetchInterval: (result) =>
+      awaitingPlan || result.state.data?.items.some((plan) => plan.status === 'generating')
+        ? 2500
+        : false,
+  });
+  const latestPlan = plans.data?.items[0] ?? null;
+  const [reviewingPlanId, setReviewingPlanId] = useState<string | null>(null);
+
+  if (awaitingPlan && latestPlan && latestPlan.totalChanges > 0) {
+    setAwaitingPlan(false);
+  }
+
   const generateCorrection = useMutation({
     mutationFn: () =>
       api.post(
@@ -1269,12 +1295,15 @@ function EvidencePanel({
         },
         newIdempotencyKey(),
       ),
-    onSuccess: () =>
+    onSuccess: () => {
       push({
         tone: 'success',
         title: 'Correction plan started',
         description: 'You will review each proposed change before anything is written.',
-      }),
+      });
+      setAwaitingPlan(true);
+      void queryClient.invalidateQueries({ queryKey: ['corrections', consultation.id] });
+    },
     onError: (error: ApiError) =>
       push({ tone: 'error', title: 'Could not start the correction', description: error.message }),
   });
@@ -1379,6 +1408,36 @@ function EvidencePanel({
           <Sparkles className="h-4 w-4" aria-hidden />
           {t('consult.generateCorrected', { format: outputFormat })}
         </Button>
+
+        {latestPlan && (
+          <div className="mt-2.5 rounded-[var(--uxe-radius-control)] border border-[var(--uxe-border)] bg-[var(--uxe-surface-sunken)] p-3">
+            {latestPlan.totalChanges === 0 ? (
+              <p className="text-[12px] text-[var(--uxe-text-secondary)]">
+                Working out what needs to change…
+              </p>
+            ) : (
+              <>
+                <p className="text-[13px] font-medium text-[var(--uxe-text)]">
+                  {latestPlan.totalChanges} proposed change
+                  {latestPlan.totalChanges === 1 ? '' : 's'}
+                  {latestPlan.pendingChanges > 0
+                    ? ` · ${latestPlan.pendingChanges} still to review`
+                    : ' · all reviewed'}
+                </p>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  full
+                  className="mt-2"
+                  onClick={() => setReviewingPlanId(latestPlan.id)}
+                >
+                  <ClipboardCheck className="h-4 w-4" aria-hidden />
+                  Review proposed changes
+                </Button>
+              </>
+            )}
+          </div>
+        )}
       </section>
 
       {coverage && (
@@ -1493,6 +1552,14 @@ function EvidencePanel({
       >
         {content}
       </SlideOver>
+
+      {reviewingPlanId && (
+        <CorrectionReviewDialog
+          open
+          onOpenChange={(next) => !next && setReviewingPlanId(null)}
+          planId={reviewingPlanId}
+        />
+      )}
     </>
   );
 }

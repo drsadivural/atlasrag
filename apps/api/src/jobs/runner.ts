@@ -617,6 +617,21 @@ async function runCorrectionPlanJob(
 
   await deps.repos.jobs.updateStage(job.id, 'plan', 'running');
 
+  // "Correct this document" means "against what we just found". When the caller names no
+  // review, the consultation's most recent completed one is used; with none at all there is
+  // nothing to correct against, and saying so beats producing an empty plan that looks like
+  // success.
+  const reviewId =
+    payload.reviewId ??
+    (await deps.repos.consultations.latestCompletedReview(tenant, payload.consultationId))?.id ??
+    null;
+
+  if (!reviewId) {
+    throw new Error(
+      'Run a compliance review first: a corrected edition is built from the findings it produces.',
+    );
+  }
+
   const source = await deps.repos.sources.getById(tenant, payload.sourceId);
   const version = await deps.repos.sources.getCurrentVersion(tenant, payload.sourceId);
   if (!version) throw new Error('That document has no indexed version to correct.');
@@ -636,7 +651,7 @@ async function runCorrectionPlanJob(
     consultationId: payload.consultationId,
     sourceId: payload.sourceId,
     sourceVersionId: version.id,
-    reviewId: payload.reviewId,
+    reviewId,
     outputStrategy: decision.strategy,
     limitations: decision.limitations,
     signatureNotice: decision.signatureNotice,
@@ -645,33 +660,27 @@ async function runCorrectionPlanJob(
 
   // Only findings the caller selected are actionable, and only those from a review they
   // are permitted to read.
-  const findings = payload.reviewId
-    ? (await deps.repos.consultations.listFindings(tenant, payload.reviewId))
-        .filter(
-          (row) => payload.findingIds.length === 0 || payload.findingIds.includes(row.finding.id),
-        )
-        .map(({ finding, requirement }) => ({
-          findingId: finding.id,
-          requirementId: finding.requirementId,
-          requirementReference: requirement.reference,
-          requirementTitle: requirement.title,
-          result: finding.result as never,
-          risk: finding.risk as never,
-          finding: finding.finding,
-          projectEvidenceCitationIds: finding.projectEvidenceCitationIds,
-          governingCitationIds: finding.governingCitationIds,
-          missingEvidence: finding.missingEvidence,
-          conflicts: finding.conflicts,
-          recommendedAction: finding.recommendedAction,
-          confidence: finding.confidence,
-        }))
-    : [];
+  const findings = (await deps.repos.consultations.listFindings(tenant, reviewId))
+    .filter((row) => payload.findingIds.length === 0 || payload.findingIds.includes(row.finding.id))
+    .map(({ finding, requirement }) => ({
+      findingId: finding.id,
+      requirementId: finding.requirementId,
+      requirementReference: requirement.reference,
+      requirementTitle: requirement.title,
+      result: finding.result as never,
+      risk: finding.risk as never,
+      finding: finding.finding,
+      projectEvidenceCitationIds: finding.projectEvidenceCitationIds,
+      governingCitationIds: finding.governingCitationIds,
+      missingEvidence: finding.missingEvidence,
+      conflicts: finding.conflicts,
+      recommendedAction: finding.recommendedAction,
+      confidence: finding.confidence,
+    }));
 
-  const citations = payload.reviewId
-    ? (await deps.repos.consultations.listCitationsForReview(tenant, payload.reviewId)).map(
-        toCitation,
-      )
-    : [];
+  const citations = (await deps.repos.consultations.listCitationsForReview(tenant, reviewId)).map(
+    toCitation,
+  );
 
   const changes = buildChangePlan({
     findings,

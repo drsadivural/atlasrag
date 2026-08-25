@@ -7,8 +7,12 @@
  * where the document worker is reachable, so what appears on screen is genuinely indexed
  * data rather than fixtures pasted into tables.
  */
-import 'dotenv/config';
-import { readFileSync } from 'node:fs';
+import { loadRepositoryEnv } from './load-env.js';
+
+loadRepositoryEnv();
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { createDb } from './client.js';
 import { newId } from './ids.js';
 
@@ -632,7 +636,7 @@ async function ingest(
   } = await import('@uxe/rag');
   const { RetrievalRepository } = await import('./repositories/retrieval.js');
 
-  const bytes = readFileSync(file);
+  const bytes = readFileSync(repositoryPath(file));
   const response = await fetch(`${WORKER_URL}/extract`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-worker-token': WORKER_TOKEN },
@@ -657,12 +661,21 @@ async function ingest(
 
   const versionId = newId();
   const sha = await sha256(bytes);
+
+  // The original bytes are stored under the same key the API would use. Without this the
+  // demonstration workspace looks complete but every operation that needs the original —
+  // download, reprocess, generating a corrected edition — fails on a missing file.
+  const storageKey = `${ctx.organizationId}/${ctx.workspaceId}/source/${sourceId}/${
+    file.split('/').pop() ?? 'document'
+  }`;
+  storeOriginal(storageKey, bytes);
+
   await sql`
     INSERT INTO source_versions (id, source_id, organization_id, workspace_id, version, version_number, sha256,
                                  storage_key, content_type, size_bytes, pages, status, is_current, promoted_at,
                                  created_by_user_id)
     VALUES (${versionId}, ${sourceId}, ${ctx.organizationId}, ${ctx.workspaceId}, 'v1.0', 1, ${sha},
-            ${`seed/${sourceId}`}, ${mimeFor(contentType)}, ${bytes.length}, ${extraction.pageCount},
+            ${storageKey}, ${mimeFor(contentType)}, ${bytes.length}, ${extraction.pageCount},
             ${promote ? 'ready' : 'needs_review'}, ${promote}, ${ts(promote ? new Date() : null)}::timestamptz, ${ctx.userId})
   `;
   if (promote) {
@@ -731,6 +744,25 @@ async function ingest(
   console.log(
     `    indexed ${file.split('/').pop()}: ${extraction.pageCount} page(s), ${chunks.length} chunk(s)`,
   );
+}
+
+/**
+ * Resolves a repository-relative path.
+ *
+ * pnpm runs this script with the working directory set to `packages/db`, so a bare
+ * `tests/fixtures/...` would not exist. The path is anchored to this file instead.
+ */
+function repositoryPath(relative: string): string {
+  return resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', relative);
+}
+
+/** Writes an original into the filesystem bucket the local API reads from. */
+function storeOriginal(storageKey: string, bytes: Buffer): void {
+  const configured = process.env.STORAGE_LOCAL_PATH ?? './.data/storage';
+  const root = configured.startsWith('/') ? configured : repositoryPath(configured);
+  const target = join(root, 'originals', storageKey);
+  mkdirSync(dirname(target), { recursive: true });
+  writeFileSync(target, bytes);
 }
 
 function mimeFor(type: string): string {

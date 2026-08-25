@@ -1,3 +1,4 @@
+import { loadRepositoryEnv } from './load-env.js';
 import { readFile, readdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -21,6 +22,8 @@ export interface MigrationResult {
   applied: string[];
   skipped: string[];
 }
+
+loadRepositoryEnv();
 
 export async function runMigrations(
   databaseUrl: string,

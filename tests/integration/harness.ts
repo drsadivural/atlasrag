@@ -368,6 +368,8 @@ export interface SettledJob {
   status: string;
   error: string;
   stages: Array<{ key: string; label: string; state: string; detail: string | null }>;
+  /** What the job produced: the message, artifact, source, review or plan it created. */
+  resultRef: { kind: string; id: string } | null;
 }
 
 export async function waitForJob(
@@ -376,13 +378,14 @@ export async function waitForJob(
   timeoutMs = 90_000,
 ): Promise<SettledJob> {
   const deadline = Date.now() + timeoutMs;
-  let last: SettledJob = { status: 'unknown', error: '', stages: [] };
+  let last: SettledJob = { status: 'unknown', error: '', stages: [], resultRef: null };
 
   while (Date.now() < deadline) {
     const response = await client.get<{
       status: string;
       error: { message?: string } | null;
       stages: SettledJob['stages'];
+      resultRef: { kind: string; id: string } | null;
     }>(`/jobs/${jobId}`);
 
     if (response.status === 200) {
@@ -390,6 +393,7 @@ export async function waitForJob(
         status: response.body.status,
         error: response.body.error?.message ?? '',
         stages: response.body.stages ?? [],
+        resultRef: response.body.resultRef ?? null,
       };
       if (['succeeded', 'failed', 'cancelled', 'dead_letter'].includes(last.status)) return last;
     }

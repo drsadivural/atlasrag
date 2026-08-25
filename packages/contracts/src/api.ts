@@ -688,6 +688,8 @@ export const CorrectionPlan = z.object({
   changes: z.array(CorrectionChange),
   createdAt: Timestamp,
   generatedArtifactId: Id.nullable(),
+  /** Optimistic-concurrency token; echo it back when recording decisions. */
+  version: z.number().int().min(0),
 });
 export type CorrectionPlan = z.infer<typeof CorrectionPlan>;
 

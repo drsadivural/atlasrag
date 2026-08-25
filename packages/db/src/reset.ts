@@ -4,7 +4,9 @@
  * Refuses to run against a production database: a reset is destructive and there is no
  * legitimate reason to want one there.
  */
-import 'dotenv/config';
+import { loadRepositoryEnv } from './load-env.js';
+
+loadRepositoryEnv();
 import postgres from 'postgres';
 import { runMigrations } from './migrate.js';
 

@@ -45,6 +45,24 @@ regression detection on the behaviours the product depends on, not a leaderboard
 The two 100% thresholds are not aspirational. They are enforceable because verification is
 mechanical: an excerpt is either present in the stored page text or it is not.
 
+## Measured results
+
+From a real run against the fixture corpus (`pnpm test:rag-evals`, 2026-08-25):
+
+| Metric                      | Threshold       | Measured                   |
+| --------------------------- | --------------- | -------------------------- |
+| Recall@5                    | ≥ 80%           | **100%** (5/5)             |
+| nDCG@5                      | ≥ 0.70          | **0.926**                  |
+| Quoted-text verification    | 100%            | **100%** over 30 citations |
+| Locator accuracy            | 100%            | **100%** over 30 citations |
+| Requirement coverage        | 100%            | **100%** (4/4)             |
+| Retrieval latency p50 / p95 | < 1.5 s / < 4 s | **5 ms / 8 ms**            |
+
+The latency figures are against a local PostgreSQL on the same host; Hyperdrive and a
+managed database change the constant, not the shape. They are reported because a
+five-millisecond p50 says something useful: retrieval is not the bottleneck, so a slow
+answer is an extraction or generation problem, not an index problem.
+
 ## How each is computed
 
 **Recall@K** — the fraction of gold questions for which the expected phrase appears in any

@@ -14,7 +14,7 @@ let owner: RegisteredAccount;
 let regulationId: string;
 let projectId: string;
 let consultationId: string;
-let reviewJobId: string;
+let reviewId: string;
 
 /**
  * Reports and corrected documents.
@@ -44,7 +44,7 @@ beforeAll(async () => {
   });
   consultationId = consultation.body.id;
 
-  const review = await owner.client.post<{ job: { id: string } }>(
+  const review = await owner.client.post<{ job: { id: string }; reviewId: string }>(
     `/consultations/${consultationId}/reviews`,
     {
       projectSourceIds: [projectId],
@@ -53,66 +53,96 @@ beforeAll(async () => {
       idempotencyKey: `report-setup-${Date.now()}`,
     },
   );
-  reviewJobId = review.body.job.id;
-  await waitForJob(owner.client, reviewJobId, 240_000);
+  if (review.status >= 300) {
+    throw new Error(`Review setup failed: ${review.status} ${JSON.stringify(review.body)}`);
+  }
+  reviewId = review.body.reviewId;
+  const settled = await waitForJob(owner.client, review.body.job.id, 240_000);
+  if (settled.status !== 'succeeded') {
+    throw new Error(`Review job did not succeed: ${settled.status} ${settled.error}`);
+  }
 }, 600_000);
 
 afterAll(async () => {
   await harness.close();
 });
 
-async function generateReport(format: string): Promise<{ artifactId: string }> {
+async function generateReport(
+  format: string,
+  kind: 'compliance_report' | 'summary' | 'evidence_matrix' = 'compliance_report',
+): Promise<{ artifactId: string }> {
   const response = await owner.client.post<{ job: { id: string }; artifactId?: string }>(
     `/consultations/${consultationId}/reports`,
-    { format, idempotencyKey: `report-${format}-${Date.now()}` },
+    {
+      format,
+      kind,
+      reviewId,
+      idempotencyKey: `report-${format}-${Date.now()}`,
+    },
   );
   expect(response.status).toBeLessThan(300);
   const job = await waitForJob(owner.client, response.body.job.id, 180_000);
   expect(job.status).toBe('succeeded');
 
   const artifacts = await owner.client.get<{
-    items: Array<{ id: string; format: string; sizeBytes: number }>;
+    items: Array<{ id: string; documentType: string; sizeBytes: number; status: string }>;
   }>('/artifacts?pageSize=50');
-  const artifact = artifacts.body.items.find((a) => a.format === format);
-  expect(artifact, `no ${format} artifact was produced`).toBeDefined();
+  const artifact = artifacts.body.items.find((a) => a.documentType === format);
+  expect(
+    artifact,
+    `no ${format} artifact was produced: ${JSON.stringify(artifacts.body.items)}`,
+  ).toBeDefined();
   expect(artifact!.sizeBytes).toBeGreaterThan(0);
+  expect(artifact!.status).toBe('ready');
   return { artifactId: artifact!.id };
+}
+
+/**
+ * Downloads an artifact the way the browser does: ask for a short-lived signed URL, then
+ * fetch it. The bytes are never served from the JSON endpoint itself.
+ */
+async function downloadArtifact(artifactId: string): Promise<Uint8Array> {
+  const signed = await owner.client.get<{ url: string; expiresAt: string }>(
+    `/artifacts/${artifactId}/download`,
+  );
+  expect(signed.status, JSON.stringify(signed.body)).toBeLessThan(400);
+  expect(signed.body.url).toBeTruthy();
+
+  const path = new URL(signed.body.url, 'http://localhost:8788');
+  const bytes = await owner.client.request<unknown>(
+    'GET',
+    `${path.pathname.replace('/api/v1', '')}${path.search}`,
+  );
+  expect(bytes.status).toBe(200);
+  return new Uint8Array(await bytes.raw.clone().arrayBuffer());
 }
 
 describe('compliance reports', () => {
   it('produces a PDF that is really a PDF', async () => {
     const { artifactId } = await generateReport('pdf');
 
-    const download = await owner.client.get<string>(`/artifacts/${artifactId}/download`);
-    expect(download.status).toBeLessThan(400);
-
-    const bytes = new Uint8Array(await download.raw.clone().arrayBuffer());
-    if (bytes.byteLength > 4) {
-      expect(String.fromCharCode(...bytes.slice(0, 4))).toBe('%PDF');
-    }
+    const bytes = await downloadArtifact(artifactId);
+    expect(String.fromCharCode(...bytes.slice(0, 4))).toBe('%PDF');
   }, 300_000);
 
   it('produces a DOCX that is really a zip container', async () => {
     const { artifactId } = await generateReport('docx');
-    const download = await owner.client.get(`/artifacts/${artifactId}/download`);
-    const bytes = new Uint8Array(await download.raw.clone().arrayBuffer());
-    if (bytes.byteLength > 2) {
-      expect([bytes[0], bytes[1]]).toEqual([0x50, 0x4b]);
-    }
+    const bytes = await downloadArtifact(artifactId);
+    // A DOCX is an OPC zip container; "PK" is the only proof that it really is one.
+    expect([bytes[0], bytes[1]]).toEqual([0x50, 0x4b]);
   }, 300_000);
 
   it('produces an evidence matrix export with one row per finding', async () => {
-    const { artifactId } = await generateReport('csv');
-    const download = await owner.client.get<string>(`/artifacts/${artifactId}/download`);
-    const text = await download.raw.clone().text();
+    const { artifactId } = await generateReport('csv', 'evidence_matrix');
+    const text = new TextDecoder().decode(await downloadArtifact(artifactId));
 
-    if (text.length > 0 && !text.startsWith('{')) {
-      const header = text.split('\n')[0]!.toLowerCase();
-      expect(header).toMatch(/requirement/);
-      expect(header).toMatch(/result/);
-      expect(header).toMatch(/page|location|clause/);
-      expect(header).toMatch(/excerpt/);
-    }
+    const header = text.split('\n')[0]!.toLowerCase();
+    expect(header).toMatch(/requirement/);
+    expect(header).toMatch(/result/);
+    expect(header).toMatch(/page|location|clause/);
+    expect(header).toMatch(/excerpt/);
+    // One header row plus one row per finding.
+    expect(text.trim().split('\n').length).toBeGreaterThan(1);
   }, 300_000);
 
   it('records the report in the activity log with its author', async () => {
@@ -135,11 +165,11 @@ describe('compliance reports', () => {
 
 describe('corrected documents', () => {
   it('proposes changes for the failing requirements, each with a governing citation', async () => {
-    const created = await owner.client.post<{ job: { id: string }; planId?: string }>(
+    const created = await owner.client.post<{ job: { id: string } }>(
       `/consultations/${consultationId}/corrections`,
       {
-        targetSourceId: projectId,
-        outputFormat: 'match_source',
+        sourceId: projectId,
+        reviewId,
         idempotencyKey: `correction-${Date.now()}`,
       },
     );
@@ -147,8 +177,9 @@ describe('corrected documents', () => {
     const job = await waitForJob(owner.client, created.body.job.id, 240_000);
     expect(job.status).toBe('succeeded');
 
-    const planId = created.body.planId;
-    if (!planId) return;
+    // The plan is created by the job; the job says which one.
+    expect(job.resultRef?.kind).toBe('plan');
+    const planId = job.resultRef!.id;
 
     const plan = await owner.client.get<{
       changes: Array<{
@@ -177,34 +208,43 @@ describe('corrected documents', () => {
   }, 600_000);
 
   it('generates the corrected edition only from accepted changes, and leaves the original untouched', async () => {
-    const created = await owner.client.post<{ job: { id: string }; planId?: string }>(
+    const created = await owner.client.post<{ job: { id: string } }>(
       `/consultations/${consultationId}/corrections`,
       {
-        targetSourceId: projectId,
-        outputFormat: 'match_source',
+        sourceId: projectId,
+        reviewId,
         idempotencyKey: `correction-apply-${Date.now()}`,
       },
     );
-    await waitForJob(owner.client, created.body.job.id, 240_000);
-    const planId = created.body.planId;
-    if (!planId) return;
+    const planJob = await waitForJob(owner.client, created.body.job.id, 240_000);
+    expect(planJob.status).toBe('succeeded');
+    const planId = planJob.resultRef!.id;
 
-    const plan = await owner.client.get<{ changes: Array<{ id: string }> }>(
+    const plan = await owner.client.get<{ changes: Array<{ id: string }>; version: number }>(
       `/corrections/${planId}`,
     );
     const first = plan.body.changes[0];
-    if (!first) return;
+    expect(first, 'the plan proposed no changes').toBeDefined();
 
     const accepted = await owner.client.patch(`/corrections/${planId}`, {
-      decisions: [{ changeId: first.id, status: 'accepted' }],
+      decisions: [{ changeId: first!.id, status: 'accepted', editedContent: null }],
+      version: plan.body.version,
     });
-    expect(accepted.status).toBeLessThan(300);
+    expect(accepted.status, JSON.stringify(accepted.body)).toBeLessThan(300);
+
+    // The decision is really recorded, not merely accepted by the endpoint.
+    const afterDecision = await owner.client.get<{
+      changes: Array<{ id: string; status: string }>;
+    }>(`/corrections/${planId}`);
+    expect(afterDecision.body.changes.find((change) => change.id === first!.id)?.status).toBe(
+      'accepted',
+    );
 
     const generated = await owner.client.post<{ job: { id: string } }>(
       `/corrections/${planId}/generate`,
       { idempotencyKey: `generate-${Date.now()}` },
     );
-    expect(generated.status).toBeLessThan(300);
+    expect(generated.status, JSON.stringify(generated.body)).toBeLessThan(300);
     const job = await waitForJob(owner.client, generated.body.job.id, 240_000);
     expect(job.status).toBe('succeeded');
 
@@ -215,10 +255,11 @@ describe('corrected documents', () => {
     expect(source.body.status).toBe('ready');
 
     const artifacts = await owner.client.get<{
-      items: Array<{ id: string; kind: string; format: string; disclosures?: string[] }>;
+      items: Array<{ id: string; kind: string; documentType: string; disclosures?: string[] }>;
     }>('/artifacts?pageSize=50');
     const corrected = artifacts.body.items.find((a) => a.kind === 'corrected_document');
-    expect(corrected).toBeDefined();
-    expect(corrected!.format).toBe('pdf');
+    expect(corrected, JSON.stringify(artifacts.body.items)).toBeDefined();
+    // The corrected edition matches the input type, as the brief requires.
+    expect(corrected!.documentType).toBe('pdf');
   }, 600_000);
 });

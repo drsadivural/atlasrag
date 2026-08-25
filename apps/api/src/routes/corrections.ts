@@ -16,6 +16,48 @@ import { toJobView } from './jobs.js';
 export function correctionRoutes(deps: AppDeps) {
   const app = new Hono<AppBindings>();
 
+  /**
+   * Every correction plan for a consultation.
+   *
+   * A plan is otherwise reachable only through the job that created it, so a refresh mid
+   * review would lose it.
+   */
+  app.get('/', requirePermission('correction:create'), async (c) => {
+    const tenant = c.get('tenant');
+    if (!tenant) throw ApiError.unauthenticated();
+
+    const consultationId = new URL(c.req.url).searchParams.get('consultationId');
+    if (!consultationId) {
+      throw ApiError.badRequest('Name the consultation whose correction plans you want.', {
+        consultationId: ['Required'],
+      });
+    }
+    await deps.repos.consultations.getById(tenant, consultationId);
+
+    const plans = await deps.repos.corrections.listPlansForConsultation(tenant, consultationId);
+    const summaries = await Promise.all(
+      plans.map(async (plan) => {
+        const changes = await deps.repos.corrections.listChanges(tenant, plan.id);
+        return {
+          id: plan.id,
+          consultationId: plan.consultationId,
+          sourceId: plan.sourceId,
+          status: plan.status,
+          outputStrategy: plan.outputStrategy,
+          createdAt: plan.createdAt.toISOString(),
+          generatedArtifactId: plan.generatedArtifactId,
+          totalChanges: changes.length,
+          acceptedChanges: changes.filter((change) =>
+            ['accepted', 'edited'].includes(change.status),
+          ).length,
+          pendingChanges: changes.filter((change) => change.status === 'proposed').length,
+        };
+      }),
+    );
+
+    return c.json({ items: summaries });
+  });
+
   app.get('/:planId', requirePermission('correction:create'), async (c) => {
     const tenant = c.get('tenant');
     if (!tenant) throw ApiError.unauthenticated();
@@ -160,6 +202,8 @@ async function buildPlanView(
     outputStrategy: plan.outputStrategy as CorrectionPlan['outputStrategy'],
     createdAt: plan.createdAt.toISOString(),
     generatedArtifactId: plan.generatedArtifactId,
+    // Without this a caller has no way to satisfy the version the decide endpoint requires.
+    version: plan.version,
     changes: changes.map((change) => {
       const row = change.governingCitationId
         ? citationById.get(change.governingCitationId)

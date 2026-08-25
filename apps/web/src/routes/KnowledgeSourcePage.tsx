@@ -38,7 +38,7 @@ import {
   useToast,
 } from '@uxe/ui';
 import type { SourceAccessScope, SourceDetail } from '@uxe/contracts';
-import { type ApiError, api, newIdempotencyKey } from '../lib/api.js';
+import { type ApiError, api, newIdempotencyKey, unrenderedFieldErrors } from '../lib/api.js';
 import { useI18n } from '../lib/i18n.js';
 import { useSession } from '../lib/session.js';
 import { PageHeader } from '../components/PageHeader.js';
@@ -436,6 +436,12 @@ function EditSourceDialog({
     },
     onError: (error: ApiError) => {
       setFieldErrors(error.fieldErrors);
+      const unshown = unrenderedFieldErrors(error, [
+        'title',
+        'tags',
+        'effectiveDate',
+        'accessScope',
+      ]);
       push({
         tone: 'error',
         title:
@@ -445,7 +451,7 @@ function EditSourceDialog({
         description:
           error.code === 'version_conflict'
             ? 'Reload the page to see their change before editing again.'
-            : error.message,
+            : (unshown ?? error.message),
       });
     },
   });

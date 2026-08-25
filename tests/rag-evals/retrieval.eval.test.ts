@@ -212,12 +212,17 @@ describe('citation quality', () => {
 
         const opened = await owner.client.get<{
           citation: { supportingExcerpt: string };
-          page: { text: string; number: number };
+          pageText: string;
+          highlight: { start: number; end: number } | null;
         }>(`/citations/${citation.citationId}`);
 
+        // The locator is correct only when the highlight offsets slice out exactly the
+        // quotation the answer displayed.
         if (
           opened.status === 200 &&
-          opened.body.page.text.includes(opened.body.citation.supportingExcerpt)
+          opened.body.highlight !== null &&
+          opened.body.pageText.slice(opened.body.highlight.start, opened.body.highlight.end) ===
+            opened.body.citation.supportingExcerpt
         ) {
           locatorCorrect += 1;
         }

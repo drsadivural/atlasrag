@@ -490,6 +490,28 @@ export class ConsultationRepository {
     return row;
   }
 
+  /**
+   * The most recent completed review for a consultation.
+   *
+   * "Correct this document" means "correct it against what we just found", so the caller
+   * does not have to know a review identifier to express that.
+   */
+  async latestCompletedReview(ctx: TenantContext, consultationId: string) {
+    const [row] = await this.db
+      .select()
+      .from(complianceReviews)
+      .where(
+        and(
+          eq(complianceReviews.consultationId, consultationId),
+          eq(complianceReviews.workspaceId, ctx.workspaceId),
+          eq(complianceReviews.status, 'complete'),
+        ),
+      )
+      .orderBy(desc(complianceReviews.createdAt))
+      .limit(1);
+    return row ?? null;
+  }
+
   async getReview(ctx: TenantContext, reviewId: string) {
     const [row] = await this.db
       .select()

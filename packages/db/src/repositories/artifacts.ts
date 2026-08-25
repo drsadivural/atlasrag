@@ -241,6 +241,25 @@ export class CorrectionRepository {
     return row;
   }
 
+  /**
+   * Every correction plan for a consultation, newest first.
+   *
+   * Without this a plan is only reachable through the job that created it, so a page
+   * refresh loses the review the user was in the middle of.
+   */
+  async listPlansForConsultation(ctx: TenantContext, consultationId: string) {
+    return this.db
+      .select()
+      .from(correctionPlans)
+      .where(
+        and(
+          eq(correctionPlans.consultationId, consultationId),
+          eq(correctionPlans.workspaceId, ctx.workspaceId),
+        ),
+      )
+      .orderBy(desc(correctionPlans.createdAt));
+  }
+
   async addChanges(
     ctx: TenantContext,
     planId: string,
