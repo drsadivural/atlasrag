@@ -7,7 +7,6 @@ import {
   ChevronLeft,
   FileEdit,
   FileText,
-  Globe,
   HelpCircle,
   Link2,
   Loader2,
@@ -972,9 +971,9 @@ function Composer({
               <span className="max-sm:sr-only">{t('consult.uploadDocuments')}</span>
             </Button>
 
-            <ConnectorChip label="Google Drive" />
-            <ConnectorChip label="OneDrive" />
-            <ConnectorChip label="SharePoint" />
+            <ConnectorChip label="Google Drive" icon={<GoogleDriveGlyph />} />
+            <ConnectorChip label="OneDrive" icon={<OneDriveGlyph />} />
+            <ConnectorChip label="SharePoint" icon={<SharePointGlyph />} />
 
             <Button variant="ghost" size="sm">
               <Link2 className="h-3.5 w-3.5" aria-hidden />
@@ -1022,23 +1021,62 @@ function Composer({
   );
 }
 
-function ConnectorChip({ label }: { label: string }) {
+function ConnectorChip({ label, icon }: { label: string; icon: React.ReactNode }) {
   const { push } = useToast();
+  const navigate = useNavigate();
+
   return (
     <Button
       variant="ghost"
       size="icon-sm"
-      aria-label={label}
+      aria-label={`Attach from ${label}`}
       onClick={() =>
         push({
           tone: 'info',
           title: `${label} is not connected`,
-          description: 'Connect it from the Knowledge Base to attach files from there.',
+          description: 'Connect it in the Knowledge Base, then attach files from there.',
+          action: { label: 'Open Knowledge Base', onClick: () => navigate('/knowledge') },
         })
       }
     >
-      <Globe className="h-4 w-4 text-[var(--uxe-text-secondary)]" aria-hidden />
+      {icon}
     </Button>
+  );
+}
+
+function GoogleDriveGlyph() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden>
+      <path fill="#0066DA" d="M1.6 17.3l1.4 2.4c.3.5.7.9 1.2 1.2l4.9-8.5H0c0 .6.1 1.1.4 1.6l1.2 3.3z" />
+      <path fill="#00AC47" d="M12 7.6L7.1 0h-.2c-.5.3-.9.7-1.2 1.2L.4 10.6c-.3.5-.4 1-.4 1.6h9.1L12 7.6z" />
+      <path fill="#EA4335" d="M16.9 24c.5-.3.9-.7 1.2-1.2l.6-1 2.8-4.8c.3-.5.4-1 .4-1.6h-9.1l1.9 3.4L16.9 24z" />
+      <path fill="#00832D" d="M12 7.6L16.9 0H7.1L12 7.6z" />
+      <path fill="#2684FC" d="M19.1 12.4H24c0-.6-.1-1.1-.4-1.6L18.3 1.2c-.3-.5-.7-.9-1.2-1.2l-4.9 8.5 6.9 3.9z" />
+      <path fill="#FFBA00" d="M9.1 12.4H0l4.9 8.5c.5.3 1 .4 1.6.4h11c.6 0 1.1-.1 1.6-.4l-4.9-8.5H9.1z" />
+    </svg>
+  );
+}
+
+function OneDriveGlyph() {
+  return (
+    <svg width="17" height="13" viewBox="0 0 24 16" aria-hidden>
+      <path fill="#0364B8" d="M9.6 5.3l4.3 2.6 2.6-1.1a4 4 0 0 1 1.6-.3A6 6 0 0 0 7.7 3.4a4.7 4.7 0 0 1 1.9 1.9z" />
+      <path fill="#0078D4" d="M7.7 3.4a4.8 4.8 0 0 0-2.6 1.2 4.8 4.8 0 0 0-1.5 2.6 4.4 4.4 0 0 0-2.4 1.2L8.6 12l5.3-4.1-4.3-2.6a4.7 4.7 0 0 0-1.9-1.9z" />
+      <path fill="#28A8EA" d="M18.1 6.5a4 4 0 0 0-1.6.3l-2.6 1.1L18.6 16h3.1A4.3 4.3 0 0 0 24 12.2a4.3 4.3 0 0 0-4.3-4.3c-.5 0-1 .1-1.5.2v-1.6z" />
+      <path fill="#0078D4" d="M.1 12.4A4.3 4.3 0 0 0 4.3 16h14.3l-4.7-8.1L8.6 12 .1 12.4z" />
+    </svg>
+  );
+}
+
+function SharePointGlyph() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden>
+      <circle cx="9" cy="7" r="6.5" fill="#036C70" />
+      <circle cx="15.5" cy="12" r="5.5" fill="#1A9BA1" />
+      <circle cx="12.5" cy="18" r="4.5" fill="#37C6D0" />
+      <rect x="2" y="8" width="11" height="11" rx="1" fill="#03787C" />
+      <text x="7.5" y="16.4" fontSize="8.5" fill="#fff" textAnchor="middle" fontFamily="Inter, sans-serif" fontWeight="700">S</text>
+    </svg>
   );
 }
 
@@ -1126,6 +1164,7 @@ function EvidencePanel({
         <SegmentedControl
           className="mt-2 w-full"
           full
+          size="sm"
           value={answerStyle}
           onValueChange={(value) => {
             onAnswerStyleChange(value as AnswerStyle);

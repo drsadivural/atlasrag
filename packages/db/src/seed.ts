@@ -139,6 +139,14 @@ async function main() {
       status: 'needs_review',
       role: 'governing',
     },
+    {
+      file: 'tests/fixtures/documents/project-plan.pdf',
+      title: 'Evacuation Plan – Tower A',
+      type: 'pdf',
+      tags: ['project', 'evacuation'],
+      status: 'ready',
+      role: 'project',
+    },
   ];
 
   const sourceIds: Record<string, string> = {};
@@ -222,6 +230,17 @@ async function main() {
   }
   console.log(`  consultations: ${consultations.length}`);
 
+  // --- A real compliance review on the flagship consultation ---------------
+  // Runs the actual pipeline rather than inserting canned findings, so the seeded
+  // workspace shows genuine verified citations that open at their real page.
+  const flagshipId = consultationIds[0];
+  const regulationId = sourceIds['UAE Fire and Life Safety Code of Practice 2018'];
+  const projectId = sourceIds['Evacuation Plan – Tower A'];
+
+  if (workerReachable && flagshipId && regulationId && projectId) {
+    await runSeedReview(ctx, flagshipId, regulationId, projectId, ownerId);
+  }
+
   // Spread activity across the last 30 days so the dashboard chart has a shape.
   for (let day = 29; day >= 0; day -= 1) {
     const count = Math.max(0, Math.round(2 + Math.sin(day / 4) * 2 + (29 - day) / 12));
@@ -277,6 +296,192 @@ async function main() {
 /* -------------------------------------------------------------------------- */
 /* Helpers                                                                    */
 /* -------------------------------------------------------------------------- */
+
+/**
+ * Executes a real compliance review against the seeded documents.
+ *
+ * Everything the UI then displays — findings, citations, coverage, confidence — is the
+ * genuine output of the retrieval and verification pipeline, so the seeded workspace is a
+ * working demonstration rather than a set of hard-coded strings.
+ */
+async function runSeedReview(
+  ctx: { organizationId: string; workspaceId: string; userId: string; role: 'owner'; groupIds: string[]; traceId: string },
+  consultationId: string,
+  regulationSourceId: string,
+  projectSourceId: string,
+  ownerId: string,
+): Promise<void> {
+  const { runComplianceReview } = await import('@uxe/rag');
+  const { DeterministicChatProvider, DeterministicEmbeddingProvider } = await import('@uxe/rag');
+  const { RetrievalRepository } = await import('./repositories/retrieval.js');
+  const { ConsultationRepository } = await import('./repositories/consultations.js');
+
+  const versions = await sql<{ id: string; source_id: string; pages: number | null; version: string }[]>`
+    SELECT id, source_id, pages, version FROM source_versions
+    WHERE source_id IN (${regulationSourceId}, ${projectSourceId}) AND is_current = true
+  `;
+
+  const scope = versions.map((v) => ({
+    sourceId: v.source_id,
+    sourceVersionId: v.id,
+    role: (v.source_id === regulationSourceId ? 'governing' : 'project') as 'governing' | 'project',
+    title: v.source_id === regulationSourceId ? 'UAE Fire and Life Safety Code of Practice 2018' : 'Evacuation Plan – Tower A',
+    version: v.version,
+    pages: v.pages,
+    effectiveDate: v.source_id === regulationSourceId ? new Date('2018-01-01') : null,
+    tags: v.source_id === regulationSourceId ? ['regulation', 'code'] : ['project'],
+    promoted: true,
+    superseded: false,
+  }));
+
+  if (scope.length < 2) return;
+
+  for (const entry of scope) {
+    await sql`
+      INSERT INTO consultation_sources (id, consultation_id, source_id, source_version_id, workspace_id, role)
+      VALUES (${newId()}, ${consultationId}, ${entry.sourceId}, ${entry.sourceVersionId}, ${ctx.workspaceId}, ${entry.role})
+      ON CONFLICT DO NOTHING
+    `;
+  }
+
+  const question = 'Does the uploaded evacuation plan comply with the UAE Fire and Life Safety Code? Give me the key gaps.';
+  const userMessageId = newId();
+  const assistantMessageId = newId();
+  const reviewId = newId();
+
+  await sql`
+    INSERT INTO messages (id, consultation_id, organization_id, workspace_id, role, author_user_id, text, task_mode, answer_style)
+    VALUES (${userMessageId}, ${consultationId}, ${ctx.organizationId}, ${ctx.workspaceId}, 'user', ${ownerId},
+            ${question}, 'check_compliance', 'optimal')
+  `;
+  await sql`
+    INSERT INTO compliance_reviews (id, consultation_id, organization_id, workspace_id, status, project_source_ids,
+                                    governing_source_ids, created_by_user_id)
+    VALUES (${reviewId}, ${consultationId}, ${ctx.organizationId}, ${ctx.workspaceId}, 'running',
+            ${JSON.stringify([projectSourceId])}::jsonb, ${JSON.stringify([regulationSourceId])}::jsonb, ${ownerId})
+  `;
+
+  const review = await runComplianceReview(
+    ctx as never,
+    {
+      repo: new RetrievalRepository(db),
+      embedder: new DeterministicEmbeddingProvider(),
+      chat: new DeterministicChatProvider(),
+    },
+    scope,
+    {
+      task: 'check_compliance',
+      answerStyle: 'optimal',
+      knowledgeOnly: true,
+      askWhenUncertain: true,
+      generalModelFallback: false,
+      minimumEvidenceThreshold: 0.3,
+      consultantName: 'Ayumi',
+      locale: 'en',
+      idFactory: newId,
+      nonce: newId(),
+      scopeNote: 'Fire and life safety review of the Tower A evacuation plan.',
+    },
+  );
+
+  const consultations = new ConsultationRepository(db);
+  await consultations.saveCitations(
+    ctx as never,
+    review.citations.map((c) => ({
+      id: c.citationId,
+      reviewId,
+      messageId: assistantMessageId,
+      sourceId: c.sourceId,
+      sourceVersionId: c.sourceVersionId,
+      sourceSha256: c.sourceSha256,
+      documentTitle: c.documentTitle,
+      documentType: c.documentType,
+      pageNumber: c.pageNumber,
+      sheetName: c.sheetName,
+      cellRange: c.cellRange,
+      slideNumber: c.slideNumber,
+      shapeName: c.shapeName,
+      chapter: c.chapter,
+      section: c.section,
+      clause: c.clause,
+      headingPath: c.headingPath,
+      paragraphIndex: c.paragraphIndex,
+      charStart: c.charStart,
+      charEnd: c.charEnd,
+      urlFragment: c.urlFragment,
+      boundingBoxes: c.boundingBoxes,
+      supportingExcerpt: c.supportingExcerpt,
+      retrievalScore: c.retrievalScore,
+      rerankScore: c.rerankScore,
+      entailment: c.entailment,
+      verified: c.verified,
+      verificationMethod: c.verificationMethod,
+      effectiveDate: c.effectiveDate ? new Date(c.effectiveDate) : null,
+    })),
+  );
+
+  await consultations.saveRequirements(
+    ctx as never,
+    reviewId,
+    review.requirements.map((r, index) => ({
+      id: r.requirementId,
+      sourceId: r.sourceId,
+      sourceVersionId: r.sourceVersionId,
+      sectionId: null,
+      reference: r.reference,
+      title: r.title,
+      obligationText: r.obligationText,
+      modality: r.modality,
+      citationId: r.citationId,
+      exceptions: r.exceptions,
+      crossReferences: r.crossReferences,
+      ordinal: index,
+    })),
+  );
+
+  await consultations.saveFindings(
+    ctx as never,
+    reviewId,
+    review.findings.map((f) => ({
+      id: f.findingId,
+      requirementId: f.requirementId,
+      result: f.result,
+      risk: f.risk,
+      finding: f.finding,
+      projectEvidenceCitationIds: f.projectEvidenceCitationIds,
+      governingCitationIds: f.governingCitationIds,
+      missingEvidence: f.missingEvidence,
+      conflicts: f.conflicts,
+      recommendedAction: f.recommendedAction,
+      confidence: f.confidence,
+    })),
+  );
+
+  await sql`
+    INSERT INTO messages (id, consultation_id, organization_id, workspace_id, role, text, task_mode, answer_style, answer)
+    VALUES (${assistantMessageId}, ${consultationId}, ${ctx.organizationId}, ${ctx.workspaceId}, 'assistant',
+            ${review.answer.headline}, 'check_compliance', 'optimal', ${JSON.stringify(review.answer)}::jsonb)
+  `;
+
+  const total = review.requirements.length || 1;
+  await sql`
+    UPDATE compliance_reviews SET status = 'complete', message_id = ${assistantMessageId},
+      requirements_total = ${review.requirements.length}, compliant_count = ${review.counts.compliant},
+      non_compliant_count = ${review.counts.nonCompliant}, needs_evidence_count = ${review.counts.needsEvidence},
+      not_assessed_count = ${review.counts.notAssessed}, evidence_coverage = ${review.answer.coverage.score},
+      confidence = ${review.answer.confidence.overall}, risk_level = ${review.answer.riskLevel}
+    WHERE id = ${reviewId}
+  `;
+  await sql`
+    UPDATE consultations SET compliance_score = ${(review.counts.compliant / total) * 100},
+      last_message_at = now(), task_mode = 'check_compliance' WHERE id = ${consultationId}
+  `;
+
+  console.log(
+    `  review: ${review.requirements.length} requirement(s) — ${review.counts.compliant} met, ` +
+      `${review.counts.nonCompliant} not met, ${review.counts.needsEvidence} awaiting evidence`,
+  );
+}
 
 const INGEST_STAGES = [
   ['malware_scan', 'Malware scan'],

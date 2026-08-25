@@ -49,6 +49,18 @@ test.describe('@visual primary screens', () => {
     if (await first.isVisible().catch(() => false)) {
       await first.click();
       await waitForSettled(page);
+
+      // The transcript auto-scrolls to the newest message, which puts the answer's own
+      // header above the fold. Bring the last answer's top into view so the screenshot
+      // shows the verdict rather than the middle of a citation.
+      const answer = page.locator('[data-answer-root]').last();
+      if (await answer.isVisible().catch(() => false)) {
+        // Align the answer's TOP, not the nearest edge: the verdict and headline are what
+        // the screenshot needs to show, and a long evidence table would otherwise leave
+        // the frame parked in the middle of a citation.
+        await answer.evaluate((el) => el.scrollIntoView({ block: 'start', behavior: 'instant' }));
+        await page.waitForTimeout(400);
+      }
     }
     await capture(page, testInfo.project.name, '04-consult-now');
   });

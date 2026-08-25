@@ -273,17 +273,20 @@ export function SegmentedControl({
           value={option.value}
           title={option.hint}
           className={cn(
-            'inline-flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap',
+            // `min-w-0` lets a segment shrink below its content width; the label itself
+            // carries the truncation, because `truncate` on a flex container has no
+            // effect on a child element's text.
+            'inline-flex min-w-0 flex-1 items-center justify-center gap-1.5',
             'rounded-[var(--uxe-radius-control)] font-semibold transition-all',
             'duration-[var(--uxe-duration)] ease-[var(--uxe-ease)]',
             'focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--uxe-cobalt)]',
-            size === 'sm' ? 'h-8 px-2.5 text-[13px]' : 'h-9 px-3.5 text-[13px]',
+            size === 'sm' ? 'h-8 px-2 text-[12.5px]' : 'h-9 px-3.5 text-[13px]',
             'data-[state=off]:text-[var(--uxe-text-secondary)] data-[state=off]:hover:bg-[var(--uxe-surface-hover)]',
             'data-[state=on]:bg-[var(--uxe-cobalt)] data-[state=on]:text-white data-[state=on]:shadow-[var(--uxe-shadow-sm)]',
           )}
         >
           {option.icon && <span aria-hidden className="flex shrink-0">{option.icon}</span>}
-          {option.label}
+          <span className="truncate">{option.label}</span>
         </ToggleGroupPrimitive.Item>
       ))}
     </ToggleGroupPrimitive.Root>

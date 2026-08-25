@@ -59,7 +59,7 @@ export function AnswerView({
   const decisive = useMemo(() => pickDecisive(answer, style === 'yes_no' ? 3 : 6), [answer, style]);
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4" data-answer-root>
       {answer.injectionWarnings.length > 0 && <InjectionWarning warnings={answer.injectionWarnings} />}
 
       <DecisionHeader answer={answer} style={style} />
