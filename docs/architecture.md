@@ -17,14 +17,14 @@ flowchart TB
 
   subgraph Edge["Cloudflare Workers"]
     API["API worker<br/>Hono 4 · Zod 4<br/>auth · tenancy · retrieval · jobs"]
-    RL["Rate limiter<br/>Durable Object"]
-    Q["Queues<br/>uxe-jobs · uxe-jobs-dlq"]
+    RL["Rate limiter<br/>Workers KV"]
+    Q["Cron trigger<br/>drains processing_jobs"]
   end
 
   subgraph Data
     HD["Hyperdrive<br/>pooling + cache"]
     PG[("PostgreSQL 16<br/>pgvector 0.8<br/>44 tables")]
-    R2O[("R2: originals<br/>immutable bytes")]
+    R2O[("R2 (S3 API): originals<br/>immutable bytes")]
     R2A[("R2: artifacts<br/>reports · corrected editions")]
   end
 
@@ -34,8 +34,7 @@ flowchart TB
 
   WEB -- "same-site session cookie<br/>+ double-submit CSRF" --> API
   API --> RL
-  API --> Q
-  Q -- "consumer" --> API
+  Q -- "every minute" --> API
   API --> HD --> PG
   API --> R2O
   API --> R2A

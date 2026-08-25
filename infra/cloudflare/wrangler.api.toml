@@ -2,15 +2,18 @@
 # UXE Consulting AI — API worker
 #
 # The Hono app in apps/api is runtime-agnostic: the same module serves Node in
-# development and this Worker in production. Nothing in the request path reaches for
-# process.env, so the bindings below are the only configuration surface.
+# development and this Worker in production. apps/api/src/worker.ts is the only
+# runtime-specific file — it turns bindings into configuration and drains the job
+# queue on a schedule.
 #
-# Deploy:  npx wrangler deploy --config infra/cloudflare/wrangler.api.toml --env production
+# Deploy:  npx wrangler deploy --config infra/cloudflare/wrangler.api.toml --env staging
 # ---------------------------------------------------------------------------
 
 name = "uxe-api"
 main = "../../apps/api/src/worker.ts"
 compatibility_date = "2026-06-01"
+# The app uses node:crypto-backed APIs through WebCrypto and postgres-js, both of which
+# need the Node compatibility layer.
 compatibility_flags = ["nodejs_compat"]
 workers_dev = false
 minify = true
@@ -28,9 +31,14 @@ mode = "smart"
 APP_ENV = "production"
 LOG_FORMAT = "json"
 LOG_LEVEL = "info"
-STORAGE_DRIVER = "r2"
+# R2 is reached over its S3-compatible API with an access key pair, which is what the
+# storage driver implements and what the integration suite exercises.
+STORAGE_DRIVER = "s3"
+S3_REGION = "auto"
 EMAIL_DRIVER = "resend"
-RATE_LIMIT_DRIVER = "durable"
+# KV is eventually consistent, which is the documented trade for this limiter. Anything
+# needing exactness uses the database counter instead.
+RATE_LIMIT_DRIVER = "kv"
 OTEL_SERVICE_NAME = "uxe-api"
 
 # ---------------------------------------------------------------------------
@@ -38,42 +46,38 @@ OTEL_SERVICE_NAME = "uxe-api"
 # ---------------------------------------------------------------------------
 [env.staging]
 name = "uxe-api-staging"
+workers_dev = true
 
 [env.staging.vars]
 APP_ENV = "staging"
 LOG_LEVEL = "debug"
+LOG_FORMAT = "json"
+STORAGE_DRIVER = "s3"
+S3_REGION = "auto"
+S3_BUCKET_ORIGINALS = "uxe-originals-staging"
+S3_BUCKET_ARTIFACTS = "uxe-artifacts-staging"
+EMAIL_DRIVER = "resend"
+RATE_LIMIT_DRIVER = "kv"
+OTEL_SERVICE_NAME = "uxe-api-staging"
 PUBLIC_APP_URL = "https://staging.uxe.example"
 PUBLIC_API_URL = "https://api-staging.uxe.example"
 CORS_ALLOWED_ORIGINS = "https://staging.uxe.example"
 DOCUMENT_WORKER_URL = "https://worker-staging.internal.uxe.example"
 
-[[env.staging.r2_buckets]]
-binding = "ORIGINALS"
-bucket_name = "uxe-originals-staging"
-
-[[env.staging.r2_buckets]]
-binding = "ARTIFACTS"
-bucket_name = "uxe-artifacts-staging"
-
+# Created with: wrangler hyperdrive create uxe-staging --connection-string=...
 [[env.staging.hyperdrive]]
 binding = "HYPERDRIVE"
-# Created with: wrangler hyperdrive create uxe-staging --connection-string=...
 id = "REPLACE_WITH_STAGING_HYPERDRIVE_ID"
 
-[[env.staging.queues.producers]]
-binding = "JOBS"
-queue = "uxe-jobs-staging"
+# Created with: wrangler kv namespace create uxe-rate-limit-staging
+[[env.staging.kv_namespaces]]
+binding = "RATE_LIMIT_KV"
+id = "REPLACE_WITH_STAGING_KV_NAMESPACE_ID"
 
-[[env.staging.queues.consumers]]
-queue = "uxe-jobs-staging"
-max_batch_size = 5
-max_batch_timeout = 10
-max_retries = 3
-dead_letter_queue = "uxe-jobs-staging-dlq"
-
-[[env.staging.durable_objects.bindings]]
-name = "RATE_LIMITER"
-class_name = "RateLimiterDurableObject"
+# Jobs are rows claimed with FOR UPDATE SKIP LOCKED, so overlapping runs are safe and a
+# run that ends mid-job leaves it to be reclaimed after its stale window.
+[env.staging.triggers]
+crons = ["* * * * *"]
 
 # ---------------------------------------------------------------------------
 # Production
@@ -84,6 +88,14 @@ name = "uxe-api"
 [env.production.vars]
 APP_ENV = "production"
 LOG_LEVEL = "info"
+LOG_FORMAT = "json"
+STORAGE_DRIVER = "s3"
+S3_REGION = "auto"
+S3_BUCKET_ORIGINALS = "uxe-originals"
+S3_BUCKET_ARTIFACTS = "uxe-artifacts"
+EMAIL_DRIVER = "resend"
+RATE_LIMIT_DRIVER = "kv"
+OTEL_SERVICE_NAME = "uxe-api"
 PUBLIC_APP_URL = "https://app.uxe.example"
 PUBLIC_API_URL = "https://api.uxe.example"
 CORS_ALLOWED_ORIGINS = "https://app.uxe.example"
@@ -93,44 +105,27 @@ DOCUMENT_WORKER_URL = "https://worker.internal.uxe.example"
 pattern = "api.uxe.example"
 custom_domain = true
 
-[[env.production.r2_buckets]]
-binding = "ORIGINALS"
-bucket_name = "uxe-originals"
-
-[[env.production.r2_buckets]]
-binding = "ARTIFACTS"
-bucket_name = "uxe-artifacts"
-
 [[env.production.hyperdrive]]
 binding = "HYPERDRIVE"
 id = "REPLACE_WITH_PRODUCTION_HYPERDRIVE_ID"
 
-[[env.production.queues.producers]]
-binding = "JOBS"
-queue = "uxe-jobs"
+[[env.production.kv_namespaces]]
+binding = "RATE_LIMIT_KV"
+id = "REPLACE_WITH_PRODUCTION_KV_NAMESPACE_ID"
 
-[[env.production.queues.consumers]]
-queue = "uxe-jobs"
-max_batch_size = 5
-max_batch_timeout = 10
-max_retries = 3
-dead_letter_queue = "uxe-jobs-dlq"
-
-[[env.production.durable_objects.bindings]]
-name = "RATE_LIMITER"
-class_name = "RateLimiterDurableObject"
-
-[[migrations]]
-tag = "v1"
-new_sqlite_classes = ["RateLimiterDurableObject"]
+[env.production.triggers]
+crons = ["* * * * *"]
 
 # --- Secrets ---------------------------------------------------------------
 # Never in this file. Set with:
-#   wrangler secret put SESSION_SECRET --env production
-#   wrangler secret put CSRF_SECRET --env production
-#   wrangler secret put ENCRYPTION_KEY --env production
-#   wrangler secret put DOCUMENT_WORKER_TOKEN --env production
-#   wrangler secret put RESEND_API_KEY --env production
-#   wrangler secret put ANTHROPIC_API_KEY --env production      # optional
-#   wrangler secret put OAUTH_GOOGLE_CLIENT_SECRET --env production
-#   wrangler secret put OAUTH_MICROSOFT_CLIENT_SECRET --env production
+#   wrangler secret put SESSION_SECRET --env staging
+#   wrangler secret put CSRF_SECRET --env staging
+#   wrangler secret put ENCRYPTION_KEY --env staging          # exactly 32 bytes, base64
+#   wrangler secret put S3_ENDPOINT --env staging             # https://<account>.r2.cloudflarestorage.com
+#   wrangler secret put S3_ACCESS_KEY_ID --env staging
+#   wrangler secret put S3_SECRET_ACCESS_KEY --env staging
+#   wrangler secret put DOCUMENT_WORKER_TOKEN --env staging
+#   wrangler secret put RESEND_API_KEY --env staging
+#   wrangler secret put ANTHROPIC_API_KEY --env staging       # optional
+#   wrangler secret put OAUTH_GOOGLE_CLIENT_SECRET --env staging
+#   wrangler secret put OAUTH_MICROSOFT_CLIENT_SECRET --env staging

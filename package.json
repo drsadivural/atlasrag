@@ -31,6 +31,7 @@
     "db:migrate": "pnpm --filter @uxe/db migrate",
     "db:seed": "pnpm --filter @uxe/db seed",
     "db:reset": "pnpm --filter @uxe/db reset",
+    "smoke": "node scripts/smoke.mjs",
     "docker:db": "docker compose -f infra/docker-compose.yml up -d postgres",
     "worker:dev": "cd services/document-worker && .venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8099 --reload",
     "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build"

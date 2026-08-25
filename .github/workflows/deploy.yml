@@ -77,10 +77,16 @@ jobs:
           docker build -f infra/document-worker/Dockerfile -t "$IMAGE" .
           docker push "$IMAGE"
 
+      # Signs in, reads an answer, and asserts its citation re-locates in the stored
+      # source. A liveness ping would pass against a deployment whose evidence path is
+      # broken, which is the only failure that matters here.
       - name: Smoke test
-        run: |
-          curl --fail --silent --show-error https://api-staging.uxe.example/api/v1/health | tee /dev/stderr | grep -q '"status":"ok"'
-          curl --fail --silent --show-error --output /dev/null https://staging.uxe.example
+        run: pnpm smoke
+        env:
+          SMOKE_API: https://api-staging.uxe.example/api/v1
+          SMOKE_WEB: https://staging.uxe.example
+          SMOKE_EMAIL: ${{ secrets.SMOKE_EMAIL }}
+          SMOKE_PASSWORD: ${{ secrets.SMOKE_PASSWORD }}
 
   # Production requires a human approval on the `production` environment.
   production:
@@ -138,9 +144,12 @@ jobs:
           docker push "$IMAGE"
 
       - name: Smoke test
-        run: |
-          curl --fail --silent --show-error https://api.uxe.example/api/v1/health | grep -q '"status":"ok"'
-          curl --fail --silent --show-error --output /dev/null https://app.uxe.example
+        run: pnpm smoke
+        env:
+          SMOKE_API: https://api.uxe.example/api/v1
+          SMOKE_WEB: https://app.uxe.example
+          SMOKE_EMAIL: ${{ secrets.SMOKE_EMAIL }}
+          SMOKE_PASSWORD: ${{ secrets.SMOKE_PASSWORD }}
 
       - name: Roll back on a failed smoke test
         if: failure()

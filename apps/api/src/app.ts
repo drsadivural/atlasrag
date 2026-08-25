@@ -57,7 +57,7 @@ import { storageRoutes } from './routes/storage.js';
 import { ConsoleEmailDriver, ResendEmailDriver, type EmailDriver } from './services/email.js';
 import { FilesystemStorage, S3Storage, type StorageDriver } from './services/storage.js';
 import { DocumentWorkerClient } from './services/document-worker.js';
-import { MemoryRateLimiter } from './services/rate-limit.js';
+import { MemoryRateLimiter, type RateLimiter } from './services/rate-limit.js';
 import { buildProviders } from './services/providers.js';
 
 export interface BuildOptions {
@@ -67,6 +67,12 @@ export interface BuildOptions {
   storage?: StorageDriver;
   email?: EmailDriver;
   logger?: Logger;
+  /**
+   * Supplied by the Workers entry, which binds a KV-backed limiter. Without it the app
+   * uses the in-process limiter, which is correct for a single Node process and is
+   * per-isolate — that is, useless — on Workers.
+   */
+  rateLimiter?: RateLimiter;
 }
 
 export interface BuiltApp {
@@ -158,7 +164,7 @@ export function buildApp(options: BuildOptions = {}): BuiltApp {
       env.DOCUMENT_WORKER_TOKEN,
       env.DOCUMENT_WORKER_TIMEOUT_MS,
     ),
-    rateLimiter: new MemoryRateLimiter(),
+    rateLimiter: options.rateLimiter ?? new MemoryRateLimiter(),
     embeddings: providers.embeddings,
     chat: providers.chat,
   };

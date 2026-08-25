@@ -168,7 +168,8 @@ attempt. Each is asserted to be handled, not to crash.
 ## Deployment
 
 - **Web** — Cloudflare Workers Static Assets
-- **API** — Cloudflare Workers, with R2, Queues, Hyperdrive and a Durable Object rate limiter
+- **API** — Cloudflare Workers, with Hyperdrive for PostgreSQL, R2 over its S3 API, a KV-backed
+  rate limiter, and a one-minute cron that drains the job queue
 - **Document worker** — a container on a private network, no inbound internet, no egress
 - **Database** — managed PostgreSQL 16 with pgvector
 
@@ -176,6 +177,9 @@ attempt. Each is asserted to be handled, not to crash.
 pnpm exec wrangler deploy --config infra/cloudflare/wrangler.api.toml --env production
 pnpm exec wrangler deploy --config infra/cloudflare/wrangler.web.toml --env production
 docker build -f infra/document-worker/Dockerfile -t $REGISTRY/uxe-document-worker:$SHA .
+
+# Then prove it works, rather than assuming it does
+SMOKE_API=https://api.uxe.example/api/v1 SMOKE_WEB=https://app.uxe.example pnpm smoke
 ```
 
 Migrations follow expand → migrate → contract, so a rollback never lands on a schema it

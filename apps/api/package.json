@@ -18,13 +18,13 @@
     "@uxe/db": "workspace:*",
     "@uxe/observability": "workspace:*",
     "@uxe/rag": "workspace:*",
+    "dotenv": "17.4.2",
     "hono": "4.13.4",
-    "zod": "4.4.3",
-    "dotenv": "17.4.2"
+    "zod": "4.4.3"
   },
   "devDependencies": {
-    "@uxe/config": "workspace:*",
     "@types/node": "22.19.2",
+    "@uxe/config": "workspace:*",
     "tsx": "4.23.12",
     "typescript": "5.9.3",
     "wrangler": "4.125.0"

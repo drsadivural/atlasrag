@@ -24,7 +24,7 @@ store is unreachable.
 | ------------------------------------------ | ------------------------ | ----------------------------------------------------------- |
 | `uxe_job_failures_total` by kind           | > 5% of runs over 15 min | Ingestion or answering is broken                            |
 | `uxe_job_duration_ms` p95, `source_ingest` | > 300 s                  | Worker starved or a pathological document                   |
-| Queue depth                                | > 100 for 10 min         | Workers are not keeping up                                  |
+| `processing_jobs` queued depth             | > 100 for 10 min         | The cron drain is not keeping up                            |
 | `uxe_citation_verification_rate`           | drops below 1.0          | Extraction drift — the most serious signal the system emits |
 | `uxe_cross_tenant_denials_total`           | any non-zero rate        | Somebody is probing another tenant's identifiers            |
 | `uxe_http_request_duration_ms` 5xx rate    | > 1% over 5 min          | Standard availability alert                                 |

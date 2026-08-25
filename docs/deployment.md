@@ -6,15 +6,15 @@ implied.
 
 ## Topology
 
-| Component       | Runs on                                          | Why                                                    |
-| --------------- | ------------------------------------------------ | ------------------------------------------------------ |
-| Web             | Cloudflare Workers Static Assets                 | Static bundle, no server rendering, global edge        |
-| API             | Cloudflare Workers                               | Runtime-agnostic Hono app; also runs on Node unchanged |
-| Rate limiter    | Durable Object                                   | Consistent counters across the edge                    |
-| Jobs            | Cloudflare Queues (+ dead-letter)                | Long work off the request path                         |
-| Database        | Managed PostgreSQL 16 + pgvector, via Hyperdrive | pgvector for retrieval; Hyperdrive for pooling         |
-| Objects         | R2: `uxe-originals`, `uxe-artifacts`             | Immutable originals, generated artifacts               |
-| Document worker | Container on a private network                   | Native parsers cannot run on an isolate                |
+| Component       | Runs on                                              | Why                                                                 |
+| --------------- | ---------------------------------------------------- | ------------------------------------------------------------------- |
+| Web             | Cloudflare Workers Static Assets                     | Static bundle, no server rendering, global edge                     |
+| API             | Cloudflare Workers                                   | Runtime-agnostic Hono app; also runs on Node unchanged              |
+| Rate limiter    | Workers KV                                           | Eventually consistent, which is the documented trade for a limiter  |
+| Jobs            | Cron trigger draining `processing_jobs`              | Claimed with `FOR UPDATE SKIP LOCKED`, so overlapping runs are safe |
+| Database        | Managed PostgreSQL 16 + pgvector, via Hyperdrive     | pgvector for retrieval; Hyperdrive for pooling                      |
+| Objects         | R2 over its S3 API: `uxe-originals`, `uxe-artifacts` | Immutable originals, generated artifacts                            |
+| Document worker | Container on a private network                       | Native parsers cannot run on an isolate                             |
 
 ## One-time setup
 
@@ -25,11 +25,9 @@ wrangler r2 bucket create uxe-artifacts
 wrangler r2 bucket create uxe-originals-staging
 wrangler r2 bucket create uxe-artifacts-staging
 
-# Queues
-wrangler queues create uxe-jobs
-wrangler queues create uxe-jobs-dlq
-wrangler queues create uxe-jobs-staging
-wrangler queues create uxe-jobs-staging-dlq
+# KV namespace for the rate limiter
+wrangler kv namespace create uxe-rate-limit
+wrangler kv namespace create uxe-rate-limit-staging
 
 # Hyperdrive — put the returned id into infra/cloudflare/wrangler.api.toml
 wrangler hyperdrive create uxe-production --connection-string="$PRODUCTION_DATABASE_URL"
