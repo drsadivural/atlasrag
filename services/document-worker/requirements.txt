@@ -1,0 +1,20 @@
+# Pinned exactly for reproducible container builds.
+fastapi==0.141.1
+uvicorn[standard]==0.52.4
+python-multipart==0.0.32
+pydantic==2.13.4
+pydantic-settings==2.15.0
+
+# Document processing
+pymupdf==1.28.2
+pdfplumber==0.11.10
+python-docx==1.2.0
+openpyxl==3.1.5
+python-pptx==1.0.2
+pikepdf==10.12.0
+Pillow==12.3.0
+pytesseract==0.3.13
+
+# Runtime
+httpx==0.28.1
+structlog==26.1.0
