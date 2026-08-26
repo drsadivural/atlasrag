@@ -122,3 +122,35 @@ AA in both themes.
 
 These are asserted, not asserted-to: `pnpm test:a11y` scans every route with axe at WCAG 2.2
 AA and drives the product with the keyboard alone.
+
+## The sign-in backdrop
+
+The signed-out screens stand on a photograph of the same desert twelve hours apart, chosen
+by the viewer's clock: daylight from 06:00 to 18:00, night otherwise. The app's light/dark
+setting says how somebody wants to read a screen; it says nothing about whether the sun is
+up, so the two are kept separate.
+
+Three rules make it hold together:
+
+- **The scrim carries the contrast**, heaviest at the top where the wordmark and the
+  promise sit and thinnest at the bottom where nothing but sand is behind Ayumi. Text is
+  never left to depend on which part of the dunes happens to fall behind it.
+- **Ink is pinned to the photograph, not the theme.** Dark over the day frame, light over
+  the night one, set as `--uxe-text` and `--uxe-text-secondary` on the subtree. A theme
+  that disagreed with the sky would otherwise produce light text on bright sand half the
+  time.
+- **Only what sits directly on the photograph takes that ink.** The proof cards paint
+  their own light surface and stay outside the override — night text on a white card is
+  text the wrong way round, which is exactly what the first attempt produced.
+
+`apps/web/src/lib/backdrop.ts` holds the choice and both palettes; the boundaries are
+covered in `tests/unit/backdrop.test.ts`.
+
+## Settings tabs
+
+The sections read as a horizontal tab strip: an underline carries the selection so the
+label keeps its weight and the strip does not reflow as the current tab changes. They are
+links in a `nav`, not an ARIA `tablist` — each one is a route, and `role="tab"` would
+promise panel switching that a navigation does not do. `NavLink` supplies
+`aria-current="page"`. The strip scrolls within itself on a narrow screen so the page
+never scrolls sideways.

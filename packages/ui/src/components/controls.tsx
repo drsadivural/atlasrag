@@ -321,7 +321,11 @@ export function SegmentedControl({
             // `min-w-0` lets a segment shrink below its content width; the label itself
             // carries the truncation, because `truncate` on a flex container has no
             // effect on a child element's text.
-            'inline-flex min-w-0 flex-1 items-center justify-center gap-1.5',
+            'inline-flex min-w-0 items-center justify-center gap-1.5',
+            // Equal widths only when the control fills its container. On an inline
+            // control, `flex-1` sizes every segment to the narrowest one and truncates
+            // the longest label even with the whole row to spare.
+            full && 'flex-1',
             'rounded-[var(--uxe-radius-control)] font-semibold transition-all',
             'duration-[var(--uxe-duration)] ease-[var(--uxe-ease)]',
             'focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--uxe-cobalt)]',

@@ -139,6 +139,31 @@ describe('SegmentedControl', () => {
     expect(within(group).getByRole('radio', { name: 'Yes/No' })).not.toBeChecked();
   });
 
+  it('sizes segments to their labels unless asked to fill the row', () => {
+    // `flex-1` makes every segment as wide as the narrowest, which truncates the longest
+    // label even with room to spare. It belongs to the fill-the-row mode only.
+    const { rerender } = render(
+      <SegmentedControl
+        options={OPTIONS}
+        value="optimal"
+        onValueChange={() => {}}
+        ariaLabel="Answer style"
+      />,
+    );
+    expect(screen.getByRole('radio', { name: 'Details' }).className).not.toContain('flex-1');
+
+    rerender(
+      <SegmentedControl
+        options={OPTIONS}
+        value="optimal"
+        onValueChange={() => {}}
+        ariaLabel="Answer style"
+        full
+      />,
+    );
+    expect(screen.getByRole('radio', { name: 'Details' }).className).toContain('flex-1');
+  });
+
   it('reports the new value when another mode is chosen', async () => {
     const onChange = vi.fn();
     render(

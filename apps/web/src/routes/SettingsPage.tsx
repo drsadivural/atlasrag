@@ -69,22 +69,27 @@ export function SettingsPage() {
     <div className="mx-auto w-full max-w-[1200px] p-4 sm:p-6">
       <PageHeader title={t('settings.title')} />
 
-      <div className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-[220px_minmax(0,1fr)]">
-        <nav
-          aria-label={t('settings.title')}
-          className="lg:sticky lg:top-[calc(var(--uxe-header-height)+1.5rem)] lg:self-start"
-        >
-          <ul className="flex gap-1 overflow-x-auto lg:flex-col">
+      <div className="mt-5 flex flex-col gap-5">
+        {/*
+          Tabs, not a tablist. Each one is a route, so they stay links and NavLink marks
+          the current one with aria-current; ARIA tabs would promise panel switching that
+          a navigation does not do.
+        */}
+        <nav aria-label={t('settings.title')} className="border-b border-[var(--uxe-border)]">
+          {/* Scrolls within itself on a narrow screen, so the page never scrolls sideways. */}
+          <ul className="-mb-px flex gap-1 overflow-x-auto">
             {SECTIONS.map((entry) => (
               <li key={entry.key}>
                 <NavLink
                   to={`/settings/${entry.key}`}
                   className={({ isActive }) =>
                     cn(
-                      'flex items-center gap-2.5 rounded-[var(--uxe-radius-control-lg)] px-3 py-2.5 text-[14px] font-medium whitespace-nowrap transition-colors',
+                      'flex items-center gap-2 border-b-2 px-3 py-2.5 text-[14px] font-medium whitespace-nowrap transition-colors',
+                      // The underline carries the selection, so the label keeps its weight
+                      // and the strip does not reflow as the current tab changes.
                       isActive
-                        ? 'bg-[var(--uxe-surface-selected)] text-[var(--uxe-cobalt)]'
-                        : 'text-[var(--uxe-text-secondary)] hover:bg-[var(--uxe-surface-hover)]',
+                        ? 'border-[var(--uxe-cobalt)] text-[var(--uxe-cobalt)]'
+                        : 'border-transparent text-[var(--uxe-text-secondary)] hover:border-[var(--uxe-border-strong)] hover:text-[var(--uxe-text)]',
                     )
                   }
                 >

@@ -16,6 +16,7 @@ import { ApiError, api, setCsrfToken } from '../lib/api.js';
 import { useSession } from '../lib/session.js';
 import { useI18n } from '../lib/i18n.js';
 import { Ayumi, BrandLockup } from '../components/Brand.js';
+import { BACKDROPS, timeOfDay } from '../lib/backdrop.js';
 
 type Stage = 'credentials' | 'mfa' | 'verify_email';
 
@@ -333,15 +334,29 @@ export function LoginPage() {
 
 function BrandPanel() {
   const { t } = useI18n();
+  // Read once per mount. Nobody sits on a sign-in screen across a sunrise, and a ticking
+  // clock here would redraw a full-bleed photograph for no one's benefit.
+  const backdrop = BACKDROPS[timeOfDay()];
 
   return (
-    <section
-      className={cn(
-        'relative overflow-hidden px-6 pt-8 sm:px-10 lg:px-14 lg:pt-12',
-        'bg-[linear-gradient(160deg,#FFFFFF_0%,#F4F7FF_55%,#EEF2FF_100%)]',
-        'dark:bg-[linear-gradient(160deg,#0E1320_0%,#131829_55%,#161D33_100%)]',
-      )}
-    >
+    <section className="relative overflow-hidden px-6 pt-8 sm:px-10 lg:px-14 lg:pt-12">
+      <img
+        src={backdrop.image}
+        alt=""
+        aria-hidden
+        fetchPriority="high"
+        decoding="async"
+        className="pointer-events-none absolute inset-0 h-full w-full object-cover select-none"
+        draggable={false}
+      />
+      {/* Carries the contrast, so the wordmark and the promise never depend on which part
+          of the dunes happens to sit behind them. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0"
+        style={{ backgroundImage: backdrop.scrim }}
+      />
+
       {/* Decorative ground: soft brand glow, kept behind everything and hidden from AT. */}
       <div
         aria-hidden
@@ -353,33 +368,45 @@ function BrandPanel() {
       />
 
       <div className="relative flex h-full flex-col">
-        <div>
-          <BrandLockup size="lg" className="max-lg:!text-[28px]" />
-          <p className="mt-3 max-w-xl text-[15px] font-medium text-[var(--uxe-text-secondary)] sm:text-[17px]">
-            {t('app.promise')}
-          </p>
-        </div>
+        {/*
+          Only what sits directly on the photograph takes its ink. The proof cards below
+          paint their own light surface, so they keep the theme's colours — night text on
+          a white card would be text the wrong way round.
+        */}
+        <div
+          style={{
+            ['--uxe-text' as string]: backdrop.text,
+            ['--uxe-text-secondary' as string]: backdrop.textSecondary,
+          }}
+        >
+          <div>
+            <BrandLockup size="lg" className="max-lg:!text-[28px]" />
+            <p className="mt-3 max-w-xl text-[15px] font-medium text-[var(--uxe-text-secondary)] sm:text-[17px]">
+              {t('app.promise')}
+            </p>
+          </div>
 
-        <ul className="mt-8 grid gap-5 sm:grid-cols-3 lg:mt-10">
-          <TrustCue
-            icon={<ShieldCheck className="h-5 w-5" aria-hidden />}
-            tone="info"
-            title={t('auth.enterpriseSecurity')}
-            detail={t('auth.enterpriseSecurityDetail')}
-          />
-          <TrustCue
-            icon={<CheckCircle2 className="h-5 w-5" aria-hidden />}
-            tone="success"
-            title={t('auth.trustedBy')}
-            detail={t('auth.trustedByDetail')}
-          />
-          <TrustCue
-            icon={<Lock className="h-5 w-5" aria-hidden />}
-            tone="violet"
-            title={t('auth.secureConfidential')}
-            detail={t('auth.secureConfidentialDetail')}
-          />
-        </ul>
+          <ul className="mt-8 grid gap-5 sm:grid-cols-3 lg:mt-10">
+            <TrustCue
+              icon={<ShieldCheck className="h-5 w-5" aria-hidden />}
+              tone="info"
+              title={t('auth.enterpriseSecurity')}
+              detail={t('auth.enterpriseSecurityDetail')}
+            />
+            <TrustCue
+              icon={<CheckCircle2 className="h-5 w-5" aria-hidden />}
+              tone="success"
+              title={t('auth.trustedBy')}
+              detail={t('auth.trustedByDetail')}
+            />
+            <TrustCue
+              icon={<Lock className="h-5 w-5" aria-hidden />}
+              tone="violet"
+              title={t('auth.secureConfidential')}
+              detail={t('auth.secureConfidentialDetail')}
+            />
+          </ul>
+        </div>
 
         {/* Ayumi + the floating proof cards. Hidden below `lg` so the sign-in form is the
             first thing a phone user sees. */}

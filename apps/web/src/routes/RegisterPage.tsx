@@ -6,6 +6,7 @@ import { ApiError, api } from '../lib/api.js';
 import { useI18n } from '../lib/i18n.js';
 import { Ayumi, BrandLockup } from '../components/Brand.js';
 import { MIN_PASSWORD_LENGTH } from '@uxe/contracts';
+import { BACKDROPS, timeOfDay } from '../lib/backdrop.js';
 
 export function RegisterPage() {
   const { t } = useI18n();
@@ -23,6 +24,7 @@ export function RegisterPage() {
   // Null until the server answers. It decides whether a confirmation email is part of
   // this deployment's flow, so the page does not have to guess.
   const [done, setDone] = useState<'registered' | 'email_verification_required' | null>(null);
+  const backdrop = BACKDROPS[timeOfDay()];
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -51,9 +53,30 @@ export function RegisterPage() {
   return (
     <div className="min-h-dvh bg-[var(--uxe-bg)]">
       <div className="mx-auto grid min-h-dvh w-full max-w-[1600px] grid-cols-1 lg:grid-cols-[55fr_45fr]">
-        <section className="relative hidden overflow-hidden bg-[linear-gradient(160deg,#FFFFFF_0%,#F4F7FF_55%,#EEF2FF_100%)] px-14 pt-12 lg:block dark:bg-[linear-gradient(160deg,#0E1320_0%,#131829_55%,#161D33_100%)]">
-          <BrandLockup size="lg" />
-          <p className="mt-3 max-w-xl text-[17px] font-medium text-[var(--uxe-text-secondary)]">
+        {/* The same desert as sign-in, so moving between the two does not change the room. */}
+        <section
+          className="relative hidden overflow-hidden px-14 pt-12 lg:block"
+          style={{
+            ['--uxe-text' as string]: backdrop.text,
+            ['--uxe-text-secondary' as string]: backdrop.textSecondary,
+          }}
+        >
+          <img
+            src={backdrop.image}
+            alt=""
+            aria-hidden
+            decoding="async"
+            className="pointer-events-none absolute inset-0 h-full w-full object-cover select-none"
+            draggable={false}
+          />
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0"
+            style={{ backgroundImage: backdrop.scrim }}
+          />
+
+          <BrandLockup size="lg" className="relative" />
+          <p className="relative mt-3 max-w-xl text-[17px] font-medium text-[var(--uxe-text-secondary)]">
             {t('app.promise')}
           </p>
           <div className="absolute inset-x-0 bottom-0 flex h-[460px] items-end justify-center">
