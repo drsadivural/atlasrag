@@ -98,3 +98,42 @@ followed by `sudo systemctl restart uxe-web`.
 
 E2E 49 passed, accessibility 37 passed, and `pnpm smoke` 10/10, all against
 `https://consultnow.ayonix.com`.
+
+## Putting Cloudflare Access in front of it
+
+The staging hostname is on the public internet and the seeded demo account is documented
+in this repository, so anyone holding the URL can sign in. Access closes that.
+
+```bash
+CLOUDFLARE_API_TOKEN=... bash infra/staging/apply-access.sh
+```
+
+The script is idempotent — it creates the application or updates the existing one — and
+takes its policy from the environment:
+
+| Variable                 | Default                 |
+| ------------------------ | ----------------------- |
+| `ACCESS_HOSTNAME`        | `consultnow.ayonix.com` |
+| `ACCESS_ALLOWED_DOMAINS` | `ayonix.com`            |
+| `ACCESS_ALLOWED_EMAILS`  | `drsadivural@gmail.com` |
+
+**The token needs permissions a default one does not have.** Add both:
+
+- Account → **Access: Apps and Policies** → **Edit**
+- Account → **Access: Organizations, Identity Providers, and Groups** → **Read**
+
+Reading applications succeeds without them, so a token that can list Access apps may
+still fail to create one — that failure is `1010 auth.forbidden`, and the script says so
+rather than leaving you to guess. If the account has never had Zero Trust set up at all,
+that is a one-time step in the dashboard first; no API token can do it.
+
+With no identity provider configured, Access falls back to its own one-time PIN, so an
+allowed address simply receives a code by email.
+
+Once Access is on, anything automated hitting the public hostname meets the login page.
+Either give it a service token with its own policy, or point it at `127.0.0.1:4173` —
+same stack, just upstream of the tunnel:
+
+```bash
+SMOKE_API=http://127.0.0.1:4173/api/v1 SMOKE_WEB=http://127.0.0.1:4173 pnpm smoke
+```
