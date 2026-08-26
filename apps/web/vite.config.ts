@@ -14,6 +14,19 @@ import { fileURLToPath } from 'node:url';
 const apiTarget = process.env.PUBLIC_API_URL ?? 'http://127.0.0.1:8787';
 
 /**
+ * Hostnames this server will answer to, beyond localhost.
+ *
+ * Vite rejects requests whose Host header it does not recognise, which is the right
+ * default — it stops a DNS rebinding attack from reaching a local server. Running behind
+ * a reverse proxy or a tunnel means the Host is the public hostname, so that name has to
+ * be named explicitly rather than by turning the check off.
+ */
+const allowedHosts = (process.env.WEB_ALLOWED_HOSTS ?? '')
+  .split(',')
+  .map((host) => host.trim())
+  .filter(Boolean);
+
+/**
  * Proxy shared by `vite dev` and `vite preview`.
  *
  * Both must present a single origin, because the session cookie is same-origin: a preview
@@ -48,8 +61,14 @@ export default defineConfig(({ mode }) => ({
     port: Number(process.env.WEB_PORT ?? 5173),
     strictPort: true,
     proxy: apiProxy,
+    ...(allowedHosts.length > 0 ? { allowedHosts } : {}),
   },
-  preview: { port: 4173, strictPort: true, proxy: apiProxy },
+  preview: {
+    port: 4173,
+    strictPort: true,
+    proxy: apiProxy,
+    ...(allowedHosts.length > 0 ? { allowedHosts } : {}),
+  },
   build: {
     target: 'es2022',
     sourcemap: mode !== 'production',

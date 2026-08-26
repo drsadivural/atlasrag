@@ -169,6 +169,26 @@ One defect was found and fixed that way: the script called `systemctl` directly,
 so it aborted on any host where systemd is not PID 1. Service control now falls
 back to `pg_ctlcluster` and then to `pg_ctl`.
 
+## Public staging exposure
+
+The browser suites were then run against a public HTTPS origin rather than only against
+loopback, which surfaced two defects that a same-machine run cannot see.
+
+**Vite rejected the proxied Host.** `vite preview` answers only to hostnames it
+recognises — correct, since it stops DNS rebinding from reaching a local server — so
+every request through the tunnel returned 403. Turning the check off would have been the
+wrong fix; `apps/web/vite.config.ts` now takes a `WEB_ALLOWED_HOSTS` list, so the public
+name is named explicitly.
+
+**The E2E and accessibility suites contaminated each other.** Answer depth is persisted
+per consultation. The accessibility suite's keyboard case pressed ArrowRight on the depth
+control and left it on "Details + references", where inline citation chips do not render;
+the functional case that clicks _Open exact page_ then failed on the next run against the
+same database. It had passed against loopback only because that database was reset
+between runs. Both suites now restore the depth they change, and the functional case sets
+the depth it depends on instead of inheriting it. Verified by running accessibility and
+then E2E back to back against the same live database: 37 passed, then 49 passed.
+
 ## Reproducing
 
 ```bash

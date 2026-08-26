@@ -3,6 +3,7 @@ import {
   expect,
   openConsultation,
   openEvidencePanel,
+  setAnswerStyle,
   signIn,
   test,
   waitForSettled,
@@ -131,6 +132,11 @@ test.describe('asking and citing', () => {
     await openConsultation(page, /UAE Fire Code Review/);
     await waitForSettled(page);
 
+    // Inline citation chips render at the Yes/No and Optimal depths; "Details + references"
+    // presents its evidence differently. The depth is persisted per consultation and other
+    // suites change it, so this case asks for the one it is about instead of inheriting it.
+    await setAnswerStyle(page, /^optimal$/i);
+
     const answer = page.locator('[data-answer-root]').last();
     await expect(answer).toBeVisible({ timeout: 30_000 });
 
@@ -171,6 +177,10 @@ test.describe('asking and citing', () => {
       const verdict = (text: string | null) =>
         /\b(YES|NO|UNABLE TO DETERMINE)\b/.exec(text ?? '')?.[0];
       expect(verdict(after)).toBe(verdict(before));
+
+      // The depth is persisted, so leaving it on yes/no would change what the next run
+      // of this suite sees. Put it back.
+      await setAnswerStyle(page, /^optimal$/i);
     }
   });
 

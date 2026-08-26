@@ -65,6 +65,11 @@ test('the answer-style control is operable with the arrow keys', async ({ page }
 
   const after = await group.getByRole('radio', { checked: true }).textContent();
   expect(after).not.toBe(before);
+
+  // The depth is persisted server-side, so a keyboard test that moved it would silently
+  // change what every later run of the functional suite sees. Move it back.
+  await page.keyboard.press('ArrowLeft');
+  await expect(group.getByRole('radio', { checked: true })).toHaveText(before ?? '');
 });
 
 test('a citation can be opened and dismissed without a mouse', async ({ page }) => {

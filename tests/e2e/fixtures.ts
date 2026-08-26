@@ -86,6 +86,33 @@ export async function openEvidencePanel(page: Page): Promise<void> {
   }
 }
 
+/**
+ * Select an answer depth and wait for the answer to re-render at it.
+ *
+ * The choice is persisted per consultation, so a test that asserts on depth-specific
+ * affordances — the inline citation chips only exist at the richer depths — has to set
+ * the depth it needs rather than inherit whatever a previous run left behind.
+ */
+export async function setAnswerStyle(page: Page, name: RegExp): Promise<void> {
+  await openEvidencePanel(page);
+  const styles = page.getByRole('radiogroup', { name: /answer style/i }).first();
+  if (!(await styles.isVisible().catch(() => false))) return;
+
+  const option = styles.getByRole('radio', { name });
+  if ((await option.getAttribute('aria-checked').catch(() => null)) !== 'true') {
+    await option.click();
+    await page.waitForTimeout(1200);
+  }
+
+  // Below 1280px the panel is a drawer over the conversation. Leaving it open would hide
+  // the answer from whatever the caller does next, so put the page back as it was found.
+  const drawer = page.getByRole('dialog').first();
+  if (await drawer.isVisible().catch(() => false)) {
+    await page.keyboard.press('Escape');
+    await drawer.waitFor({ state: 'hidden', timeout: 5_000 }).catch(() => undefined);
+  }
+}
+
 export const test = base.extend<{ authenticatedPage: Page }>({
   authenticatedPage: async ({ page }, use) => {
     await signIn(page);

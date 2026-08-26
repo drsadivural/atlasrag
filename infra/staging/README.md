@@ -45,13 +45,13 @@ prints both options, and the private one is the recommended default:
 
 Exercised end to end on a clean `ubuntu:24.04` host on 2026-08-25:
 
-| Step | Result |
-| --- | --- |
-| Fresh install | PostgreSQL 16.15, pgvector 0.8.6, `uxe_staging` created |
-| Second run (idempotency) | Re-ran clean; `pg_trgm already exists, skipping` |
-| `pnpm --filter @uxe/db migrate` | `applied 4, already present 0` |
-| `pnpm --filter @uxe/db seed` | 7 sources, 5 consultations, 8 audit events |
-| `pnpm smoke` against an API pointed at it | 10/10 checks passed |
+| Step                                      | Result                                                  |
+| ----------------------------------------- | ------------------------------------------------------- |
+| Fresh install                             | PostgreSQL 16.15, pgvector 0.8.6, `uxe_staging` created |
+| Second run (idempotency)                  | Re-ran clean; `pg_trgm already exists, skipping`        |
+| `pnpm --filter @uxe/db migrate`           | `applied 4, already present 0`                          |
+| `pnpm --filter @uxe/db seed`              | 7 sources, 5 consultations, 8 audit events              |
+| `pnpm smoke` against an API pointed at it | 10/10 checks passed                                     |
 
 The last three rows matter more than the first: they show the script produces a
 database this application actually runs on, not merely a PostgreSQL server.
