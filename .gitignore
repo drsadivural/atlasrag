@@ -42,3 +42,6 @@ storage-local/
 *.log
 .DS_Store
 .scratch/
+
+# Agent worktrees: full checkouts of this repo, owned by another session.
+.claude/worktrees/

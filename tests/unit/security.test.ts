@@ -157,7 +157,8 @@ describe('password handling', () => {
 
   it('rejects weak and personal passwords', () => {
     expect(checkPasswordStrength('password123').ok).toBe(false);
-    expect(checkPasswordStrength('short1A').ok).toBe(false);
+    expect(checkPasswordStrength('Shrt1A').ok).toBe(false); // under the length floor
+    expect(checkPasswordStrength('Kestrel7').ok).toBe(true); // exactly the floor, and varied
     expect(checkPasswordStrength('aaaaaaaaaaaaA1').ok).toBe(false);
     expect(checkPasswordStrength('Sadivural2026X', { email: 'sadivural@x.com' }).ok).toBe(false);
     expect(checkPasswordStrength('Tr0ubad0ur-Nimbus-42').ok).toBe(true);

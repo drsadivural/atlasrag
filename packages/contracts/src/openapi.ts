@@ -31,7 +31,7 @@ const OPERATIONS: OperationSpec[] = [
     summary: 'Create an account and its first organization/workspace',
     tag: 'auth',
     request: A.RegisterRequest,
-    response: A.LoginResponse,
+    response: A.RegisterResponse,
     public: true,
   },
   {

@@ -54,6 +54,8 @@ export const EnvSchema = z.object({
   EMBEDDING_PROVIDER: z.enum(['deterministic', 'openai']).default('deterministic'),
 
   EMAIL_DRIVER: z.enum(['console', 'resend', 'smtp']).default('console'),
+  // Leave unset to let it follow the mail driver — see `requiresEmailVerification`.
+  REQUIRE_EMAIL_VERIFICATION: z.enum(['true', 'false']).optional(),
   EMAIL_FROM: z.string().default('UXE Consulting AI <no-reply@example.com>'),
   RESEND_API_KEY: z.string().default(''),
 
@@ -165,4 +167,19 @@ export function corsOrigins(env: AppEnv): string[] {
 
 export function isProduction(env: AppEnv): boolean {
   return env.APP_ENV === 'production';
+}
+
+/**
+ * Whether a new account must confirm its address before it can sign in.
+ *
+ * Unset, this follows the mail driver: the `console` driver writes the message to a log
+ * instead of delivering it, so requiring confirmation there would leave every new account
+ * waiting on an email that is never coming. A deployment that can actually send mail gets
+ * the check; one that cannot does not gate people behind it.
+ */
+export function requiresEmailVerification(env: AppEnv): boolean {
+  if (env.REQUIRE_EMAIL_VERIFICATION !== undefined) {
+    return env.REQUIRE_EMAIL_VERIFICATION === 'true';
+  }
+  return env.EMAIL_DRIVER !== 'console';
 }

@@ -53,7 +53,7 @@ const TEST_ENV = {
 
 let migrated = false;
 
-export async function createHarness(): Promise<Harness> {
+export async function createHarness(overrides: Record<string, string> = {}): Promise<Harness> {
   const url = process.env.DATABASE_URL;
   if (!url)
     throw new Error('DATABASE_URL is not set; tests/integration/setup.ts should have set it.');
@@ -76,7 +76,7 @@ export async function createHarness(): Promise<Harness> {
   const email = new ConsoleEmailDriver(logger);
 
   const built = buildApp({
-    env: { ...TEST_ENV, DATABASE_URL: url, STORAGE_LOCAL_PATH: storagePath },
+    env: { ...TEST_ENV, DATABASE_URL: url, STORAGE_LOCAL_PATH: storagePath, ...overrides },
     db: handle.db,
     storage: new FilesystemStorage(storagePath, TEST_ENV.SESSION_SECRET, TEST_ENV.PUBLIC_API_URL),
     email,
@@ -264,7 +264,7 @@ export async function registerOwner(
   const password = 'Tr0ubad0ur-Nimbus-42!';
   const client = new Client(harness);
 
-  const registered = await client.post<{ verificationRequired?: boolean }>('/auth/register', {
+  const registered = await client.post<{ status?: string }>('/auth/register', {
     email,
     password,
     fullName: options.fullName ?? `Owner ${accountCounter}`,
@@ -276,7 +276,11 @@ export async function registerOwner(
     throw new Error(`Registration failed: ${registered.status} ${JSON.stringify(registered.body)}`);
   }
 
-  await verifyEmail(harness, client, email);
+  // The server decides whether this deployment confirms addresses. Follow its answer
+  // rather than assuming, so the helper works under either configuration.
+  if (registered.body.status === 'email_verification_required') {
+    await verifyEmail(harness, client, email);
+  }
   await login(client, email, password);
 
   const session = await client.get<{

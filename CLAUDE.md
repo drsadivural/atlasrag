@@ -17,6 +17,7 @@ case terminates.
 **1. Every wait is bounded — three bounds, always.**
 No `while (true)`, no unbounded `for`, no naked `await` on something that may
 never resolve. Each wait must carry:
+
 - `max_attempts`
 - per-attempt `timeout`
 - an absolute `deadline` (wall-clock)
@@ -76,6 +77,7 @@ backoff (e.g. 30s) and cap total retry budget. Never retry a 4xx-class /
 deterministic failure at all.
 
 **10. Nothing in bash may block on stdin or stream forever.**
+
 - Wrap anything network- or process-bound: `timeout 60 <cmd>`
 - `--no-pager`, `-y`, `--yes`, `--non-interactive`, `</dev/null`
 - Never `tail -f`, `watch`, `journalctl -f`, `docker logs -f`, or a dev server in
@@ -140,10 +142,12 @@ async function waitFor<T>(opts: {
 }): Promise<{ ok: boolean; value: T | null; reason: string }> {
   const { label, poll, done, producerAlive } = opts;
   const maxAttempts = opts.maxAttempts ?? 20;
-  const intervalMs  = opts.intervalMs  ?? 3000;
-  const deadline    = Date.now() + (opts.deadlineMs ?? 120_000);
+  const intervalMs = opts.intervalMs ?? 3000;
+  const deadline = Date.now() + (opts.deadlineMs ?? 120_000);
 
-  let last: string | null = null, stall = 0, value: T | null = null;
+  let last: string | null = null,
+    stall = 0,
+    value: T | null = null;
 
   for (let i = 1; i <= maxAttempts; i++) {
     if (Date.now() > deadline) return { ok: false, value, reason: `${label}: deadline exceeded` };
@@ -152,7 +156,7 @@ async function waitFor<T>(opts: {
     const snap = JSON.stringify(value);
     console.log(`attempt ${i}/${maxAttempts} | ${label}=${snap}`);
 
-    if (done(value)) return { ok: true, value, reason: "satisfied" };
+    if (done(value)) return { ok: true, value, reason: 'satisfied' };
 
     if (!(await producerAlive()))
       return { ok: false, value, reason: `${label}: producer dead — condition unreachable` };
@@ -161,7 +165,7 @@ async function waitFor<T>(opts: {
     if (stall >= 3) return { ok: false, value, reason: `${label}: stalled at ${snap}` };
     last = snap;
 
-    await new Promise(r => setTimeout(r, intervalMs));
+    await new Promise((r) => setTimeout(r, intervalMs));
   }
   return { ok: false, value, reason: `${label}: attempts exhausted (last ${last})` };
 }
@@ -173,7 +177,7 @@ async function waitFor<T>(opts: {
 
 - [ ] Bounded by attempts **and** wall-clock deadline?
 - [ ] Is there an explicit give-up branch that returns a result?
-- [ ] Does each iteration check the *producer's* health, not just the value?
+- [ ] Does each iteration check the _producer's_ health, not just the value?
 - [ ] Is the condition per-source rather than an aggregate?
 - [ ] Is stall (value unchanged + no activity) detected separately from timeout?
 - [ ] Does every attempt print a line showing value and delta?

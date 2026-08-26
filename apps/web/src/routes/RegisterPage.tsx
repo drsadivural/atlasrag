@@ -1,10 +1,11 @@
 import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { Building2, Eye, EyeOff, Lock, Mail, User } from 'lucide-react';
+import { Building2, CheckCircle2, Eye, EyeOff, Lock, Mail, User } from 'lucide-react';
 import { Button, Card, Checkbox, Field, Input } from '@uxe/ui';
 import { ApiError, api } from '../lib/api.js';
 import { useI18n } from '../lib/i18n.js';
 import { Ayumi, BrandLockup } from '../components/Brand.js';
+import { MIN_PASSWORD_LENGTH } from '@uxe/contracts';
 
 export function RegisterPage() {
   const { t } = useI18n();
@@ -19,7 +20,9 @@ export function RegisterPage() {
   const [submitting, setSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
   const [formError, setFormError] = useState<string | null>(null);
-  const [done, setDone] = useState(false);
+  // Null until the server answers. It decides whether a confirmation email is part of
+  // this deployment's flow, so the page does not have to guess.
+  const [done, setDone] = useState<'registered' | 'email_verification_required' | null>(null);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -28,8 +31,11 @@ export function RegisterPage() {
     setFieldErrors({});
 
     try {
-      await api.post('/auth/register', { ...form, locale: 'en' });
-      setDone(true);
+      const result = await api.post<{ status?: string }>('/auth/register', {
+        ...form,
+        locale: 'en',
+      });
+      setDone(result?.status === 'registered' ? 'registered' : 'email_verification_required');
     } catch (error) {
       if (error instanceof ApiError) {
         setFieldErrors(error.fieldErrors);
@@ -69,16 +75,34 @@ export function RegisterPage() {
                   aria-hidden
                   className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[var(--uxe-success-bg)] text-[var(--uxe-success-text)]"
                 >
-                  <Mail className="h-6 w-6" />
+                  {done === 'registered' ? (
+                    <CheckCircle2 className="h-6 w-6" />
+                  ) : (
+                    <Mail className="h-6 w-6" />
+                  )}
                 </span>
                 <h1 className="mt-4 text-[22px] font-bold text-[var(--uxe-text)]">
-                  {t('auth.checkInbox')}
+                  {done === 'registered' ? t('auth.accountCreated') : t('auth.checkInbox')}
                 </h1>
                 <p className="mt-2 text-[14px] text-[var(--uxe-text-secondary)]">
-                  {t('auth.verifyEmailSent', { email: form.email })}
+                  {done === 'registered'
+                    ? t('auth.accountCreatedHint')
+                    : t('auth.verifyEmailSent', { email: form.email })}
                 </p>
-                <Button asChild variant="secondary" className="mt-6">
-                  <Link to="/login">{t('auth.backToSignIn')}</Link>
+                <Button
+                  asChild
+                  className="mt-6"
+                  variant={done === 'registered' ? 'primary' : 'secondary'}
+                >
+                  <Link
+                    to={
+                      done === 'registered'
+                        ? `/login?registered=${encodeURIComponent(form.email)}`
+                        : '/login'
+                    }
+                  >
+                    {done === 'registered' ? t('auth.signIn') : t('auth.backToSignIn')}
+                  </Link>
                 </Button>
               </div>
             ) : (
@@ -157,7 +181,7 @@ export function RegisterPage() {
                     label={t('auth.password')}
                     htmlFor="password"
                     error={fieldErrors.password?.[0]}
-                    hint="At least 12 characters, with upper case, lower case and a number."
+                    hint={t('auth.passwordHint', { min: MIN_PASSWORD_LENGTH })}
                     required
                   >
                     <Input

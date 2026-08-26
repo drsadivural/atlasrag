@@ -66,6 +66,11 @@ export const en = {
   'auth.mfaVerify': 'Verify',
   'auth.mfaRecoveryHint': 'You can also use one of your recovery codes.',
   'auth.checkInbox': 'Check your inbox',
+  'auth.accountCreated': 'Account created',
+  'auth.accountCreatedHint': 'Your workspace is ready. Sign in to open it.',
+  'auth.passwordHint': 'At least {min} characters, with upper case, lower case and a number.',
+  'auth.passwordHintInvite': 'At least {min} characters, and not something you use elsewhere.',
+  'auth.registeredNotice': 'Account created. Sign in to continue.',
   'auth.verifyEmailSent':
     'We sent a confirmation link to {email}. Open it to finish setting up your workspace.',
   'auth.resetSent': 'If that address has an account, a reset link is on its way.',

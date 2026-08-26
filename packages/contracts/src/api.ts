@@ -145,6 +145,19 @@ export const LoginResponse = z.discriminatedUnion('status', [
 ]);
 export type LoginResponse = z.infer<typeof LoginResponse>;
 
+/**
+ * Registration never mints a session.
+ *
+ * The response is byte-identical whether the address was free or already taken, so it
+ * cannot be used to discover who has an account. `registered` means the account can sign
+ * in now; `email_verification_required` means it must confirm the address first.
+ */
+export const RegisterResponse = z.object({
+  status: z.enum(['registered', 'email_verification_required']),
+  email: Email,
+});
+export type RegisterResponse = z.infer<typeof RegisterResponse>;
+
 export const DeviceSession = z.object({
   id: Id,
   current: z.boolean(),

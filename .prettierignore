@@ -9,3 +9,6 @@ assets/
 artifacts/
 .venv/
 services/document-worker/.venv/
+
+# Agent worktrees are full copies of this repo; formatting them means formatting it twice.
+.claude/

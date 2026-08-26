@@ -1,5 +1,5 @@
 import type { Role } from '@uxe/contracts';
-import { rankOfRole } from '@uxe/contracts';
+import { MIN_PASSWORD_LENGTH, rankOfRole } from '@uxe/contracts';
 
 export type MfaPolicy = 'optional' | 'required_admins' | 'required_all';
 
@@ -118,6 +118,8 @@ const WEAK_PASSWORDS = new Set([
   'uxeconsultingai',
 ]);
 
+export { MIN_PASSWORD_LENGTH };
+
 export interface PasswordCheck {
   ok: boolean;
   reasons: string[];
@@ -130,7 +132,8 @@ export function checkPasswordStrength(
   const reasons: string[] = [];
   const lower = password.toLowerCase();
 
-  if (password.length < 12) reasons.push('Use at least 12 characters.');
+  if (password.length < MIN_PASSWORD_LENGTH)
+    reasons.push(`Use at least ${MIN_PASSWORD_LENGTH} characters.`);
   if (!/[a-z]/.test(password)) reasons.push('Add a lowercase letter.');
   if (!/[A-Z]/.test(password)) reasons.push('Add an uppercase letter.');
   if (!/\d/.test(password)) reasons.push('Add a number.');

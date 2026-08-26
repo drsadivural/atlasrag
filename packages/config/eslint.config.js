@@ -20,6 +20,8 @@ export const ignores = [
   'docs/product/**',
   // Local throwaway scripts; gitignored and never shipped.
   '.scratch/**',
+  // Agent worktrees are full copies of this repo; linting them lints it twice.
+  '.claude/**',
   '**/*.d.ts',
 ];
 

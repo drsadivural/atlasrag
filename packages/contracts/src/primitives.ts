@@ -22,12 +22,21 @@ export const Email = z
   .refine((v) => /^[^\s@]+@[^\s@.]+\.[^\s@]+$/.test(v), 'must be a valid email address');
 
 /**
+ * Shortest password accepted.
+ *
+ * Eight is the floor NIST 800-63B sets for a secret a person chooses. Length alone is a
+ * weak signal, so the rest of the policy carries the weight: character classes here, and
+ * breach lists, personal information, runs and sequences on the server.
+ */
+export const MIN_PASSWORD_LENGTH = 8;
+
+/**
  * Passwords are checked for length and composition here so the browser can show the
  * same message the server enforces. Breach-list checks happen server-side only.
  */
 export const Password = z
   .string()
-  .min(12, 'Use at least 12 characters')
+  .min(MIN_PASSWORD_LENGTH, `Use at least ${MIN_PASSWORD_LENGTH} characters`)
   .max(256, 'Use at most 256 characters')
   .refine((v) => /[a-z]/.test(v), 'Add a lowercase letter')
   .refine((v) => /[A-Z]/.test(v), 'Add an uppercase letter')

@@ -52,7 +52,7 @@ import { body, validateJson } from '../middleware/validate.js';
 import { clientIp, requireAuth, userAgent } from '../middleware/index.js';
 import { RateLimitBuckets } from '../services/rate-limit.js';
 import { EmailTemplates } from '../services/email.js';
-import { isProduction } from '../env.js';
+import { isProduction, requiresEmailVerification } from '../env.js';
 import { defaultWorkspaceSettings, workspaceSettingsFrom } from '../services/settings.js';
 import type { OAuthConfig, OAuthProvider } from '@uxe/auth';
 
@@ -85,14 +85,19 @@ export function authRoutes(deps: AppDeps) {
       throw ApiError.badRequest('Choose a stronger password.', { password: strength.reasons });
     }
 
+    const mustVerify = requiresEmailVerification(deps.env);
+    const status = mustVerify ? 'email_verification_required' : 'registered';
+
     const existing = await deps.repos.identity.findUserByEmail(input.email);
     if (existing) {
       // Registering an existing address must not confirm that it exists. The response is
       // identical to a success, and the account holder gets an email instead.
       await sendVerificationEmail(deps, existing.id, existing.email, existing.fullName);
       // Same status as the success path, not only the same body: a different status code
-      // is an enumeration oracle on its own.
-      return c.json({ status: 'email_verification_required', email: input.email }, 201);
+      // is an enumeration oracle on its own. That holds whether or not confirmation is
+      // required — the caller must not be able to tell the two branches apart, so no
+      // session is minted here even when one would be harmless.
+      return c.json({ status, email: input.email }, 201);
     }
 
     const user = await deps.repos.identity.createUser({
@@ -101,6 +106,8 @@ export function authRoutes(deps: AppDeps) {
       fullName: input.fullName,
       locale: input.locale,
     });
+
+    if (!mustVerify) await deps.repos.identity.markEmailVerified(user.id);
 
     const slug = slugify(input.organizationName);
     const { organization, workspace } = await deps.repos.identity.createOrganizationWithWorkspace({
@@ -139,8 +146,8 @@ export function authRoutes(deps: AppDeps) {
       summary: `${user.fullName} created an account and the workspace "${workspace.name}".`,
     });
 
-    await sendVerificationEmail(deps, user.id, user.email, user.fullName);
-    return c.json({ status: 'email_verification_required', email: user.email }, 201);
+    if (mustVerify) await sendVerificationEmail(deps, user.id, user.email, user.fullName);
+    return c.json({ status, email: user.email }, 201);
   });
 
   /* ---------------------------------------------------------------------- */
@@ -202,7 +209,7 @@ export function authRoutes(deps: AppDeps) {
       });
     }
 
-    if (!user.emailVerifiedAt) {
+    if (!user.emailVerifiedAt && requiresEmailVerification(deps.env)) {
       await sendVerificationEmail(deps, user.id, user.email, user.fullName);
       return c.json({ status: 'email_verification_required', email: user.email }, 200);
     }

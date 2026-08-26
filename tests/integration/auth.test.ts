@@ -40,16 +40,11 @@ async function register(client: Client, email: string, overrides: Record<string,
 }
 
 describe('registration', () => {
-  it('creates an organization, a workspace and an owner, and sends a verification email', async () => {
+  it('creates an organization, a workspace and an owner', async () => {
     const client = new Client(harness);
     const response = await register(client, 'founder@example.test');
     expect(response.status).toBe(201);
 
-    const message = harness.email.messagesFor('founder@example.test').at(-1);
-    expect(message).toBeDefined();
-    expect(message!.tag).toContain('verify');
-
-    await verifyEmail(harness, client, 'founder@example.test');
     await login(client, 'founder@example.test', PASSWORD);
 
     const session = await client.get<{
@@ -98,16 +93,60 @@ describe('registration', () => {
     );
   });
 
-  it('refuses to sign in before the address is verified', async () => {
+  it('lets a new account sign in immediately when confirmation is not required', async () => {
     const client = new Client(harness);
-    await register(client, 'unverified@example.test');
+    const created = await register(client, 'straight-in@example.test');
+    expect((created.body as { status: string }).status).toBe('registered');
 
     const response = await client.post<{ status: string }>('/auth/login', {
-      email: 'unverified@example.test',
+      email: 'straight-in@example.test',
       password: PASSWORD,
       rememberMe: false,
     });
-    expect(response.body.status).toBe('email_verification_required');
+    expect(response.body.status).toBe('authenticated');
+  });
+
+  it('still hides whether the address was taken when confirmation is not required', async () => {
+    const client = new Client(harness);
+    const first = await register(client, 'twice@example.test');
+    const second = await register(client, 'twice@example.test');
+
+    expect(second.status).toBe(first.status);
+    expect(second.body).toEqual(first.body);
+  });
+
+  describe('with confirmation required', () => {
+    let gated: Harness;
+
+    beforeAll(async () => {
+      gated = await createHarness({ REQUIRE_EMAIL_VERIFICATION: 'true' });
+    });
+    afterAll(async () => {
+      await gated.close();
+    });
+
+    it('sends a verification email and refuses to sign in until it is used', async () => {
+      const client = new Client(gated);
+      const created = await register(client, 'unverified@example.test');
+      expect((created.body as { status: string }).status).toBe('email_verification_required');
+
+      const message = gated.email.messagesFor('unverified@example.test').at(-1);
+      expect(message).toBeDefined();
+      expect(message!.tag).toContain('verify');
+
+      const response = await client.post<{ status: string }>('/auth/login', {
+        email: 'unverified@example.test',
+        password: PASSWORD,
+        rememberMe: false,
+      });
+      expect(response.body.status).toBe('email_verification_required');
+
+      // And the link in that email is what opens the account.
+      await verifyEmail(gated, client, 'unverified@example.test');
+      await login(client, 'unverified@example.test', PASSWORD);
+      const session = await client.get<{ user: { emailVerified: boolean } }>('/auth/session');
+      expect(session.body.user.emailVerified).toBe(true);
+    });
   });
 });
 

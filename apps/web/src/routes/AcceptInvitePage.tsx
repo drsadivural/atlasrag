@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, Eye, EyeOff } from 'lucide-react';
 import { Badge, Button, Card, Field, Input, Skeleton } from '@uxe/ui';
-import type { InvitationPreview } from '@uxe/contracts';
+import { MIN_PASSWORD_LENGTH, type InvitationPreview } from '@uxe/contracts';
 import { type ApiError, api, setCsrfToken } from '../lib/api.js';
 import { useI18n } from '../lib/i18n.js';
 import { BrandLockup } from '../components/Brand.js';
@@ -154,7 +154,7 @@ export function AcceptInvitePage() {
                 label={t('auth.password')}
                 htmlFor="invite-password"
                 error={fieldErrors.password?.[0]}
-                hint="At least 12 characters, and not something you use elsewhere."
+                hint={t('auth.passwordHintInvite', { min: MIN_PASSWORD_LENGTH })}
                 required
               >
                 <Input

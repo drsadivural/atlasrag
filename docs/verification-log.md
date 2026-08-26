@@ -216,6 +216,33 @@ for containers) and staging narrows it to `127.0.0.1`, so the tunnel is the only
 
 Verified against the live hostname: E2E 49 passed, accessibility 37 passed, smoke 10/10.
 
+## Sign-up without a confirmation email
+
+Registration ended at "check your inbox" on a deployment whose mail driver is `console` —
+the message is written to a log, never delivered — so every new account was stuck behind
+an email that was never coming.
+
+`requiresEmailVerification` now decides this, and unset it follows the mail driver: the
+gate applies exactly when mail can actually be sent. `REQUIRE_EMAIL_VERIFICATION` overrides
+it either way, and staging sets it to `false` explicitly.
+
+What did **not** change is the property that registration cannot be used to discover who
+has an account. Both branches still return the same status and the same body, and neither
+mints a session — so a caller cannot tell a new address from a taken one. The page reads
+the server's answer rather than assuming a mode, and sends the new owner to sign-in with
+their address already filled in.
+
+The password floor moved from 12 characters to 8, the minimum NIST 800-63B sets for a
+chosen secret. It was enforced in two places that had drifted apart in message wording;
+`MIN_PASSWORD_LENGTH` in `@uxe/contracts` is now the single source, used by the Zod
+schema, the server-side strength check and the hint under the field. Everything else in
+the policy is unchanged: character classes, breach lists, personal information, repeated
+runs and sequences all still apply at any length.
+
+Both modes are covered in the integration suite — the default path signs in immediately,
+and a second harness configured with `REQUIRE_EMAIL_VERIFICATION=true` proves the gate
+still sends its email and still blocks sign-in until the link is used.
+
 ## Reproducing
 
 ```bash

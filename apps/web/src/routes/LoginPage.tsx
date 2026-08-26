@@ -34,7 +34,9 @@ export function LoginPage() {
   const { refresh } = useSession();
 
   const [stage, setStage] = useState<Stage>('credentials');
-  const [email, setEmail] = useState('');
+  // Arriving straight from registration: the address is already known, so do not make
+  // somebody type it again one screen after they chose it.
+  const [email, setEmail] = useState(() => searchParams.get('registered') ?? '');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
@@ -53,6 +55,7 @@ export function LoginPage() {
   const [notice] = useState<string | null>(() => {
     if (searchParams.get('expired')) return t('auth.sessionExpired');
     if (searchParams.get('verified')) return 'Your email is confirmed. Sign in to continue.';
+    if (searchParams.get('registered')) return t('auth.registeredNotice');
     return null;
   });
 

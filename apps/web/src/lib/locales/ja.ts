@@ -35,6 +35,11 @@ export const ja: Catalogue = {
   'nav.skipToContent': 'メインコンテンツへスキップ',
   'nav.mainLabel': 'メインナビゲーション',
   'nav.mobileLabel': '主要ナビゲーション',
+  'auth.accountCreated': 'アカウントを作成しました',
+  'auth.accountCreatedHint': 'ワークスペースの準備ができました。サインインしてください。',
+  'auth.passwordHint': '{min} 文字以上、大文字・小文字・数字を含めてください。',
+  'auth.passwordHintInvite': '{min} 文字以上で、他で使っていないものにしてください。',
+  'auth.registeredNotice': 'アカウントを作成しました。サインインしてください。',
 
   'auth.welcomeBack': 'おかえりなさい',
   'auth.continueGoogle': 'Google で続行',
