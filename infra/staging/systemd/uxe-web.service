@@ -12,9 +12,6 @@ WorkingDirectory=/home/codex/atlasrag/apps/web
 # The public hostname must be named explicitly: the server rejects Host headers it does
 # not recognise, which is what stops DNS rebinding from reaching it through the tunnel.
 Environment=WEB_ALLOWED_HOSTS=consultnow.ayonix.com
-# The credential itself lives in a root-only file rather than here, because a unit file
-# is world readable. Remove this line and the file once Cloudflare Access is in place.
-EnvironmentFile=/etc/uxe/web-basic-auth.env
 ExecStart=/home/codex/atlasrag/node_modules/.bin/vite preview --port 4173 --strictPort --host 127.0.0.1
 Restart=always
 RestartSec=5

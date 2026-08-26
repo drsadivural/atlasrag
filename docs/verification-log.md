@@ -243,6 +243,22 @@ Both modes are covered in the integration suite — the default path signs in im
 and a second harness configured with `REQUIRE_EMAIL_VERIFICATION=true` proves the gate
 still sends its email and still blocks sign-in until the link is used.
 
+## Sign-up driven through a browser
+
+The registration and sign-in flow is now covered end to end in the browser against the
+live hostname, not only at the API: follow the link from sign-in, fill the form, land on
+"Account created", sign in with the address carried across, and arrive in a workspace
+named after the organization just given. A second case proves a short password is refused
+at the field rather than silently.
+
+Both are desktop-only. Registration is rate limited to five attempts an hour per IP, and
+creating three accounts per suite run would spend that allowance on the suite itself.
+
+Writing them found a locator trap worth recording: a required field renders its label with
+a trailing asterisk, so `getByLabel('Password', { exact: true })` matches on the sign-in
+page and silently fails on the sign-up page, where the field is required. The tests match
+on a prefix instead.
+
 ## Reproducing
 
 ```bash

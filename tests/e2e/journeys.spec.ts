@@ -50,6 +50,69 @@ test.describe('sign in', () => {
   });
 });
 
+test.describe('creating an account', () => {
+  test.use({ storageState: { cookies: [], origins: [] } });
+
+  test('a new person signs up with a work email and lands in their own workspace', async ({
+    page,
+  }) => {
+    // Desktop only. Registration is rate limited per IP, and creating three accounts per
+    // suite run would spend the hour's allowance on the suite itself.
+    test.skip(test.info().project.name !== 'desktop', 'one registration per run is enough');
+
+    // Unique per run: the account it creates is real and outlives the test.
+    const email = `e2e-signup-${Date.now()}@example.test`;
+    const password = 'Kestrel7';
+
+    await page.goto('/login');
+    await page.getByRole('link', { name: /create account/i }).click();
+    await expect(page).toHaveURL(/\/register/);
+
+    // A required field renders its label with a trailing asterisk, so the password
+    // locator matches on a prefix rather than exactly.
+    await page.getByLabel('Full name').fill('Ayumi Tester');
+    await page.getByLabel('Work email').fill(email);
+    await page.getByLabel('Organization name').fill('Marina Consulting');
+    await page.getByLabel(/^Password/).fill(password);
+    await page.getByRole('checkbox', { name: /terms of service/i }).click();
+    await page.getByRole('button', { name: /create account/i }).click();
+
+    // No confirmation email stands between signing up and signing in.
+    await expect(page.getByRole('heading', { name: /account created/i })).toBeVisible({
+      timeout: 30_000,
+    });
+
+    await page.getByRole('link', { name: /^sign in$/i }).click();
+    await expect(page).toHaveURL(/\/login/);
+    // The address carries over, so nobody retypes what they chose one screen ago.
+    await expect(page.getByLabel('Work email')).toHaveValue(email);
+
+    await page.getByLabel(/^Password/).fill(password);
+    await page.getByRole('button', { name: 'Sign in' }).click();
+
+    await expect(page).toHaveURL(/\/dashboard/, { timeout: 30_000 });
+    await waitForSettled(page);
+    // Their own workspace, named after the organization they gave.
+    await expect(page.getByText('Marina Consulting').first()).toBeVisible({ timeout: 20_000 });
+  });
+
+  test('rejects a password under the minimum, at the field', async ({ page }) => {
+    test.skip(test.info().project.name !== 'desktop', 'one registration attempt per run');
+
+    await page.goto('/register');
+
+    await page.getByLabel('Full name').fill('Ayumi Tester');
+    await page.getByLabel('Work email').fill(`e2e-short-${Date.now()}@example.test`);
+    await page.getByLabel('Organization name').fill('Marina Consulting');
+    await page.getByLabel(/^Password/).fill('Kestre7');
+    await page.getByRole('checkbox', { name: /terms of service/i }).click();
+    await page.getByRole('button', { name: /create account/i }).click();
+
+    await expect(page.getByText(/at least 8 characters/i)).toBeVisible({ timeout: 20_000 });
+    await expect(page).toHaveURL(/\/register/);
+  });
+});
+
 test.describe('knowledge base', () => {
   test('uploads a document and reports it ready', async ({ page }) => {
     await page.goto('/knowledge');

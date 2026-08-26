@@ -99,30 +99,17 @@ followed by `sudo systemctl restart uxe-web`.
 E2E 49 passed, accessibility 37 passed, and `pnpm smoke` 10/10, all against
 `https://consultnow.ayonix.com`.
 
-## The stopgap lock
+## Who can reach it
 
-Until Access is in place the hostname is behind HTTP basic auth. The credential lives in
-`/etc/uxe/web-basic-auth.env` (root only, 0640) rather than in the unit file, which is
-world readable, and the web unit reads it through `EnvironmentFile`.
+Nothing stands in front of the hostname: the way in is the product's own sign-up and
+sign-in. Anyone with the URL can create an account and gets their own organization and
+workspace, isolated from every other tenant. That is the right shape for a staging
+environment people are meant to try, and the wrong one for anything with real client
+material in it.
 
-It applies **only** to the public hostnames named in `WEB_ALLOWED_HOSTS`, so
-`127.0.0.1:4173` is untouched and the verification suites still have a way in. Nothing
-else can reach that address: the web server and the API both bind to loopback.
-
-It covers the API as well as the pages, because the plugin runs ahead of the `/api`
-proxy — a lock on the HTML alone would be no lock at all.
-
-To remove it once Access is live:
-
-```bash
-sudo rm /etc/uxe/web-basic-auth.env
-sudo sed -i '/web-basic-auth/d;/world readable/d;/# The credential itself/d' \
-  /etc/systemd/system/uxe-web.service
-sudo systemctl daemon-reload && sudo systemctl restart uxe-web
-```
-
-Basic auth over the tunnel's TLS is a weak control — one shared credential, no expiry, no
-audit trail. It is a door lock while the real one is being fitted, not a substitute.
+The `WEB_BASIC_AUTH` plugin is still available if a lock is wanted again — set it to
+`user:password` on the web unit and it covers the pages and the API together, leaving
+loopback alone for the verification suites. Access is the better answer; see below.
 
 ## Putting Cloudflare Access in front of it
 
