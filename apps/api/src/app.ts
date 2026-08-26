@@ -43,6 +43,7 @@ import { idempotency } from './middleware/idempotency.js';
 import { authRoutes } from './routes/auth.js';
 import { sourceRoutes } from './routes/sources.js';
 import { connectorCallbackRoutes, connectorRoutes } from './routes/connectors.js';
+import { governmentRoutes } from './routes/government.js';
 import { consultationRoutes } from './routes/consultations.js';
 import { correctionRoutes } from './routes/corrections.js';
 import { jobRoutes } from './routes/jobs.js';
@@ -191,6 +192,7 @@ export function buildApp(options: BuildOptions = {}): BuiltApp {
   v1.route('/', systemRoutes(deps));
   v1.route('/storage', storageRoutes(deps));
   v1.route('/auth', authRoutes(deps));
+  v1.route('/auth/government', governmentRoutes(deps));
   // The provider redirects a browser here with no session of ours, so the callback is
   // outside the authenticated area and identified by its single-use state token instead.
   v1.route('/connectors', connectorCallbackRoutes(deps));

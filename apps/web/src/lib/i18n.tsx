@@ -2,11 +2,12 @@ import { createContext, useCallback, useContext, useMemo, type ReactNode } from 
 import type { Locale } from '@uxe/contracts';
 import { en } from './locales/en.js';
 import { ja, type Catalogue } from './locales/ja.js';
+import { ar } from './locales/ar.js';
 
 export type Messages = typeof en;
 export type MessageKey = keyof Messages;
 
-const CATALOGUES: Record<Locale, Catalogue> = { en, ja };
+const CATALOGUES: Record<Locale, Catalogue> = { en, ja, ar };
 
 interface I18nContextValue {
   locale: Locale;

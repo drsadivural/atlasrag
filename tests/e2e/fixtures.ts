@@ -17,15 +17,37 @@ export const SEED_PASSWORD = process.env.SEED_PASSWORD ?? 'Tr0ubad0ur-Nimbus-42'
  * scenarios, so exercising it on every test keeps it covered continuously rather than in
  * one isolated case.
  */
+/**
+ * Reveals the email and password form on the sign-in screen.
+ *
+ * It is a disclosure that starts expanded on desktop and collapsed on a phone, where the
+ * two federated buttons are what a small screen should lead with. A test that types into
+ * it has to open it first, whichever viewport it is running at.
+ */
+export async function openCredentials(page: Page): Promise<void> {
+  // Wait for the disclosure itself before asking whether the form is open. Checking too
+  // early answers "not visible" because nothing has rendered yet, and the click that
+  // follows then closes a panel that was already expanded.
+  const toggle = page.getByRole('button', { name: /other approved access/i });
+  await toggle.waitFor({ state: 'visible', timeout: 20_000 });
+
+  const email = page.getByLabel('Government email');
+  if (await email.isVisible().catch(() => false)) return;
+
+  await toggle.click();
+  await email.waitFor({ state: 'visible', timeout: 10_000 });
+}
+
 export async function signIn(
   page: Page,
   email = SEED_EMAIL,
   password = SEED_PASSWORD,
 ): Promise<void> {
   await page.goto('/login');
-  await page.getByLabel('Work email').fill(email);
+  await openCredentials(page);
+  await page.getByLabel('Government email').fill(email);
   await page.getByLabel('Password', { exact: true }).fill(password);
-  await page.getByRole('button', { name: 'Sign in' }).click();
+  await page.getByRole('button', { name: 'Sign in securely' }).click();
   await page.waitForURL(/\/dashboard/, { timeout: 30_000 });
 }
 

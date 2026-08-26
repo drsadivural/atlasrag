@@ -59,6 +59,48 @@ export const EnvSchema = z.object({
   EMAIL_FROM: z.string().default('UXE Consulting AI <no-reply@example.com>'),
   RESEND_API_KEY: z.string().default(''),
 
+  /* --- Government Edition ------------------------------------------------ */
+  /**
+   * UAE PASS. Every field is required together: a half-configured provider is worse than
+   * an absent one, because the button would render and then fail at the redirect.
+   */
+  UAE_PASS_ENVIRONMENT: z.enum(['staging', 'production']).default('staging'),
+  UAE_PASS_ISSUER: z.string().default(''),
+  UAE_PASS_AUTHORIZATION_ENDPOINT: z.string().default(''),
+  UAE_PASS_TOKEN_ENDPOINT: z.string().default(''),
+  UAE_PASS_USERINFO_ENDPOINT: z.string().default(''),
+  UAE_PASS_CLIENT_ID: z.string().default(''),
+  /** Server-side only. Never reaches a browser bundle. */
+  UAE_PASS_CLIENT_SECRET: z.string().default(''),
+  UAE_PASS_SCOPES: z.string().default('openid profile email'),
+  UAE_PASS_ACR_VALUES: z.string().default('urn:safelayer:tws:policies:authentication:level:low'),
+
+  /** Government SSO. Uses the Microsoft OIDC adapter unless an issuer is given. */
+  GOV_SSO_ISSUER: z.string().default(''),
+  GOV_SSO_CLIENT_ID: z.string().default(''),
+  GOV_SSO_CLIENT_SECRET: z.string().default(''),
+  /** Comma separated. Empty means no tenant is accepted, which fails closed. */
+  GOV_SSO_ALLOWED_TENANTS: z.string().default(''),
+
+  /** Comma separated. Which address domains may sign in at all. */
+  GOV_ALLOWED_EMAIL_DOMAINS: z.string().default('gov.ae'),
+  /** Where an authenticated government user lands. */
+  GOV_POST_LOGIN_ROUTE: z.string().default('/dashboard'),
+  /**
+   * Only claim data residency when the deployment actually satisfies it. Off by default,
+   * because the honest default for an unverified deployment is to say less.
+   */
+  GOV_DATA_RESIDENCY_STATEMENT: z.enum(['true', 'false']).default('false'),
+
+  GOV_URL_PRIVACY: z.string().default('/legal/privacy'),
+  GOV_URL_SECURITY: z.string().default('/legal/security'),
+  GOV_URL_ACCESSIBILITY: z.string().default('/legal/accessibility'),
+  GOV_URL_SUPPORT: z.string().default('/support'),
+  GOV_URL_STATUS: z.string().default(''),
+  GOV_URL_INCIDENT: z.string().default(''),
+  GOV_URL_UAE_PASS_HELP: z.string().default(''),
+  GOV_URL_SSO_HELP: z.string().default(''),
+
   GOOGLE_OAUTH_CLIENT_ID: z.string().default(''),
   GOOGLE_OAUTH_CLIENT_SECRET: z.string().default(''),
   MICROSOFT_OAUTH_CLIENT_ID: z.string().default(''),
@@ -177,6 +219,63 @@ export function isProduction(env: AppEnv): boolean {
  * waiting on an email that is never coming. A deployment that can actually send mail gets
  * the check; one that cannot does not gate people behind it.
  */
+/** Domains whose addresses may sign in. Empty list means the check is off. */
+export function allowedGovernmentDomains(env: AppEnv): string[] {
+  return env.GOV_ALLOWED_EMAIL_DOMAINS.split(',')
+    .map((domain) => domain.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+export interface UaePassConfig {
+  issuer: string;
+  authorizationEndpoint: string;
+  tokenEndpoint: string;
+  userinfoEndpoint: string;
+  clientId: string;
+  clientSecret: string;
+  scopes: string;
+  acrValues: string;
+  environment: 'staging' | 'production';
+}
+
+/**
+ * The UAE PASS configuration, or null when this deployment has none.
+ *
+ * All-or-nothing on purpose: a partially set provider would render an enabled button that
+ * fails at the redirect, which is worse for the person pressing it than a disabled one
+ * with a message naming what an administrator has to supply.
+ */
+export function uaePassConfig(env: AppEnv): UaePassConfig | null {
+  const required = [
+    env.UAE_PASS_ISSUER,
+    env.UAE_PASS_AUTHORIZATION_ENDPOINT,
+    env.UAE_PASS_TOKEN_ENDPOINT,
+    env.UAE_PASS_USERINFO_ENDPOINT,
+    env.UAE_PASS_CLIENT_ID,
+    env.UAE_PASS_CLIENT_SECRET,
+  ];
+  if (required.some((value) => !value)) return null;
+
+  return {
+    issuer: env.UAE_PASS_ISSUER,
+    authorizationEndpoint: env.UAE_PASS_AUTHORIZATION_ENDPOINT,
+    tokenEndpoint: env.UAE_PASS_TOKEN_ENDPOINT,
+    userinfoEndpoint: env.UAE_PASS_USERINFO_ENDPOINT,
+    clientId: env.UAE_PASS_CLIENT_ID,
+    clientSecret: env.UAE_PASS_CLIENT_SECRET,
+    scopes: env.UAE_PASS_SCOPES,
+    acrValues: env.UAE_PASS_ACR_VALUES,
+    environment: env.UAE_PASS_ENVIRONMENT,
+  };
+}
+
+/** Tenants Government SSO accepts. Empty means none, which fails closed. */
+export function allowedSsoTenants(env: AppEnv): string[] {
+  return env.GOV_SSO_ALLOWED_TENANTS.split(',')
+    .map((tenant) => tenant.trim())
+    .filter(Boolean);
+}
+
 export function requiresEmailVerification(env: AppEnv): boolean {
   if (env.REQUIRE_EMAIL_VERIFICATION !== undefined) {
     return env.REQUIRE_EMAIL_VERIFICATION === 'true';

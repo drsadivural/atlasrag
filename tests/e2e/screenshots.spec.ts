@@ -26,7 +26,7 @@ test.describe('@visual primary screens', () => {
     const page = await context.newPage();
     await page.goto('/login');
     await waitForSettled(page);
-    await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Sign in to your workspace' })).toBeVisible();
     await capture(page, testInfo.project.name, '01-login');
     await context.close();
   });

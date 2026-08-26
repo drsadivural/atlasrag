@@ -892,7 +892,7 @@ export function authRoutes(deps: AppDeps) {
 const DUMMY_HASH =
   'pbkdf2-sha512$600000$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
 
-async function issueSession(
+export async function issueSession(
   deps: AppDeps,
   c: Context<AppBindings>,
   user: {

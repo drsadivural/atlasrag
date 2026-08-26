@@ -1,7 +1,7 @@
 import { mkdir } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { test as setup } from '@playwright/test';
-import { SEED_EMAIL, SEED_PASSWORD, STORAGE_STATE } from './fixtures.js';
+import { SEED_EMAIL, SEED_PASSWORD, STORAGE_STATE, openCredentials } from './fixtures.js';
 
 /**
  * Signs in once for the whole run.
@@ -15,9 +15,10 @@ setup('authenticate', async ({ page }) => {
   await mkdir(dirname(STORAGE_STATE), { recursive: true });
 
   await page.goto('/login');
-  await page.getByLabel('Work email').fill(SEED_EMAIL);
+  await openCredentials(page);
+  await page.getByLabel('Government email').fill(SEED_EMAIL);
   await page.getByLabel('Password', { exact: true }).fill(SEED_PASSWORD);
-  await page.getByRole('button', { name: 'Sign in' }).click();
+  await page.getByRole('button', { name: 'Sign in securely' }).click();
   await page.waitForURL(/\/dashboard/, { timeout: 30_000 });
 
   await page.context().storageState({ path: STORAGE_STATE });

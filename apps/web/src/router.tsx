@@ -5,7 +5,9 @@ import { useSession } from './lib/session.js';
 import { AppShell } from './components/AppShell.js';
 import { RouteErrorBoundary } from './components/ErrorBoundary.js';
 import { I18nProvider } from './lib/i18n.js';
-import { LoginPage } from './routes/LoginPage.js';
+import { PreferencesProvider, usePreferences } from './lib/preferences.js';
+import { GovernmentLoginPage } from './routes/government/GovernmentLoginPage.js';
+import { PolicyPage } from './routes/PolicyPage.js';
 import { RegisterPage } from './routes/RegisterPage.js';
 import { ForgotPasswordPage } from './routes/ForgotPasswordPage.js';
 import { DashboardPage } from './routes/DashboardPage.js';
@@ -85,18 +87,30 @@ function RequireAuth() {
   );
 }
 
-/** Keeps a signed-in user out of the authentication screens. */
+/**
+ * Keeps a signed-in user out of the authentication screens.
+ *
+ * Language on these screens is the visitor's own choice rather than a stored profile
+ * setting — nobody has signed in yet, so there is no profile to read it from.
+ */
 function RequireAnonymous() {
   const { session, isLoading } = useSession();
   if (isLoading) return <RouteFallback />;
   if (session) return <Navigate to="/dashboard" replace />;
   return (
-    <I18nProvider locale="en">
-      <Boundary>
-        <Outlet />
-      </Boundary>
-    </I18nProvider>
+    <PreferencesProvider>
+      <SignedOutLocale>
+        <Boundary>
+          <Outlet />
+        </Boundary>
+      </SignedOutLocale>
+    </PreferencesProvider>
   );
+}
+
+function SignedOutLocale({ children }: { children: ReactNode }) {
+  const { locale } = usePreferences();
+  return <I18nProvider locale={locale}>{children}</I18nProvider>;
 }
 
 function NotFoundPage() {
@@ -122,12 +136,16 @@ export const router = createBrowserRouter([
     element: <RequireAnonymous />,
     errorElement: <RouteErrorBoundary />,
     children: [
-      { path: '/login', element: <LoginPage /> },
+      { path: '/login', element: <GovernmentLoginPage /> },
       { path: '/register', element: <RegisterPage /> },
       { path: '/forgot-password', element: <ForgotPasswordPage /> },
       { path: '/reset-password', element: <ResetPasswordPage /> },
       { path: '/verify-email', element: <VerifyEmailPage /> },
       { path: '/accept-invite', element: <AcceptInvitePage /> },
+      { path: '/legal/privacy', element: <PolicyPage policy="privacy" /> },
+      { path: '/legal/security', element: <PolicyPage policy="security" /> },
+      { path: '/legal/accessibility', element: <PolicyPage policy="accessibility" /> },
+      { path: '/support', element: <PolicyPage policy="support" /> },
     ],
   },
   {

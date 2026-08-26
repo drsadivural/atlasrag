@@ -1,6 +1,7 @@
 import {
   expect,
   openConsultation,
+  openCredentials,
   openEvidencePanel,
   test,
   waitForSettled,
@@ -99,9 +100,10 @@ test.describe('signed out', () => {
 
   test('a form reports its errors to the keyboard user, not only in colour', async ({ page }) => {
     await page.goto('/login');
-    await page.getByRole('button', { name: 'Sign in' }).click();
+    await openCredentials(page);
+    await page.getByRole('button', { name: 'Sign in securely' }).click();
 
-    const email = page.getByLabel('Work email');
+    const email = page.getByLabel('Government email');
     // The browser's own constraint validation or the app's — either way the field must be
     // marked invalid programmatically.
     const invalid = await email.evaluate(

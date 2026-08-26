@@ -49,7 +49,13 @@ export const Slug = z
   .max(64)
   .regex(/^[a-z0-9][a-z0-9-]*[a-z0-9]$/, 'lowercase letters, numbers and hyphens only');
 
-export const Locale = z.enum(['en', 'ja']);
+/**
+ * Interface languages.
+ *
+ * Arabic is here rather than in a future ticket because the Government Edition is
+ * bilingual by requirement, and `dir` follows the locale rather than a separate flag.
+ */
+export const Locale = z.enum(['en', 'ja', 'ar']);
 export type Locale = z.infer<typeof Locale>;
 
 export const ThemePreference = z.enum(['light', 'dark', 'system']);

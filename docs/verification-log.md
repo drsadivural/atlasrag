@@ -300,6 +300,46 @@ that could only ever refuse them. They now sync when connected, start the consen
 when the deployment can, and explain themselves with a link to the right screen when it
 cannot.
 
+## The Government Edition sign-in screen
+
+`/login` is now the government screen from the approved references. Full detail in
+[docs/government-login.md](government-login.md); what belongs here is what was found while
+building it and what remains unproven.
+
+**Defects found and fixed while testing it**
+
+- Gold at `#9a7b3f` reaches only 3.75:1 as text on ivory. It is fine as a stroke, where
+  3:1 is the bar, so the two uses were separated: `--gov-gold` for borders and lines,
+  `--gov-gold-text` for words.
+- The same gold lifted for the dark theme then sat on the authentication card at 1.81:1 —
+  because the card is white in _both_ themes, as the references show. Gold on the card now
+  has its own token that does not flip.
+- The radio inputs in the accessibility panel were `sr-only`, which makes them invisible to
+  a pointer as well as to the eye and left the choices unclickable for anything driving the
+  page. They are transparent and stretched over their labels instead.
+- The section wrapping the card was labelled by a screen-reader-only heading that repeated
+  the card's own `h1`, giving the page two elements with the same name. It is labelled by
+  the visible heading now.
+- The hero photograph was covering a portrait column, which magnified the consultant to
+  roughly twice the scale the references show. It is contained and bottom-anchored, and the
+  blend sits on the photograph's own top edge rather than at a percentage of the hero, so
+  it stays put at any column width.
+
+**Deliberate departures from the previous sign-in screen**
+
+- There is no registration link. Access is provisioned by an entity administrator, and the
+  federated callbacks refuse an identity that is not already provisioned. `/register` still
+  exists as a route and its tests still run; it is simply no longer reachable from
+  sign-in.
+- The hero photograph follows the theme rather than the clock. The references pair a night
+  desert with the dark theme and a day desert with the light one, and the theme still
+  defaults to the operating system's preference.
+
+**Not verified: the live handshake with UAE PASS or an Entra directory.** This deployment
+has no registered application for either, so no request has reached them. The fail-closed
+path is verified: an unconfigured provider disables its button, names the variables, and
+refuses to start a flow it cannot finish.
+
 ## Reproducing
 
 ```bash

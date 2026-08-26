@@ -45,6 +45,57 @@ test.describe('unauthenticated pages', () => {
   }
 });
 
+/**
+ * The sign-in screen in every combination it actually ships in.
+ *
+ * One page, four renderings. A contrast mistake that only exists in the dark theme, or a
+ * label that only breaks under RTL, would pass a single scan of the default and reach
+ * everybody who does not use the default.
+ */
+test.describe('the sign-in screen in both themes and both languages', () => {
+  test.use({ storageState: { cookies: [], origins: [] } });
+
+  for (const theme of ['light', 'dark'] as const) {
+    for (const language of ['en', 'ar'] as const) {
+      test(`${theme} ${language} has no WCAG 2.2 AA violations`, async ({ page }) => {
+        await page.goto('/login');
+        // From the defaults, so a case that failed before this one cannot change what it
+        // scans.
+        await page.evaluate(() => localStorage.removeItem('uxe-preferences'));
+        await page.evaluate(() => localStorage.removeItem('uxe-theme'));
+        await page.reload();
+        await waitForSettled(page);
+
+        await page.getByRole('button', { name: /accessibility options/i }).click();
+        const dialog = page.getByRole('dialog');
+        await dialog
+          .getByRole('radio', { name: theme === 'dark' ? 'Dark' : 'Light', exact: true })
+          .click();
+        await page.keyboard.press('Escape');
+
+        if (language === 'ar') {
+          await page.getByRole('button', { name: 'العربية' }).click();
+          await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+        }
+        await waitForSettled(page);
+
+        const results = await scan(page);
+        expect(results.violations, describeViolations(results)).toEqual([]);
+
+        // Leave the next case the defaults rather than this one's choices.
+        await page
+          .getByRole('button', { name: /accessibility options|خيارات إمكانية الوصول/i })
+          .click();
+        await page
+          .getByRole('dialog')
+          .getByRole('button', { name: /reset accessibility|إعادة تعيين/i })
+          .click();
+        await page.keyboard.press('Escape');
+      });
+    }
+  }
+});
+
 test.describe('authenticated pages', () => {
   for (const [name, path] of [
     ['dashboard', '/dashboard'],

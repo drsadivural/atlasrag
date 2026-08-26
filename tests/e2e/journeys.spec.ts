@@ -2,6 +2,7 @@ import { fileURLToPath } from 'node:url';
 import {
   expect,
   openConsultation,
+  openCredentials,
   openEvidencePanel,
   setAnswerStyle,
   signIn,
@@ -25,9 +26,10 @@ test.describe('sign in', () => {
 
   test('refuses a wrong password without saying which field was wrong', async ({ page }) => {
     await page.goto('/login');
-    await page.getByLabel('Work email').fill('dr.sadi@uxe.example.com');
-    await page.getByLabel('Password', { exact: true }).fill('not-the-password');
-    await page.getByRole('button', { name: 'Sign in' }).click();
+    await openCredentials(page);
+    await page.getByLabel('Government email').fill('dr.sadi@uxe.example.com');
+    await page.getByLabel(/^Password/).fill('not-the-password');
+    await page.getByRole('button', { name: 'Sign in securely' }).click();
 
     const alert = page.getByRole('alert');
     await expect(alert).toBeVisible();
@@ -64,8 +66,7 @@ test.describe('creating an account', () => {
     const email = `e2e-signup-${Date.now()}@example.test`;
     const password = 'Kestrel7';
 
-    await page.goto('/login');
-    await page.getByRole('link', { name: /create account/i }).click();
+    await page.goto('/register');
     await expect(page).toHaveURL(/\/register/);
 
     // A required field renders its label with a trailing asterisk, so the password
@@ -84,11 +85,11 @@ test.describe('creating an account', () => {
 
     await page.getByRole('link', { name: /^sign in$/i }).click();
     await expect(page).toHaveURL(/\/login/);
-    // The address carries over, so nobody retypes what they chose one screen ago.
-    await expect(page.getByLabel('Work email')).toHaveValue(email);
 
+    await openCredentials(page);
+    await page.getByLabel('Government email').fill(email);
     await page.getByLabel(/^Password/).fill(password);
-    await page.getByRole('button', { name: 'Sign in' }).click();
+    await page.getByRole('button', { name: 'Sign in securely' }).click();
 
     await expect(page).toHaveURL(/\/dashboard/, { timeout: 30_000 });
     await waitForSettled(page);

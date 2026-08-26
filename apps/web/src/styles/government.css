@@ -1,0 +1,208 @@
+/**
+ * Government Edition palette.
+ *
+ * Scoped to `[data-surface='government']` rather than applied globally: the rest of the
+ * product keeps its own identity, and only the screens that carry the government framing
+ * take these values. Both themes are defined here in full so neither is an inversion of
+ * the other — the dark theme is a night desert and the light one is midday sand, and they
+ * hold their contrast relationships independently.
+ */
+
+[data-surface='government'] {
+  /* --- Surfaces: warm ivory through pale sand ---------------------------- */
+  --gov-page: #fbf8f2;
+  --gov-hero: linear-gradient(168deg, #dfe9f5 0%, #eaded0 55%, #e8d9c2 100%);
+  --gov-panel: #f4efe6;
+  --gov-card: #ffffff;
+  --gov-card-border: #e2d9c9;
+  --gov-card-shadow: 0 1px 2px rgb(31 26 17 / 6%), 0 12px 32px -12px rgb(31 26 17 / 14%);
+  --gov-feature-card: #ffffffdb;
+  --gov-feature-border: #e3d9c8;
+
+  /* --- Ink --------------------------------------------------------------- */
+  --gov-text: #101a2e;
+  --gov-text-secondary: #4a5568;
+  --gov-text-muted: #6b7280;
+  --gov-hero-text: #101a2e;
+  --gov-hero-text-secondary: #3c4a63;
+
+  /* --- Restraint: one gold, and two accents used sparingly ---------------- */
+  --gov-gold: #9a7b3f;
+  --gov-gold-strong: #7d6231;
+  /**
+   * Gold as *text*. The decorative gold above is a stroke and a border colour, where 3:1
+   * is the bar; the same value on ivory reaches only 3.75:1 as a word, which is short of
+   * AA. This one clears it, and the two are kept apart so a border cannot quietly become
+   * a label.
+   */
+  --gov-gold-text: #7d6231;
+  /**
+   * Gold on the authentication card.
+   *
+   * Not theme-flipped, because the card is not: the approved references keep the
+   * authentication region warm off-white and its card white in both themes. A gold lifted
+   * for a dark ground would sit on white at under 2:1.
+   */
+  --gov-gold-card: #7d6231;
+  --gov-red: #8d3a3a;
+  --gov-green: #3f6b4a;
+  --gov-graphite: #5b6474;
+
+  /* --- Controls ---------------------------------------------------------- */
+  --gov-primary: #0e1b33;
+  --gov-primary-hover: #17263f;
+  --gov-primary-text: #ffffff;
+  --gov-field: #ffffff;
+  --gov-field-border: #d9cfbe;
+  --gov-field-border-hover: #c4b79f;
+  --gov-focus: #1d4ed8;
+  --gov-header: #fbf8f2;
+  --gov-header-border: #e6dccb;
+  --gov-header-text: #101a2e;
+  --gov-divider: #d9cfbe;
+
+  --gov-hero-fade: #e4eaf3;
+  --gov-hero-scrim-strong: rgb(251 248 242 / 90%);
+  --gov-hero-scrim-mid: rgb(251 248 242 / 55%);
+
+  --gov-danger: #9b2c2c;
+  --gov-danger-bg: #fdf2f2;
+  --gov-danger-border: #f0d3d3;
+  --gov-success: #2f6b46;
+  --gov-success-bg: #f1f7f3;
+}
+
+/**
+ * Dark theme. Declared under both the media query and the explicit attribute so an
+ * override wins in either direction, exactly as the product tokens do.
+ */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) [data-surface='government'] {
+    --gov-page: #060a14;
+    --gov-hero: linear-gradient(168deg, #0a1120 0%, #0c1526 55%, #0a111f 100%);
+    --gov-panel: #f6f2ea;
+    --gov-card: #ffffff;
+    --gov-card-border: #e2d9c9;
+    --gov-card-shadow: 0 1px 2px rgb(0 0 0 / 20%), 0 18px 44px -18px rgb(0 0 0 / 45%);
+    --gov-feature-card: #121b2d99;
+    --gov-feature-border: #23304a;
+
+    --gov-text: #101a2e;
+    --gov-text-secondary: #4a5568;
+    --gov-text-muted: #6b7280;
+    /* The hero sits on night desert; only its ink flips. The authentication region stays
+       warm off-white in both themes, exactly as the approved references show it. */
+    --gov-hero-text: #f4f1ea;
+    --gov-hero-text-secondary: #c2c9d6;
+
+    --gov-gold: #c9a961;
+    --gov-gold-strong: #d9bd80;
+    --gov-gold-text: #d9bd80;
+    --gov-red: #a85454;
+    --gov-green: #5c8a68;
+    --gov-graphite: #8d97a8;
+
+    --gov-header: #060a14;
+    --gov-header-border: #17223a;
+    --gov-header-text: #f4f1ea;
+    --gov-divider: #24314c;
+
+    --gov-hero-fade: #0a111f;
+    --gov-hero-scrim-strong: rgb(4 8 16 / 88%);
+    --gov-hero-scrim-mid: rgb(6 10 20 / 55%);
+  }
+}
+
+:root[data-theme='dark'] [data-surface='government'] {
+  --gov-page: #060a14;
+  --gov-hero: linear-gradient(168deg, #0a1120 0%, #0c1526 55%, #0a111f 100%);
+  --gov-panel: #f6f2ea;
+  --gov-card: #ffffff;
+  --gov-card-border: #e2d9c9;
+  --gov-card-shadow: 0 1px 2px rgb(0 0 0 / 20%), 0 18px 44px -18px rgb(0 0 0 / 45%);
+  --gov-feature-card: #121b2d99;
+  --gov-feature-border: #23304a;
+
+  --gov-text: #101a2e;
+  --gov-text-secondary: #4a5568;
+  --gov-text-muted: #6b7280;
+  --gov-hero-text: #f4f1ea;
+  --gov-hero-text-secondary: #c2c9d6;
+
+  --gov-gold: #c9a961;
+  --gov-gold-strong: #d9bd80;
+  --gov-gold-text: #d9bd80;
+  --gov-red: #a85454;
+  --gov-green: #5c8a68;
+  --gov-graphite: #8d97a8;
+
+  --gov-header: #060a14;
+  --gov-header-border: #17223a;
+  --gov-header-text: #f4f1ea;
+  --gov-divider: #24314c;
+
+  --gov-hero-fade: #0a111f;
+  --gov-hero-scrim-strong: rgb(4 8 16 / 88%);
+  --gov-hero-scrim-mid: rgb(6 10 20 / 55%);
+}
+
+/**
+ * Text size and contrast preferences.
+ *
+ * Set on the document element by the accessibility panel. Scaling the root font size lets
+ * every rem-based measurement follow, which is why the page is built in rem rather than
+ * in pixels.
+ */
+:root[data-text-size='large'] {
+  font-size: 112.5%;
+}
+
+:root[data-text-size='xlarge'] {
+  font-size: 125%;
+}
+
+:root[data-contrast='high'] [data-surface='government'] {
+  --gov-text: #000000;
+  --gov-text-secondary: #1f2733;
+  --gov-card-border: #1f2733;
+  --gov-field-border: #1f2733;
+  --gov-divider: #1f2733;
+  --gov-hero-text: #ffffff;
+  --gov-hero-text-secondary: #f0f2f6;
+  --gov-gold: #6b5220;
+}
+
+:root[data-contrast='high'][data-theme='dark'] [data-surface='government'],
+:root[data-contrast='high']:not([data-theme='light']) [data-surface='government'] {
+  --gov-gold: #e8d5a8;
+}
+
+/**
+ * Reduced motion.
+ *
+ * Honoured from the OS by the media query, and from the accessibility panel by the
+ * attribute, so somebody who cannot change an OS setting still has the choice.
+ */
+@media (prefers-reduced-motion: reduce) {
+  [data-surface='government'] *,
+  [data-surface='government'] *::before,
+  [data-surface='government'] *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+:root[data-motion='reduced'] [data-surface='government'] *,
+:root[data-motion='reduced'] [data-surface='government'] *::before,
+:root[data-motion='reduced'] [data-surface='government'] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}
+
+@keyframes gov-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}

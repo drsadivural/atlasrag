@@ -5,6 +5,7 @@ import { RouterProvider } from 'react-router-dom';
 import { ToastProvider, TooltipProvider } from '@uxe/ui';
 import '@uxe/ui/tokens.css';
 import './styles.css';
+import './styles/government.css';
 import { router } from './router.js';
 import { SessionProvider } from './lib/session.js';
 import { ThemeProvider } from './lib/theme.js';
