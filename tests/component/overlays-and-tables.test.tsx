@@ -332,6 +332,24 @@ describe('Toasts', () => {
     expect(screen.queryByText('Report ready')).not.toBeInTheDocument();
   });
 
+  it('does not swallow a click meant for the control underneath it', async () => {
+    render(
+      <ToastProvider>
+        <Trigger />
+      </ToastProvider>,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Generate' }));
+    const toast = await screen.findByRole('status');
+
+    // The toast lands over the bottom-right of the screen, which is where a dialog puts
+    // its primary action. Its own controls stay clickable; the card does not.
+    expect(toast.className).toContain('pointer-events-none');
+    expect(within(toast).getByRole('button', { name: /dismiss/i }).className).toContain(
+      'pointer-events-auto',
+    );
+  });
+
   it('raises a failure as an assertive alert, and does not auto-hide it', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     try {

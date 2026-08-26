@@ -16,6 +16,10 @@ export const EnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   APP_ENV: z.enum(['development', 'staging', 'production']).default('development'),
   API_PORT: z.coerce.number().int().min(1).max(65535).default(8787),
+  // Every interface by default, because a container has to be reachable from outside it.
+  // A deployment that fronts the API with a proxy or a tunnel should narrow this to
+  // 127.0.0.1 so the only way in is through the front door.
+  API_HOST: z.string().min(1).default('0.0.0.0'),
   PUBLIC_APP_URL: z.url().default('http://localhost:5173'),
   PUBLIC_API_URL: z.url().default('http://localhost:8787'),
   CORS_ALLOWED_ORIGINS: z.string().default('http://localhost:5173'),

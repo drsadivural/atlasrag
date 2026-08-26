@@ -1,0 +1,22 @@
+[Unit]
+Description=UXE Consulting AI API and job worker
+Documentation=file:///home/codex/atlasrag/infra/staging/README.md
+After=network-online.target docker.service uxe-document-worker.service
+Wants=network-online.target
+Requires=uxe-document-worker.service
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/codex/atlasrag
+# The server loads .env itself, so secrets stay in one place rather than being copied
+# into a unit file that is world readable.
+ExecStart=/home/codex/atlasrag/node_modules/.bin/tsx apps/api/src/server.ts
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

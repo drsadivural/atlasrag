@@ -1,0 +1,27 @@
+[Unit]
+Description=UXE Consulting AI document worker
+Documentation=file:///home/codex/atlasrag/infra/staging/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/codex/atlasrag/services/document-worker
+# The worker reads its shared token from the environment, and the API loads the same file
+# through dotenv — one source of truth, so the two can never disagree about the token.
+EnvironmentFile=/home/codex/atlasrag/.env
+ExecStart=/home/codex/atlasrag/services/document-worker/.venv/bin/python3 .venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8099 --log-level warning
+Restart=always
+RestartSec=5
+# Extraction runs untrusted documents through PyMuPDF, Tesseract and LibreOffice, so the
+# worker gets no more of the filesystem than it needs.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/codex/atlasrag/.data /home/codex/atlasrag/services/document-worker
+
+[Install]
+WantedBy=multi-user.target

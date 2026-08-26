@@ -61,3 +61,40 @@ database this application actually runs on, not merely a PostgreSQL server.
 Service control falls back to `pg_ctlcluster`, then to `pg_ctl`, so the script
 also works in a container or on a minimal image where systemd is not PID 1.
 That fallback is what made the verification above possible.
+
+## Running staging permanently
+
+Staging is served at **https://consultnow.ayonix.com** through a dedicated named
+Cloudflare Tunnel. Four systemd units in `infra/staging/systemd/` hold it up; all four are
+enabled, so the whole stack returns after a reboot without anyone logging in.
+
+| Unit                    | What it runs                                                 |
+| ----------------------- | ------------------------------------------------------------ |
+| `uxe-document-worker`   | the FastAPI extraction service on 127.0.0.1:8099             |
+| `uxe-api`               | the API and the in-process job worker on 127.0.0.1:8787      |
+| `uxe-web`               | the web server on 127.0.0.1:4173, proxying `/api` to the API |
+| `uxe-consultnow-tunnel` | `cloudflared`, the only thing reachable from outside         |
+
+PostgreSQL runs in the `uxe-postgres` container with `--restart unless-stopped`.
+
+Nothing but the tunnel is exposed: the API binds to `API_HOST=127.0.0.1`, and the web
+server answers only to the hostname named in `WEB_ALLOWED_HOSTS`. The browser sees one
+origin, so the session cookie stays first-party — the same shape production has under
+Cloudflare, which is why it is worth the proxy hop.
+
+### Installing or updating the units
+
+```bash
+sudo install -m 0644 infra/staging/systemd/*.service /etc/systemd/system/
+sudo install -m 0644 infra/staging/systemd/uxe-consultnow.yml /etc/cloudflared/
+sudo systemctl daemon-reload
+sudo systemctl enable --now uxe-document-worker uxe-api uxe-web uxe-consultnow-tunnel
+```
+
+The web server serves a built bundle, so a UI change needs `pnpm --filter @uxe/web build`
+followed by `sudo systemctl restart uxe-web`.
+
+### Verified against the live hostname
+
+E2E 49 passed, accessibility 37 passed, and `pnpm smoke` 10/10, all against
+`https://consultnow.ayonix.com`.

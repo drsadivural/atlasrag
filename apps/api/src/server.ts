@@ -15,15 +15,19 @@ const { app, deps } = buildApp();
 
 const stopWorker = startWorkerLoop(deps);
 
-const server = serve({ fetch: app.fetch, port: deps.env.API_PORT, hostname: '0.0.0.0' }, (info) => {
-  deps.logger.info('api.listening', {
-    port: info.port,
-    env: deps.env.APP_ENV,
-    storage: deps.services.storage.id,
-    chatProvider: deps.services.chat.id,
-    embeddingProvider: deps.services.embeddings.id,
-  });
-});
+const server = serve(
+  { fetch: app.fetch, port: deps.env.API_PORT, hostname: deps.env.API_HOST },
+  (info) => {
+    deps.logger.info('api.listening', {
+      port: info.port,
+      host: deps.env.API_HOST,
+      env: deps.env.APP_ENV,
+      storage: deps.services.storage.id,
+      chatProvider: deps.services.chat.id,
+      embeddingProvider: deps.services.embeddings.id,
+    });
+  },
+);
 
 const shutdown = (signal: string) => {
   deps.logger.info('api.shutdown', { signal });

@@ -1,0 +1,11 @@
+# Dedicated tunnel for UXE Consulting AI staging.
+# Its own tunnel rather than an ingress rule on an existing one, so restarting this app
+# can never interrupt another service sharing the same tunnel process.
+tunnel: fb283e46-19ba-43c7-8f21-a72a918505ef
+credentials-file: /root/.cloudflared/fb283e46-19ba-43c7-8f21-a72a918505ef.json
+ingress:
+  # The web server proxies /api to the API on 127.0.0.1:8787, so the browser sees a single
+  # origin and the session cookie stays first-party.
+  - hostname: consultnow.ayonix.com
+    service: http://127.0.0.1:4173
+  - service: http_status:404

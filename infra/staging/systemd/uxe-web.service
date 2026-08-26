@@ -1,0 +1,25 @@
+[Unit]
+Description=UXE Consulting AI web server
+Documentation=file:///home/codex/atlasrag/infra/staging/README.md
+After=network-online.target uxe-api.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/codex/atlasrag/apps/web
+# The public hostname must be named explicitly: the server rejects Host headers it does
+# not recognise, which is what stops DNS rebinding from reaching it through the tunnel.
+Environment=WEB_ALLOWED_HOSTS=consultnow.ayonix.com
+ExecStart=/home/codex/atlasrag/node_modules/.bin/vite preview --port 4173 --strictPort --host 127.0.0.1
+Restart=always
+RestartSec=5
+# The preview server exits on SIGTERM without translating it, so a clean `systemctl stop`
+# would otherwise be recorded as a failure and show up in monitoring as one.
+SuccessExitStatus=143
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

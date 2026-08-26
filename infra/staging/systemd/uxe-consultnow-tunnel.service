@@ -1,0 +1,15 @@
+[Unit]
+Description=UXE Consulting AI Named Cloudflare Tunnel
+Documentation=file:///home/codex/atlasrag/infra/staging/README.md
+After=network-online.target uxe-web.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/local/bin/cloudflared tunnel --no-autoupdate --config /etc/cloudflared/uxe-consultnow.yml run
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

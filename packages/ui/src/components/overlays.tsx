@@ -482,7 +482,11 @@ function ToastViewport({
           key={toast.id}
           role={toast.tone === 'error' ? 'alert' : 'status'}
           className={cn(
-            'pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-[var(--uxe-radius-card)] border p-3.5',
+            // The card itself stays transparent to the pointer; only its own controls take
+            // clicks. A toast overlapping a dialog's action — it is bottom-right on
+            // desktop, and so is a dialog footer — would otherwise swallow the click the
+            // user meant for the button underneath.
+            'pointer-events-none flex w-full max-w-sm items-start gap-3 rounded-[var(--uxe-radius-card)] border p-3.5',
             'animate-[uxe-fade-in_var(--uxe-duration)_var(--uxe-ease)] shadow-[var(--uxe-shadow-lg)]',
             TOAST_TONES[toast.tone],
           )}
@@ -499,7 +503,7 @@ function ToastViewport({
                   toast.action?.onClick();
                   onDismiss(toast.id);
                 }}
-                className="mt-2 text-[13px] font-semibold underline underline-offset-2"
+                className="pointer-events-auto mt-2 text-[13px] font-semibold underline underline-offset-2"
               >
                 {toast.action.label}
               </button>
@@ -509,7 +513,7 @@ function ToastViewport({
             type="button"
             onClick={() => onDismiss(toast.id)}
             aria-label={`Dismiss: ${toast.title}`}
-            className="rounded p-0.5 text-[var(--uxe-text-secondary)] hover:text-[var(--uxe-text)]"
+            className="pointer-events-auto rounded p-0.5 text-[var(--uxe-text-secondary)] hover:text-[var(--uxe-text)]"
           >
             <X className="h-4 w-4" aria-hidden />
           </button>

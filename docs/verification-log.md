@@ -189,6 +189,33 @@ between runs. Both suites now restore the depth they change, and the functional 
 the depth it depends on instead of inheriting it. Verified by running accessibility and
 then E2E back to back against the same live database: 37 passed, then 49 passed.
 
+## Permanent staging at consultnow.ayonix.com
+
+Moving from an ad-hoc tunnel to a permanent one under systemd surfaced three more defects.
+
+**The document worker lost its shared token.** As a `nohup` process it inherited the
+token from the shell; as a unit it had no environment, so it answered every extraction
+with 503 and the API reported the worker as unavailable. Every upload and every corrected
+edition failed. The unit now reads the same `.env` the API loads, so the two cannot
+disagree about the token, and `.env` was tightened from 0664 to 0600.
+
+**A success toast swallowed clicks meant for the button underneath it.** The toast
+viewport is bottom-right on desktop, which is also where a dialog puts its primary
+action; the toast card was `pointer-events-auto`, so a click on _Generate corrected
+edition_ hit the toast instead. The card is now transparent to the pointer and only its
+own dismiss and action controls take clicks. This is a real defect, not a test artefact —
+a user clicking during the toast's lifetime lost the click too. Covered by a component
+test.
+
+**A clean stop was recorded as a failure.** The web server exits on SIGTERM without
+translating it, so `systemctl stop` left the unit in `failed`. `SuccessExitStatus=143`
+makes an intentional stop read as one.
+
+The API's bind address also became configurable (`API_HOST`, still `0.0.0.0` by default
+for containers) and staging narrows it to `127.0.0.1`, so the tunnel is the only way in.
+
+Verified against the live hostname: E2E 49 passed, accessibility 37 passed, smoke 10/10.
+
 ## Reproducing
 
 ```bash
