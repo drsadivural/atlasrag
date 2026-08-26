@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import {
   ArtifactRepository,
   AuditRepository,
+  ConnectorRepository,
   ConsultationRepository,
   CorrectionRepository,
   IdempotencyRepository,
@@ -41,6 +42,7 @@ import {
 import { idempotency } from './middleware/idempotency.js';
 import { authRoutes } from './routes/auth.js';
 import { sourceRoutes } from './routes/sources.js';
+import { connectorCallbackRoutes, connectorRoutes } from './routes/connectors.js';
 import { consultationRoutes } from './routes/consultations.js';
 import { correctionRoutes } from './routes/corrections.js';
 import { jobRoutes } from './routes/jobs.js';
@@ -122,6 +124,7 @@ export function buildApp(options: BuildOptions = {}): BuiltApp {
   const repos: Repositories = {
     identity: new IdentityRepository(db),
     sources: new SourceRepository(db),
+    connectors: new ConnectorRepository(db),
     consultations: new ConsultationRepository(db),
     retrieval: new RetrievalRepository(db),
     jobs: new JobRepository(db),
@@ -188,6 +191,9 @@ export function buildApp(options: BuildOptions = {}): BuiltApp {
   v1.route('/', systemRoutes(deps));
   v1.route('/storage', storageRoutes(deps));
   v1.route('/auth', authRoutes(deps));
+  // The provider redirects a browser here with no session of ours, so the callback is
+  // outside the authenticated area and identified by its single-use state token instead.
+  v1.route('/connectors', connectorCallbackRoutes(deps));
 
   v1.get('/openapi.json', (c) =>
     c.json(buildOpenApiDocument({ version: '1.0.0', serverUrl: deps.env.PUBLIC_API_URL })),
@@ -209,6 +215,7 @@ export function buildApp(options: BuildOptions = {}): BuiltApp {
   tenantScoped.route('/audit-events', auditRoutes(deps));
   tenantScoped.route('/users', userRoutes(deps));
   tenantScoped.route('/settings', settingsRoutes(deps));
+  tenantScoped.route('/connectors', connectorRoutes(deps));
 
   v1.route('/', tenantScoped);
   app.route('/api/v1', v1);

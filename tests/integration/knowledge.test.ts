@@ -26,6 +26,28 @@ beforeEach(async () => {
   owner = await registerOwner(harness);
 });
 
+describe('source listing query', () => {
+  it('treats an empty parameter as one that was not supplied', async () => {
+    // `?sort=&ownerId=` is what a form or a hand-edited URL produces. Read as present but
+    // invalid it is a 400, which is what a caller used to get.
+    const response = await owner.client.get<{ items: unknown[] }>(
+      '/sources?status=all&documentType=all&page=1&pageSize=10&sort=&ownerId=&tag=&q=',
+    );
+    expect(response.status).toBe(200);
+    expect(Array.isArray(response.body.items)).toBe(true);
+  });
+
+  it('names the parameter it rejected', async () => {
+    const response = await owner.client.get<{
+      error: { message: string; fieldErrors: Record<string, string[]> };
+    }>('/sources?page=0');
+    expect(response.status).toBe(400);
+    // A caller cannot fix "one or more parameters are invalid".
+    expect(response.body.error.message).toContain('page');
+    expect(Object.keys(response.body.error.fieldErrors)).toContain('page');
+  });
+});
+
 describe('ingesting a regulation', () => {
   it('extracts, chunks, indexes and reports a ready source with real page counts', async () => {
     const uploaded = await uploadFixture(harness, owner.client, 'regulation-native.pdf');

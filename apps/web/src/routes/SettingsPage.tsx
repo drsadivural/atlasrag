@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { NavLink, useParams } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { NavLink, useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangle,
@@ -8,6 +8,10 @@ import {
   CheckCircle2,
   Cpu,
   KeyRound,
+  Link2,
+  Loader2,
+  Plug,
+  RefreshCw,
   Palette,
   ShieldCheck,
   Trash2,
@@ -33,8 +37,13 @@ import {
   formatRelative,
   useToast,
 } from '@uxe/ui';
-import type { ModelConfiguration, WorkspaceSettings } from '@uxe/contracts';
-import { type ApiError, api } from '../lib/api.js';
+import type {
+  ConnectorProvider,
+  ConnectorsResponse,
+  ModelConfiguration,
+  WorkspaceSettings,
+} from '@uxe/contracts';
+import { type ApiError, api, newIdempotencyKey } from '../lib/api.js';
 import { useSyncedState } from '../lib/forms.js';
 import { useI18n } from '../lib/i18n.js';
 import { useSession } from '../lib/session.js';
@@ -47,6 +56,7 @@ const SECTIONS = [
   { key: 'consultant', labelKey: 'settings.consultant', icon: UserCircle },
   { key: 'models', labelKey: 'settings.models', icon: Cpu },
   { key: 'security', labelKey: 'settings.security', icon: ShieldCheck },
+  { key: 'connectors', labelKey: 'settings.connectors', icon: Plug },
   { key: 'retention', labelKey: 'settings.retention', icon: Trash2 },
 ] as const;
 
@@ -119,6 +129,8 @@ export function SettingsPage() {
               <ConsultantSection settings={query.data.settings} canEdit={can('settings:update')} />
             ) : section === 'security' ? (
               <SecuritySection settings={query.data.settings} canEdit={can('settings:security')} />
+            ) : section === 'connectors' ? (
+              <ConnectorsSection canEdit={can('settings:connectors')} />
             ) : section === 'retention' ? (
               <RetentionSection
                 settings={query.data.settings}
@@ -872,3 +884,296 @@ function RetentionSection({
 }
 
 export { Palette };
+
+/* -------------------------------------------------------------------------- */
+/* Connectors                                                                 */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The file stores this workspace can attach.
+ *
+ * Three states, kept visibly distinct because each has a different person and a different
+ * fix behind it: connected, ready to connect, and not set up for this deployment at all.
+ * A single greyed-out button would tell an administrator none of that.
+ */
+function ConnectorsSection({ canEdit }: { canEdit: boolean }) {
+  const { t } = useI18n();
+  const { push } = useToast();
+  const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [pending, setPending] = useState<string | null>(null);
+  const [syncingId, setSyncingId] = useState<string | null>(null);
+
+  const query = useQuery<ConnectorsResponse, ApiError>({
+    queryKey: ['connectors'],
+    queryFn: () => api.get<ConnectorsResponse>('/connectors'),
+  });
+
+  // The provider sends the browser back here with its answer in the URL. Reported once
+  // and then cleared, so a refresh does not repeat a message about something already done.
+  // In an effect rather than in render: it both shows a toast and rewrites the URL, and
+  // neither belongs in the middle of producing markup.
+  useEffect(() => {
+    const outcome = searchParams.get('connector');
+    if (!outcome) return;
+
+    if (outcome === 'connected') {
+      push({ title: t('connectors.connected'), tone: 'success' });
+      void queryClient.invalidateQueries({ queryKey: ['connectors'] });
+    } else if (outcome === 'cancelled') {
+      push({ title: t('connectors.cancelled'), tone: 'info' });
+    } else {
+      push({
+        title: t('connectors.failed'),
+        description: t(reasonKey(searchParams.get('reason'))),
+        tone: 'error',
+      });
+    }
+
+    const next = new URLSearchParams(searchParams);
+    next.delete('connector');
+    next.delete('kind');
+    next.delete('reason');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams, push, queryClient, t]);
+
+  const connect = useMutation({
+    mutationFn: (kind: string) =>
+      api.post<{ authorizeUrl: string }>(`/connectors/${kind}/authorize`, {
+        returnTo: '/settings/connectors',
+      }),
+    onMutate: (kind: string) => setPending(kind),
+    onSuccess: (result) => {
+      // A full navigation, not a popup: the consent screen refuses to render in a frame,
+      // and a blocked popup would look like a button that does nothing.
+      window.location.assign(result.authorizeUrl);
+    },
+    onError: (error: ApiError) => {
+      setPending(null);
+      push({ title: t('connectors.connectFailed'), description: error.message, tone: 'error' });
+    },
+  });
+
+  const disconnect = useMutation({
+    mutationFn: (id: string) => api.delete(`/connectors/${id}`),
+    onSuccess: () => {
+      push({ title: t('connectors.disconnected'), tone: 'success' });
+      void queryClient.invalidateQueries({ queryKey: ['connectors'] });
+    },
+    onError: (error: ApiError) => push({ title: error.message, tone: 'error' }),
+  });
+
+  const sync = useMutation({
+    mutationFn: (id: string) => api.post(`/connectors/${id}/sync`, {}, newIdempotencyKey()),
+    onMutate: (id: string) => setSyncingId(id),
+    onSettled: () => setSyncingId(null),
+    onSuccess: () => {
+      push({ title: t('connectors.syncStarted'), tone: 'success' });
+      void queryClient.invalidateQueries({ queryKey: ['connectors'] });
+      void queryClient.invalidateQueries({ queryKey: ['sources'] });
+    },
+    onError: (error: ApiError) => push({ title: error.message, tone: 'error' }),
+  });
+
+  if (query.isLoading) {
+    return (
+      <LoadingRegion label={t('connectors.title')}>
+        <Skeleton className="h-64 w-full rounded-[var(--uxe-radius-card)]" />
+      </LoadingRegion>
+    );
+  }
+  if (query.error) {
+    return (
+      <ErrorState
+        message={query.error.message}
+        traceId={query.error.traceId}
+        onRetry={() => void query.refetch()}
+      />
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <Card>
+        <CardHeader>
+          <CardTitle>{t('connectors.title')}</CardTitle>
+        </CardHeader>
+        <p className="px-5 pb-5 text-[13px] text-[var(--uxe-text-secondary)]">
+          {t('connectors.description')}
+        </p>
+      </Card>
+
+      {(query.data?.providers ?? []).map((provider) => (
+        <ConnectorCard
+          key={provider.kind}
+          provider={provider}
+          canEdit={canEdit}
+          busy={pending === provider.kind}
+          syncing={syncingId === provider.connection?.id}
+          onConnect={() => connect.mutate(provider.kind)}
+          onDisconnect={(id) => disconnect.mutate(id)}
+          onSync={(id) => sync.mutate(id)}
+        />
+      ))}
+    </div>
+  );
+}
+
+function ConnectorCard({
+  provider,
+  canEdit,
+  busy,
+  syncing,
+  onConnect,
+  onDisconnect,
+  onSync,
+}: {
+  provider: ConnectorProvider;
+  canEdit: boolean;
+  busy: boolean;
+  syncing: boolean;
+  onConnect: () => void;
+  onDisconnect: (id: string) => void;
+  onSync: (id: string) => void;
+}) {
+  const { t } = useI18n();
+  const connection = provider.connection;
+
+  return (
+    <Card>
+      <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <Link2 className="h-4 w-4 text-[var(--uxe-text-secondary)]" aria-hidden />
+            <h3 className="text-[15px] font-semibold text-[var(--uxe-text)]">{provider.label}</h3>
+            {connection ? (
+              <Badge
+                tone={connection.status === 'error' ? 'danger' : 'success'}
+                size="sm"
+                icon={
+                  connection.status === 'error' ? (
+                    <XCircle className="h-3 w-3" aria-hidden />
+                  ) : (
+                    <CheckCircle2 className="h-3 w-3" aria-hidden />
+                  )
+                }
+              >
+                {connection.status === 'error'
+                  ? t('connectors.statusError')
+                  : t('connectors.statusConnected')}
+              </Badge>
+            ) : provider.available ? (
+              <Badge tone="neutral" size="sm">
+                {t('connectors.statusNotConnected')}
+              </Badge>
+            ) : (
+              <Badge
+                tone="warning"
+                size="sm"
+                icon={<AlertTriangle className="h-3 w-3" aria-hidden />}
+              >
+                {t('connectors.statusNeedsSetup')}
+              </Badge>
+            )}
+          </div>
+
+          <p className="mt-1.5 text-[13px] text-[var(--uxe-text-secondary)]">
+            {provider.description}
+          </p>
+
+          {connection && (
+            <dl className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-[13px]">
+              <div className="flex gap-1.5">
+                <dt className="text-[var(--uxe-text-secondary)]">{t('connectors.account')}</dt>
+                <dd className="font-medium text-[var(--uxe-text)]">
+                  {connection.accountEmail ?? '—'}
+                </dd>
+              </div>
+              <div className="flex gap-1.5">
+                <dt className="text-[var(--uxe-text-secondary)]">{t('connectors.lastSync')}</dt>
+                <dd className="font-medium text-[var(--uxe-text)]">
+                  {connection.lastSyncedAt
+                    ? formatRelative(connection.lastSyncedAt)
+                    : t('connectors.never')}
+                </dd>
+              </div>
+            </dl>
+          )}
+
+          {connection?.lastError && (
+            <p
+              role="status"
+              className="mt-3 rounded-[var(--uxe-radius-control)] border border-[var(--uxe-danger-border)] bg-[var(--uxe-danger-bg)] px-3 py-2 text-[13px] text-[var(--uxe-danger-text)]"
+            >
+              {connection.lastError}
+            </p>
+          )}
+
+          {!provider.available && (
+            <div className="mt-3 rounded-[var(--uxe-radius-control)] border border-[var(--uxe-border)] bg-[var(--uxe-surface-sunken)] p-3 text-[13px]">
+              {/* Named exactly, because the fix is an operator's and it is two variables
+                  and one URL — not something to leave anybody guessing at. */}
+              <p className="text-[var(--uxe-text-secondary)]">{t('connectors.setupHint')}</p>
+              <ul className="mt-2 flex flex-col gap-1 font-mono text-[12px] text-[var(--uxe-text)]">
+                {provider.requiredEnv.map((name) => (
+                  <li key={name}>{name}</li>
+                ))}
+              </ul>
+              <p className="mt-2 text-[var(--uxe-text-secondary)]">
+                {t('connectors.redirectHint')}
+              </p>
+              <p className="mt-1 font-mono text-[12px] break-all text-[var(--uxe-text)]">
+                {provider.redirectUri}
+              </p>
+            </div>
+          )}
+        </div>
+
+        <div className="flex shrink-0 flex-wrap gap-2">
+          {connection ? (
+            <>
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={!canEdit || syncing}
+                onClick={() => onSync(connection.id)}
+              >
+                {syncing ? (
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                ) : (
+                  <RefreshCw className="h-4 w-4" aria-hidden />
+                )}
+                {t('connectors.syncNow')}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={!canEdit}
+                onClick={() => onDisconnect(connection.id)}
+              >
+                {t('connectors.disconnect')}
+              </Button>
+            </>
+          ) : (
+            <Button
+              size="sm"
+              disabled={!canEdit || !provider.available || busy}
+              onClick={onConnect}
+            >
+              {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
+              {t('connectors.connect')}
+            </Button>
+          )}
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+/** The provider's own reason, said in words the person reading it can act on. */
+function reasonKey(reason: string | null) {
+  if (reason === 'no_refresh_token') return 'connectors.reasonNoRefresh' as const;
+  if (reason === 'expired') return 'connectors.reasonExpired' as const;
+  if (reason === 'not_configured') return 'connectors.reasonNotConfigured' as const;
+  return 'connectors.reasonGeneric' as const;
+}

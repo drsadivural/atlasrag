@@ -58,7 +58,23 @@ const ENDPOINTS: Record<
 export async function buildAuthorizationRequest(
   provider: OAuthProvider,
   config: OAuthConfig,
-  options: { extraScopes?: string[]; loginHint?: string } = {},
+  options: {
+    extraScopes?: string[];
+    loginHint?: string;
+    /**
+     * Ask for a refresh token.
+     *
+     * Sign-in does not need one: the session is this application's own, and the grant is
+     * spent the moment the profile is read. A connector does — it has to reach the
+     * account's files hours later, long after the access token has expired.
+     *
+     * Google returns a refresh token only for `access_type=offline`, and only on the
+     * first consent unless `prompt=consent` forces the screen again; a second connection
+     * attempt would otherwise come back with nothing to store. Microsoft covers the same
+     * ground with the `offline_access` scope it already requests.
+     */
+    offlineAccess?: boolean;
+  } = {},
 ): Promise<AuthorizationRequest> {
   const endpoints = ENDPOINTS[provider](config);
   const state = randomToken(24);
@@ -85,6 +101,10 @@ export async function buildAuthorizationRequest(
     prompt: 'select_account',
   });
   if (options.loginHint) params.set('login_hint', options.loginHint);
+  if (options.offlineAccess && provider === 'google') {
+    params.set('access_type', 'offline');
+    params.set('prompt', 'consent');
+  }
 
   return { url: `${endpoints.authorize}?${params.toString()}`, state, codeVerifier, nonce };
 }

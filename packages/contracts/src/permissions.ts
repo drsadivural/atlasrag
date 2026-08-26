@@ -46,6 +46,7 @@ export const PERMISSIONS = [
   'settings:security',
   'settings:models',
   'settings:retention',
+  'settings:connectors',
   'retention:purge',
 ] as const;
 
@@ -124,6 +125,9 @@ const ADMIN: Permission[] = [
     'settings:security',
     'settings:models',
     'settings:retention',
+    // Connecting a company's Drive or SharePoint hands this workspace a standing grant
+    // over that account's files, which is an administrator's decision, not a librarian's.
+    'settings:connectors',
   ]),
 ];
 

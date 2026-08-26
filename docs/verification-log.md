@@ -259,6 +259,47 @@ a trailing asterisk, so `getByLabel('Password', { exact: true })` matches on the
 page and silently fails on the sign-up page, where the field is required. The tests match
 on a prefix instead.
 
+## The knowledge base 400
+
+Reported as "Something went wrong / One or more query parameters are invalid" when adding
+a document, with a trace id. The log named the path and the status but not the parameter,
+so the first fix was to make the next one diagnosable: rejections now name the offending
+fields, in the message the caller sees and in the log line.
+
+The cause was general rather than specific to that page. `validateQuery` passed the query
+string to Zod as-is, and an empty parameter — `?sort=&ownerId=`, which is what a form or a
+hand-edited URL produces — reads as _present but invalid_ rather than as absent, so an
+optional field rejected its own absence. Every endpoint with an optional query parameter
+had the same hole; the fix is one line in the middleware and covers all of them.
+
+The page was hardened too: `Number(searchParams.get('page'))` turns any junk in a URL into
+`0` or `NaN` and sends it, which is how a bad link becomes a 400 with nothing on screen
+but a banner. It now falls back to the default unless the value is a positive integer.
+
+## Connectors
+
+Google Drive, OneDrive and SharePoint can be attached from Settings, and their files land
+in the knowledge base as ordinary sources. Full detail in
+[docs/connectors.md](connectors.md); what matters here is what is and is not proven.
+
+**Verified**: the provider catalogue and its availability reporting, the refusal to start a
+flow this deployment cannot finish (naming the exact variables), permission enforcement,
+callback rejection for a state that was never issued, and the entire sync — imported,
+skipped-with-reasons, deduplicated by content hash, error recorded on the connector, and
+status and timestamp afterwards. The sync runs against a stubbed provider on a harness
+configured with an OAuth application; the client request construction and response parsing
+are covered separately against stubbed fetch responses.
+
+**Not verified**: the live handshake with Google or Microsoft. This deployment has no
+registered OAuth application, so no request has ever reached either provider. That is the
+one part of the feature standing on documentation rather than on a passing test.
+
+One defect removed on the way: the knowledge base already had Drive, OneDrive and
+SharePoint buttons that posted a hardcoded `accountEmail: 'me@example.com'` to an endpoint
+that could only ever refuse them. They now sync when connected, start the consent flow
+when the deployment can, and explain themselves with a link to the right screen when it
+cannot.
+
 ## Reproducing
 
 ```bash

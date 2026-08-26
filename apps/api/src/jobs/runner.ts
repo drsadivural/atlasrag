@@ -13,6 +13,7 @@ import {
 } from '@uxe/rag';
 import { renderDetails } from '@uxe/rag';
 import type { AppDeps } from '../context.js';
+import { runConnectorSync } from './connector-sync.js';
 import { runIngestion, base64ToBytes, bytesToBase64 } from './ingest.js';
 import { DocumentWorkerError } from '../services/document-worker.js';
 import { buildStorageKey } from '../services/storage.js';
@@ -124,12 +125,33 @@ async function dispatch(
       return runCorrectionPlanJob(deps, tenant, job);
     case 'correction_generate':
       return runCorrectionGenerateJob(deps, tenant, job);
+    case 'connector_sync':
+      return runConnectorSyncJob(deps, tenant, job);
     case 'retention_purge':
       return runRetentionPurgeJob(deps, tenant);
     default:
       logger.warn('job.unknown_kind');
       throw new Error(`Unknown job kind: ${job.kind}`);
   }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Connector sync                                                             */
+/* -------------------------------------------------------------------------- */
+
+async function runConnectorSyncJob(
+  deps: AppDeps,
+  tenant: TenantContext,
+  job: JobRecord,
+): Promise<RunResult> {
+  const payload = job.payload as { connectorId: string };
+  const outcome = await runConnectorSync(deps, tenant, { connectorId: payload.connectorId });
+
+  return {
+    ok: true,
+    resultRef: { kind: 'connector', id: payload.connectorId },
+    metrics: { ...outcome },
+  };
 }
 
 /* -------------------------------------------------------------------------- */

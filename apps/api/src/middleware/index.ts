@@ -134,7 +134,17 @@ export function errorHandler(deps: AppDeps) {
       path: c.req.path,
       method: c.req.method,
       status: mapped.status,
-      error: { name: error.name, message: error.message },
+      error: {
+        name: error.name,
+        message: error.message,
+        // Which field failed, not just that one did. Field names only — the values may be
+        // whatever the caller typed.
+        ...(error instanceof ApiError && error.options.fieldErrors
+          ? Object.keys(error.options.fieldErrors).length > 0
+            ? { fields: Object.keys(error.options.fieldErrors) }
+            : {}
+          : {}),
+      },
       ...(mapped.logLevel === 'error' ? { stack: error.stack?.slice(0, 2000) } : {}),
     };
 

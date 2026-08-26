@@ -2,6 +2,7 @@ import type { AppEnv } from './env.js';
 import type {
   ArtifactRepository,
   AuditRepository,
+  ConnectorRepository,
   ConsultationRepository,
   CorrectionRepository,
   Database,
@@ -26,6 +27,7 @@ import type { RateLimiter } from './services/rate-limit.js';
 export interface Repositories {
   identity: IdentityRepository;
   sources: SourceRepository;
+  connectors: ConnectorRepository;
   consultations: ConsultationRepository;
   retrieval: RetrievalRepository;
   jobs: JobRepository;

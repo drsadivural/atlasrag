@@ -33,5 +33,6 @@ export {
   SettingsRepository,
   UploadTicketRepository,
 } from './repositories/artifacts.js';
+export { ConnectorRepository, type ConnectorRow } from './repositories/connectors.js';
 export { MetricsRepository, type PeriodSummary } from './repositories/metrics.js';
 export { runMigrations, MIGRATIONS } from './migrate.js';

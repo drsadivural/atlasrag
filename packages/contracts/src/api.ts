@@ -455,6 +455,84 @@ export const CreateConnectorRequest = z.discriminatedUnion('kind', [
 ]);
 export type CreateConnectorRequest = z.infer<typeof CreateConnectorRequest>;
 
+/* -------------------------------------------------------------------------- */
+/* Connectors                                                                 */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The three file stores a workspace can attach.
+ *
+ * A narrower set than `ConnectorKind`: a website or a pasted note is fetched once and has
+ * no account behind it, while these three hold a standing OAuth grant over somebody's
+ * files and need connecting, disconnecting and re-authorising.
+ */
+export const FileStoreKind = z.enum(['google_drive', 'onedrive', 'sharepoint']);
+export type FileStoreKind = z.infer<typeof FileStoreKind>;
+
+export const ConnectorStatus = z.enum(['connected', 'error', 'syncing', 'disconnected']);
+export type ConnectorStatus = z.infer<typeof ConnectorStatus>;
+
+/**
+ * One provider as the settings screen sees it.
+ *
+ * `available` says whether this deployment has an OAuth application for the provider at
+ * all. It is separate from `connection`, because "nobody has connected Drive yet" and
+ * "this deployment cannot connect Drive" are different problems with different fixes, and
+ * a single disabled button would tell an administrator neither.
+ */
+export const ConnectorProvider = z.object({
+  kind: FileStoreKind,
+  label: z.string(),
+  description: z.string(),
+  available: z.boolean(),
+  /** Environment variables an operator must set when `available` is false. */
+  requiredEnv: z.array(z.string()),
+  /** Register this exactly with the provider, or the handshake is refused. */
+  redirectUri: z.string(),
+  /** What the workspace is asking the account holder to grant. */
+  scopes: z.array(z.string()),
+  connection: z
+    .object({
+      id: Id,
+      status: ConnectorStatus,
+      accountEmail: z.string().nullable(),
+      displayName: z.string(),
+      rootPath: z.string(),
+      lastSyncedAt: Timestamp.nullable(),
+      lastError: z.string().nullable(),
+      createdAt: Timestamp,
+      version: z.number().int().min(0),
+    })
+    .nullable(),
+});
+export type ConnectorProvider = z.infer<typeof ConnectorProvider>;
+
+export const ConnectorsResponse = z.object({ providers: z.array(ConnectorProvider) });
+export type ConnectorsResponse = z.infer<typeof ConnectorsResponse>;
+
+export const ConnectorAuthorizeRequest = z.object({
+  /** Where to send the browser once the provider has answered. */
+  returnTo: z.string().max(200).default('/settings/connectors'),
+});
+export type ConnectorAuthorizeRequest = z.infer<typeof ConnectorAuthorizeRequest>;
+
+export const ConnectorAuthorizeResponse = z.object({ authorizeUrl: z.url() });
+export type ConnectorAuthorizeResponse = z.infer<typeof ConnectorAuthorizeResponse>;
+
+export const ConnectorCallbackQuery = z.object({
+  code: z.string().min(1).optional(),
+  state: z.string().min(1),
+  error: z.string().optional(),
+  error_description: z.string().optional(),
+});
+export type ConnectorCallbackQuery = z.infer<typeof ConnectorCallbackQuery>;
+
+export const UpdateConnectorRequest = z.object({
+  rootPath: z.string().trim().max(400).optional(),
+  version: z.number().int().min(0),
+});
+export type UpdateConnectorRequest = z.infer<typeof UpdateConnectorRequest>;
+
 export const UpdateSourceRequest = z.object({
   title: z.string().trim().min(1).max(300).optional(),
   description: z.string().max(2000).nullable().optional(),

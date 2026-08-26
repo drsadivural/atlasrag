@@ -4,7 +4,7 @@ import { Building2, CheckCircle2, Eye, EyeOff, Lock, Mail, User } from 'lucide-r
 import { Button, Card, Checkbox, Field, Input } from '@uxe/ui';
 import { ApiError, api } from '../lib/api.js';
 import { useI18n } from '../lib/i18n.js';
-import { Ayumi, BrandLockup } from '../components/Brand.js';
+import { BrandLockup } from '../components/Brand.js';
 import { MIN_PASSWORD_LENGTH } from '@uxe/contracts';
 import { BACKDROPS, timeOfDay } from '../lib/backdrop.js';
 
@@ -61,29 +61,29 @@ export function RegisterPage() {
             ['--uxe-text-secondary' as string]: backdrop.textSecondary,
           }}
         >
-          <img
-            src={backdrop.image}
-            alt=""
-            aria-hidden
-            decoding="async"
-            className="pointer-events-none absolute inset-0 h-full w-full object-cover select-none"
-            draggable={false}
-          />
           <div
             aria-hidden
             className="pointer-events-none absolute inset-0"
-            style={{ backgroundImage: backdrop.scrim }}
+            style={{ backgroundImage: backdrop.ground }}
           />
+          <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-[62%]">
+            <img
+              src={backdrop.image}
+              alt=""
+              decoding="async"
+              className="h-full w-full object-cover object-right-bottom select-none"
+              draggable={false}
+            />
+            <div
+              className="absolute inset-x-0 top-0 h-1/2"
+              style={{ backgroundImage: backdrop.scrim }}
+            />
+          </div>
 
           <BrandLockup size="lg" className="relative" />
-          <p className="relative mt-3 max-w-xl text-[17px] font-medium text-[var(--uxe-text-secondary)]">
+          <p className="relative mt-3 max-w-[500px] text-[17px] font-medium text-[var(--uxe-text-secondary)]">
             {t('app.promise')}
           </p>
-          <div className="absolute inset-x-0 bottom-0 flex h-[460px] items-end justify-center">
-            <div className="h-full w-[360px]">
-              <Ayumi variant="lg" decorative />
-            </div>
-          </div>
         </section>
 
         <main id="main" className="flex items-center justify-center px-4 py-10 sm:px-8 lg:px-12">

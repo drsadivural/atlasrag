@@ -34,12 +34,22 @@ export function validateJson<T extends z.ZodTypeAny>(schema: T): MiddlewareHandl
 
 export function validateQuery<T extends z.ZodTypeAny>(schema: T): MiddlewareHandler<AppBindings> {
   return async (c, next) => {
-    const raw = Object.fromEntries(new URL(c.req.url).searchParams.entries());
+    // An empty parameter means the caller did not supply one. `?sort=&ownerId=` is what a
+    // form or a hand-edited URL produces all the time, and Zod reads '' as a present but
+    // invalid value, so without this an optional field rejects its own absence.
+    const raw: Record<string, string> = {};
+    for (const [key, value] of new URL(c.req.url).searchParams.entries()) {
+      if (value !== '') raw[key] = value;
+    }
+
     const result = schema.safeParse(raw);
     if (!result.success) {
+      const errors = fieldErrors(result.error);
       throw ApiError.badRequest(
-        'One or more query parameters are invalid.',
-        fieldErrors(result.error),
+        // Name the parameters. Without them this is the least actionable 400 in the API:
+        // the caller sees a generic banner and the log says nothing about which one.
+        `Invalid query ${Object.keys(errors).length === 1 ? 'parameter' : 'parameters'}: ${Object.keys(errors).join(', ')}.`,
+        errors,
       );
     }
     (c.req as unknown as { valid_query?: unknown }).valid_query = result.data;

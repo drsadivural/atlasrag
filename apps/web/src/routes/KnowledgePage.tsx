@@ -51,7 +51,12 @@ import {
   formatRelative,
   useToast,
 } from '@uxe/ui';
-import type { SourceSummary, SourcesResponse, UploadTicket } from '@uxe/contracts';
+import type {
+  ConnectorsResponse,
+  SourceSummary,
+  SourcesResponse,
+  UploadTicket,
+} from '@uxe/contracts';
 import { ApiError, api, newIdempotencyKey, uploadFile } from '../lib/api.js';
 import { useI18n } from '../lib/i18n.js';
 import { useSession } from '../lib/session.js';
@@ -83,6 +88,13 @@ const TYPE_COLORS: Record<string, string> = {
 };
 
 /** Reproduces `assets/screens/03-knowledge-base.png`. */
+/** A positive integer from a URL parameter, or the fallback when it is not one. */
+function positiveInt(raw: string | null, fallback: number): number {
+  if (raw === null) return fallback;
+  const value = Number(raw);
+  return Number.isInteger(value) && value >= 1 ? value : fallback;
+}
+
 export function KnowledgePage() {
   const { t, formatNumber } = useI18n();
   const { can } = useSession();
@@ -98,8 +110,11 @@ export function KnowledgePage() {
   const status = searchParams.get('status') ?? 'all';
   const documentType = searchParams.get('type') ?? 'all';
   const q = searchParams.get('q') ?? '';
-  const page = Number(searchParams.get('page') ?? '1');
-  const pageSize = Number(searchParams.get('pageSize') ?? '10');
+  // Anything in the URL is the caller's text, not a number. `Number('')` is 0 and
+  // `Number('abc')` is NaN, and either one sent as a page would come back a 400 with
+  // nothing on screen but a generic banner.
+  const page = positiveInt(searchParams.get('page'), 1);
+  const pageSize = positiveInt(searchParams.get('pageSize'), 10);
 
   const setParam = useCallback(
     (key: string, value: string | null) => {
@@ -763,6 +778,14 @@ function AutoSyncToggle() {
  * application configured the API says exactly which credentials are missing, and that
  * message is surfaced — rather than the button appearing to work and doing nothing.
  */
+/**
+ * One file store, in whichever of its three states it is actually in.
+ *
+ * Connected, it syncs. Configured but unconnected, it starts the consent flow. Not set up
+ * for this deployment at all, it says so and points at the one screen where that can be
+ * fixed — rather than presenting a button that fails the same way every time it is
+ * pressed.
+ */
 function ConnectorButton({
   icon,
   label,
@@ -772,22 +795,55 @@ function ConnectorButton({
   label: string;
   connector: 'google_drive' | 'onedrive' | 'sharepoint';
 }) {
+  const { t } = useI18n();
   const { push } = useToast();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [pending, setPending] = useState(false);
 
-  const connect = async () => {
+  const { data } = useQuery<ConnectorsResponse, ApiError>({
+    queryKey: ['connectors'],
+    queryFn: () => api.get<ConnectorsResponse>('/connectors'),
+    staleTime: 30_000,
+  });
+
+  const provider = data?.providers.find((p) => p.kind === connector);
+  const connection = provider?.connection ?? null;
+
+  const act = async () => {
+    if (!provider) return;
+
+    if (!provider.available) {
+      push({
+        tone: 'info',
+        title: t('knowledge.connectorNeedsSetup', { label }),
+        description: t('knowledge.connectorNeedsSetupHint'),
+        action: {
+          label: t('knowledge.openSettings'),
+          onClick: () => navigate('/settings/connectors'),
+        },
+      });
+      return;
+    }
+
     setPending(true);
     try {
-      await api.post(
-        '/sources/connectors',
-        { kind: connector, accountEmail: 'me@example.com' },
-        newIdempotencyKey(),
-      );
-      push({ tone: 'success', title: `${label} connected` });
+      if (connection) {
+        await api.post(`/connectors/${connection.id}/sync`, {}, newIdempotencyKey());
+        push({ tone: 'success', title: t('connectors.syncStarted') });
+        void queryClient.invalidateQueries({ queryKey: ['sources'] });
+        void queryClient.invalidateQueries({ queryKey: ['connectors'] });
+      } else {
+        const result = await api.post<{ authorizeUrl: string }>(
+          `/connectors/${connector}/authorize`,
+          { returnTo: '/knowledge' },
+        );
+        window.location.assign(result.authorizeUrl);
+      }
     } catch (error) {
       push({
         tone: 'error',
-        title: `${label} is not available`,
+        title: connection ? t('connectors.failed') : t('connectors.connectFailed'),
         description:
           error instanceof ApiError ? error.message : 'The connector could not be started.',
       });
@@ -797,9 +853,9 @@ function ConnectorButton({
   };
 
   return (
-    <Button variant="secondary" size="md" onClick={connect} loading={pending}>
+    <Button variant="secondary" size="md" onClick={act} loading={pending}>
       {icon}
-      {label}
+      {connection ? t('knowledge.syncFrom', { label }) : label}
     </Button>
   );
 }

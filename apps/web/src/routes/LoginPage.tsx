@@ -1,21 +1,12 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import {
-  CheckCircle2,
-  Eye,
-  EyeOff,
-  Lock,
-  Mail,
-  ShieldCheck,
-  FileText,
-  PenLine,
-} from 'lucide-react';
-import { Badge, Button, Card, Checkbox, Field, Input, cn } from '@uxe/ui';
+import { CheckCircle2, Eye, EyeOff, Lock, Mail, ShieldCheck } from 'lucide-react';
+import { Button, Card, Checkbox, Field, Input, cn } from '@uxe/ui';
 import type { LoginResponse } from '@uxe/contracts';
 import { ApiError, api, setCsrfToken } from '../lib/api.js';
 import { useSession } from '../lib/session.js';
 import { useI18n } from '../lib/i18n.js';
-import { Ayumi, BrandLockup } from '../components/Brand.js';
+import { BrandLockup } from '../components/Brand.js';
 import { BACKDROPS, timeOfDay } from '../lib/backdrop.js';
 
 type Stage = 'credentials' | 'mfa' | 'verify_email';
@@ -23,9 +14,9 @@ type Stage = 'credentials' | 'mfa' | 'verify_email';
 /**
  * Sign-in.
  *
- * Reproduces `assets/screens/01-login.png`: brand and trust cues on the left with Ayumi
- * anchored to the bottom, the sign-in card on the right. On mobile the left panel collapses
- * to a compact header so the form is reachable without scrolling.
+ * Brand and trust cues on the left, over a photograph in which Ayumi already stands, and
+ * the sign-in card on the right. On mobile the left panel collapses to a compact header so
+ * the form is reachable without scrolling.
  */
 export function LoginPage() {
   const { t } = useI18n();
@@ -340,22 +331,28 @@ function BrandPanel() {
 
   return (
     <section className="relative overflow-hidden px-6 pt-8 sm:px-10 lg:px-14 lg:pt-12">
-      <img
-        src={backdrop.image}
-        alt=""
-        aria-hidden
-        fetchPriority="high"
-        decoding="async"
-        className="pointer-events-none absolute inset-0 h-full w-full object-cover select-none"
-        draggable={false}
-      />
-      {/* Carries the contrast, so the wordmark and the promise never depend on which part
-          of the dunes happens to sit behind them. */}
+      {/* The frame is a composed picture with Ayumi in it, not a texture to print words
+          on, so it takes the lower band and the words keep the clear ground above. */}
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0"
-        style={{ backgroundImage: backdrop.scrim }}
+        style={{ backgroundImage: backdrop.ground }}
       />
+      <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-[62%]">
+        <img
+          src={backdrop.image}
+          alt=""
+          fetchPriority="high"
+          decoding="async"
+          className="h-full w-full object-cover object-right-bottom select-none"
+          draggable={false}
+        />
+        {/* Carries the top of the frame into the ground colour, so the band has no edge. */}
+        <div
+          className="absolute inset-x-0 top-0 h-1/2"
+          style={{ backgroundImage: backdrop.scrim }}
+        />
+      </div>
 
       {/* Decorative ground: soft brand glow, kept behind everything and hidden from AT. */}
       <div
@@ -374,6 +371,7 @@ function BrandPanel() {
           a white card would be text the wrong way round.
         */}
         <div
+          className="max-w-[560px] pb-10"
           style={{
             ['--uxe-text' as string]: backdrop.text,
             ['--uxe-text-secondary' as string]: backdrop.textSecondary,
@@ -386,7 +384,7 @@ function BrandPanel() {
             </p>
           </div>
 
-          <ul className="mt-8 grid gap-5 sm:grid-cols-3 lg:mt-10">
+          <ul className="mt-8 grid gap-5 sm:grid-cols-2 lg:mt-10">
             <TrustCue
               icon={<ShieldCheck className="h-5 w-5" aria-hidden />}
               tone="info"
@@ -406,35 +404,6 @@ function BrandPanel() {
               detail={t('auth.secureConfidentialDetail')}
             />
           </ul>
-        </div>
-
-        {/* Ayumi + the floating proof cards. Hidden below `lg` so the sign-in form is the
-            first thing a phone user sees. */}
-        <div className="relative mt-auto hidden min-h-[380px] lg:block">
-          <div className="absolute inset-x-0 bottom-0 flex h-[440px] items-end justify-center">
-            <div className="h-full w-[380px]">
-              <Ayumi variant="lg" priority />
-            </div>
-          </div>
-
-          <FloatingCard
-            className="absolute top-[34%] left-0 w-[232px]"
-            icon={<ShieldCheck className="h-5 w-5 text-[var(--uxe-cobalt)]" aria-hidden />}
-            title={t('auth.complianceCheck')}
-            badge={{ label: t('auth.compliant'), tone: 'success' }}
-          />
-          <FloatingCard
-            className="absolute top-[24%] right-[8%] w-[248px]"
-            icon={<FileText className="h-5 w-5 text-[var(--uxe-violet)]" aria-hidden />}
-            title={t('auth.evidenceMatch')}
-            badge={{ label: t('auth.verified'), tone: 'success' }}
-          />
-          <FloatingCard
-            className="absolute right-[4%] bottom-[16%] w-[248px]"
-            icon={<PenLine className="h-5 w-5 text-[var(--uxe-cobalt)]" aria-hidden />}
-            title={t('auth.documentCorrection')}
-            badge={{ label: t('auth.ready'), tone: 'success' }}
-          />
         </div>
       </div>
     </section>
@@ -478,49 +447,6 @@ function TrustCue({
         </span>
       </span>
     </li>
-  );
-}
-
-/**
- * The restrained proof cards from the concept.
- *
- * Purely decorative, so the whole group is hidden from assistive technology: the same
- * three capabilities are already stated in the trust cues above in real text.
- */
-function FloatingCard({
-  className,
-  icon,
-  title,
-  badge,
-}: {
-  className?: string;
-  icon: React.ReactNode;
-  title: string;
-  badge: { label: string; tone: 'success' };
-}) {
-  return (
-    <div
-      aria-hidden
-      className={cn(
-        'rounded-[var(--uxe-radius-card)] border border-[var(--uxe-border)] bg-[var(--uxe-surface)]',
-        'p-4 shadow-[var(--uxe-shadow-lg)] backdrop-blur-sm',
-        className,
-      )}
-    >
-      <div className="flex items-center gap-2.5">
-        <span className="flex h-9 w-9 items-center justify-center rounded-[var(--uxe-radius-control)] bg-[var(--uxe-surface-selected)]">
-          {icon}
-        </span>
-        <span className="text-[13px] font-semibold text-[var(--uxe-text)]">{title}</span>
-      </div>
-      <div className="mt-3 space-y-1.5">
-        <span className="block h-1.5 w-full rounded-full bg-[var(--uxe-surface-sunken)]" />
-        <span className="block h-1.5 w-4/5 rounded-full bg-[var(--uxe-surface-sunken)]" />
-      </div>
-      <Badge tone="success" size="sm" className="mt-3" icon={<CheckCircle2 className="h-3 w-3" />}>
-        {badge.label}
-      </Badge>
-    </div>
   );
 }
 
