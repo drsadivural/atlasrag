@@ -99,6 +99,31 @@ followed by `sudo systemctl restart uxe-web`.
 E2E 49 passed, accessibility 37 passed, and `pnpm smoke` 10/10, all against
 `https://consultnow.ayonix.com`.
 
+## The stopgap lock
+
+Until Access is in place the hostname is behind HTTP basic auth. The credential lives in
+`/etc/uxe/web-basic-auth.env` (root only, 0640) rather than in the unit file, which is
+world readable, and the web unit reads it through `EnvironmentFile`.
+
+It applies **only** to the public hostnames named in `WEB_ALLOWED_HOSTS`, so
+`127.0.0.1:4173` is untouched and the verification suites still have a way in. Nothing
+else can reach that address: the web server and the API both bind to loopback.
+
+It covers the API as well as the pages, because the plugin runs ahead of the `/api`
+proxy — a lock on the HTML alone would be no lock at all.
+
+To remove it once Access is live:
+
+```bash
+sudo rm /etc/uxe/web-basic-auth.env
+sudo sed -i '/web-basic-auth/d;/world readable/d;/# The credential itself/d' \
+  /etc/systemd/system/uxe-web.service
+sudo systemctl daemon-reload && sudo systemctl restart uxe-web
+```
+
+Basic auth over the tunnel's TLS is a weak control — one shared credential, no expiry, no
+audit trail. It is a door lock while the real one is being fitted, not a substitute.
+
 ## Putting Cloudflare Access in front of it
 
 The staging hostname is on the public internet and the seeded demo account is documented

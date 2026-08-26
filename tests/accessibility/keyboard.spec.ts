@@ -67,8 +67,10 @@ test('the answer-style control is operable with the arrow keys', async ({ page }
   expect(after).not.toBe(before);
 
   // The depth is persisted server-side, so a keyboard test that moved it would silently
-  // change what every later run of the functional suite sees. Move it back.
-  await page.keyboard.press('ArrowLeft');
+  // change what every later run of the functional suite sees. Put it back by naming the
+  // option rather than by pressing the opposite arrow: saving the choice re-renders the
+  // group, and whether focus survives that is a race this test is not about.
+  await group.getByRole('radio', { name: before ?? '', exact: true }).click();
   await expect(group.getByRole('radio', { checked: true })).toHaveText(before ?? '');
 });
 

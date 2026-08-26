@@ -2,6 +2,7 @@ import { defineConfig, type ProxyOptions } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { fileURLToPath } from 'node:url';
+import { basicAuth } from './vite-basic-auth.js';
 
 /**
  * Vite configuration.
@@ -27,6 +28,16 @@ const allowedHosts = (process.env.WEB_ALLOWED_HOSTS ?? '')
   .filter(Boolean);
 
 /**
+ * `user:password`, and only for the public hostnames above.
+ *
+ * A stopgap lock on a staging environment that is reachable from the internet. Unset in
+ * development, where the server answers on loopback only.
+ */
+const basicAuthPlugin = process.env.WEB_BASIC_AUTH
+  ? basicAuth({ credentials: process.env.WEB_BASIC_AUTH, hosts: allowedHosts })
+  : null;
+
+/**
  * Proxy shared by `vite dev` and `vite preview`.
  *
  * Both must present a single origin, because the session cookie is same-origin: a preview
@@ -49,7 +60,7 @@ const apiProxy: Record<string, ProxyOptions> = {
 };
 
 export default defineConfig(({ mode }) => ({
-  plugins: [react(), tailwindcss()],
+  plugins: [...(basicAuthPlugin ? [basicAuthPlugin] : []), react(), tailwindcss()],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
