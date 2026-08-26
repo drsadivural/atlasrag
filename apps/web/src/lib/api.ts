@@ -136,26 +136,87 @@ export const api = {
  * XMLHttpRequest rather than fetch: fetch still cannot report upload progress in browsers,
  * and a 1,300-page regulation uploading with no feedback is indistinguishable from a hang.
  */
-export function uploadFile(
+export interface UploadResult {
+  sourceId: string;
+  versionId: string;
+  duplicate: boolean;
+  message?: string;
+  job: unknown;
+}
+
+/**
+ * The largest body sent in one request.
+ *
+ * Not a limit of this application — the server takes a whole file happily. It is what
+ * survives the trip: Cloudflare refuses a request body over 100MB on most plans, and it
+ * refuses it at the edge, so a single-shot upload of a large document never arrives at
+ * all. 48MB leaves generous headroom for whatever else sits in front of the origin.
+ */
+export const UPLOAD_CHUNK_BYTES = 48 * 1024 * 1024;
+
+/**
+ * Sends a file, in one request or in several.
+ *
+ * A file that fits goes in one request exactly as before. A larger one is cut into parts,
+ * each sent in order and numbered, and the server assembles them; progress is reported
+ * across the whole file rather than restarting per part, because that is what the person
+ * watching it cares about.
+ */
+export async function uploadFile(
   url: string,
   file: File,
   options: {
     onProgress?: (percent: number) => void;
     signal?: AbortSignal;
   } = {},
-): Promise<{
-  sourceId: string;
-  versionId: string;
-  duplicate: boolean;
-  message?: string;
-  job: unknown;
-}> {
+): Promise<UploadResult> {
+  if (file.size <= UPLOAD_CHUNK_BYTES) {
+    return putBody(url, file, file.type || 'application/octet-stream', options);
+  }
+
+  const total = Math.ceil(file.size / UPLOAD_CHUNK_BYTES);
+  let sent = 0;
+  let last: UploadResult | { complete?: boolean } = {};
+
+  for (let index = 1; index <= total; index += 1) {
+    const start = (index - 1) * UPLOAD_CHUNK_BYTES;
+    const part = file.slice(start, Math.min(start + UPLOAD_CHUNK_BYTES, file.size));
+    const before = sent;
+
+    last = await putBody(url, part, file.type || 'application/octet-stream', {
+      ...options,
+      headers: { 'x-upload-part': String(index), 'x-upload-parts': String(total) },
+      onProgress: (partPercent) => {
+        const uploaded = before + (part.size * partPercent) / 100;
+        options.onProgress?.(Math.min(100, Math.round((uploaded / file.size) * 100)));
+      },
+    });
+
+    sent = before + part.size;
+  }
+
+  return last as UploadResult;
+}
+
+function putBody(
+  url: string,
+  body: Blob,
+  contentType: string,
+  options: {
+    onProgress?: (percent: number) => void;
+    signal?: AbortSignal;
+    headers?: Record<string, string>;
+  } = {},
+): Promise<UploadResult> {
   return new Promise((resolve, reject) => {
     const request = new XMLHttpRequest();
     request.open('PUT', url, true);
     request.withCredentials = true;
-    request.setRequestHeader('content-type', file.type || 'application/octet-stream');
+    request.setRequestHeader('content-type', contentType);
     if (csrfToken) request.setRequestHeader('x-csrf-token', csrfToken);
+    for (const [name, value] of Object.entries(options.headers ?? {})) {
+      request.setRequestHeader(name, value);
+    }
 
     request.upload.addEventListener('progress', (event) => {
       if (event.lengthComputable) {
@@ -198,7 +259,7 @@ export function uploadFile(
     );
 
     options.signal?.addEventListener('abort', () => request.abort());
-    request.send(file);
+    request.send(body);
   });
 }
 

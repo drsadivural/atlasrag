@@ -176,3 +176,18 @@ document must be re-uploaded.
   the logs.
 - Never point `TEST_DATABASE_URL` at a real database. The integration suite truncates every
   table between cases.
+
+## Upload size
+
+The application accepts a file up to `MAX_UPLOAD_BYTES` (500MB by default). What sits in
+front of it usually accepts less: Cloudflare caps a request body at 100MB on Free and Pro,
+200MB on Business, and rejects anything larger at the edge with a 413 that never reaches
+the origin.
+
+The browser therefore sends a file larger than 48MB in parts, numbered with `x-upload-part`
+and `x-upload-parts`, and the server assembles them. Nothing needs configuring for this,
+and it works whatever the plan.
+
+If uploads of a particular size start failing, the first question is which side answered.
+A 413 carrying `server: cloudflare` and none of the application's headers is the edge; the
+application's own refusal names the file and both numbers.

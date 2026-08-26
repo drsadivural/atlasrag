@@ -352,6 +352,30 @@ has no registered application for either, so no request has reached them. The fa
 path is verified: an unconfigured provider disables its button, names the variables, and
 refuses to start a flow it cannot finish.
 
+## A 136MB upload that never reached the application
+
+Reported as an upload that stalls. It was not the application: measured through the live
+hostname, a request body of 90MB reaches the API and one of 110MB comes back **413 from
+Cloudflare**, with `server: cloudflare` and no header of ours on it. Cloudflare caps a
+request body at 100MB on most plans and rejects it at the edge, so a 136MB document never
+arrived at all. Confirmed from the other side too: the same 90MB and 110MB bodies both
+succeed against the origin directly.
+
+One misleading result on the way. A large body sent to an endpoint that answers 401
+produces `write EPIPE` in the web server's proxy and a 502, because the API replies
+without draining the request. That is the correct behaviour of both, and not the fault
+being chased — a genuine authenticated upload of 90MB through the same proxy returns 202.
+
+**The fix is multi-part upload.** A file larger than 48MB is now cut into parts client
+side, each part sent in its own request, and the server assembles them before anything
+downstream sees a file. Nothing after the assembly knows a document arrived in pieces:
+the hash, the duplicate check, the version and the ingest job are the ones that already
+existed.
+
+Verified end to end against the live hostname with a genuine 136MB PDF: three parts of
+48MB, 202 on each, assembled, ingested and `ready`. The parts are scratch and are deleted
+as soon as the file exists, including on the failure paths.
+
 ## Reproducing
 
 ```bash

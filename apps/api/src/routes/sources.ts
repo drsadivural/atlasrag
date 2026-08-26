@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import type { Context } from 'hono';
 import {
   BulkSourceActionRequest,
   CreateConnectorRequest,
@@ -365,14 +366,42 @@ export function sourceRoutes(deps: AppDeps) {
     const ticket = await deps.repos.uploads.findPending(tenant, ticketId);
     if (!ticket) throw ApiError.notFound('Upload');
 
-    const bytes = new Uint8Array(await c.req.arrayBuffer());
-    if (bytes.byteLength === 0) throw ApiError.badRequest('The uploaded file is empty.');
+    const chunk = readChunkHeaders(c);
+    const body = new Uint8Array(await c.req.arrayBuffer());
+    if (body.byteLength === 0) throw ApiError.badRequest('The uploaded file is empty.');
+
+    /*
+     * Large files arrive in parts.
+     *
+     * Not because this server cannot take them whole — it can — but because a proxy in
+     * front of it usually will not. Cloudflare refuses a request body over 100MB on most
+     * plans, and it refuses it at the edge, so a single-shot upload of a large document
+     * never reaches this code at all. Parts keep every individual request small enough to
+     * survive the trip, whatever sits in the middle.
+     */
+    if (chunk) {
+      await deps.services.storage.put(
+        'originals',
+        partKey(ticket.storageKey, chunk.index),
+        body,
+        'application/octet-stream',
+      );
+
+      if (chunk.index < chunk.total) {
+        return c.json({ received: chunk.index, of: chunk.total, complete: false }, 202);
+      }
+    }
+
+    const bytes = chunk ? await assembleParts(deps, ticket.storageKey, chunk.total) : body;
+
     if (bytes.byteLength > deps.env.MAX_UPLOAD_BYTES) {
+      await discardParts(deps, ticket.storageKey, chunk?.total ?? 0);
       throw new ApiError(413, 'payload_too_large', 'That file exceeds the upload limit.');
     }
     // The ticket declared a size and the quota was reserved against it. Accepting a
     // different number of bytes would make that declaration meaningless.
     if (bytes.byteLength !== ticket.declaredBytes) {
+      await discardParts(deps, ticket.storageKey, chunk?.total ?? 0);
       throw ApiError.badRequest(
         `This upload is ${bytes.byteLength} bytes but the ticket was issued for ${ticket.declaredBytes}. Start the upload again.`,
       );
@@ -384,6 +413,8 @@ export function sourceRoutes(deps: AppDeps) {
       bytes,
       ticket.contentType,
     );
+    // The assembled object is the file now; the parts are scratch and go immediately.
+    await discardParts(deps, ticket.storageKey, chunk?.total ?? 0);
 
     const sourceId = ticket.sourceId;
     await deps.repos.uploads.markReceived(ticketId, stored.sizeBytes);
@@ -883,6 +914,74 @@ async function subjectLabel(
 
 function stripExtension(fileName: string): string {
   return fileName.replace(/\.[A-Za-z0-9]{1,6}$/, '').slice(0, 300) || fileName;
+}
+
+/** Where one part of a multi-part upload lives until the whole file is assembled. */
+function partKey(storageKey: string, index: number): string {
+  return `${storageKey}.part${index}`;
+}
+
+/**
+ * The part headers, or null for an ordinary single-shot upload.
+ *
+ * Both are required together and are validated before a single byte is stored: a part
+ * index without a total, or a total this server will not assemble, is a malformed request
+ * rather than something to guess at.
+ */
+function readChunkHeaders(c: Context<AppBindings>): { index: number; total: number } | null {
+  const rawIndex = c.req.header('x-upload-part');
+  const rawTotal = c.req.header('x-upload-parts');
+  if (!rawIndex && !rawTotal) return null;
+
+  const index = Number(rawIndex);
+  const total = Number(rawTotal);
+  if (
+    !Number.isInteger(index) ||
+    !Number.isInteger(total) ||
+    total < 1 ||
+    total > MAX_UPLOAD_PARTS ||
+    index < 1 ||
+    index > total
+  ) {
+    throw ApiError.badRequest(
+      `x-upload-part and x-upload-parts must be whole numbers, with the part between 1 and the total, and the total no more than ${MAX_UPLOAD_PARTS}.`,
+    );
+  }
+  return { index, total };
+}
+
+/** Enough for a 500MB file in the client's chunk size, and a bound on the fan-out. */
+const MAX_UPLOAD_PARTS = 64;
+
+async function assembleParts(
+  deps: AppDeps,
+  storageKey: string,
+  total: number,
+): Promise<Uint8Array> {
+  const parts: Uint8Array[] = [];
+  for (let index = 1; index <= total; index += 1) {
+    const part = await deps.services.storage.get('originals', partKey(storageKey, index));
+    if (!part) {
+      await discardParts(deps, storageKey, total);
+      throw ApiError.badRequest(`Part ${index} of ${total} never arrived. Start the upload again.`);
+    }
+    parts.push(part);
+  }
+
+  const assembled = new Uint8Array(parts.reduce((sum, part) => sum + part.byteLength, 0));
+  let offset = 0;
+  for (const part of parts) {
+    assembled.set(part, offset);
+    offset += part.byteLength;
+  }
+  return assembled;
+}
+
+/** Best effort: a leftover part is scratch, and failing to remove one is not worth an error. */
+async function discardParts(deps: AppDeps, storageKey: string, total: number): Promise<void> {
+  for (let index = 1; index <= total; index += 1) {
+    await deps.services.storage.delete('originals', partKey(storageKey, index)).catch(() => false);
+  }
 }
 
 function connectorEnvFor(kind: string): string[] {
