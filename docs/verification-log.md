@@ -335,6 +335,18 @@ building it and what remains unproven.
   desert with the dark theme and a day desert with the light one, and the theme still
   defaults to the operating system's preference.
 
+**A sixth defect, found by measuring rather than by a test.** The hero heading and promise
+were sized with `clamp()` carrying a `vw` term. A viewport unit does not grow with the root
+font size, so at Extra large the fluid value became the binding constraint and the promise
+moved 10% where every other element moved 25% — the accessibility preference was being
+capped by the layout. Both are a rem ladder now, stepped at breakpoints, and every element
+scales the full +12.5% and +25%. The measured scale is in
+[docs/government-login.md](government-login.md).
+
+The same pass tightened the tablet range: 1024px now gives the authentication panel 56% of
+the width, as the brief asks, and the decorative strokes are dropped below 1280px where
+they had nowhere to run without crossing the restricted badge.
+
 **Not verified: the live handshake with UAE PASS or an Entra directory.** This deployment
 has no registered application for either, so no request has reached them. The fail-closed
 path is verified: an unconfigured provider disables its button, names the variables, and

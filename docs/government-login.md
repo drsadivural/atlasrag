@@ -131,3 +131,28 @@ and carry no emblem; no seal, coat of arms or government logo appears anywhere.
 deployment has no registered application for either, so no request has ever reached them.
 Everything on this side of the wire is covered; the handshake stands on this document
 until the credentials above exist.
+
+## Type scale and the text-size preference
+
+The page is measured in rem so the accessibility panel's text size moves everything.
+Measured on the live screen at 1680×945:
+
+| Element                    | Default (16px root) | Large (18px) | Extra large (20px) |
+| -------------------------- | ------------------- | ------------ | ------------------ |
+| Hero heading               | 58px                | 65.25px      | 72.5px             |
+| Hero promise               | 17px                | 19.13px      | 21.25px            |
+| Card heading               | 28px                | 31.5px       | 35px               |
+| Eyebrow                    | 11px                | 12.38px      | 13.75px            |
+| Field labels, footer links | 13px                | 14.63px      | 16.25px            |
+| Inputs, primary button     | 15px                | 16.88px      | 18.75px            |
+| Security statement         | 12px                | 13.5px       | 15px               |
+
+Every step is exactly +12.5% and +25%, because the root font size is what the preference
+scales and nothing on the page is sized in pixels.
+
+The heading steps down where the hero column narrows — 50px from 1280px wide, 40px from
+640px, 36px below that — and those steps are in rem too, so the preference still applies
+at every width. **This is why the type ladder is not `clamp()` with a `vw` term**: a
+viewport unit does not grow with the root font size, so a fluid heading silently caps
+itself the moment somebody asks for larger text. The first implementation did exactly
+that, and Extra large moved the hero promise by 10% instead of 25%.

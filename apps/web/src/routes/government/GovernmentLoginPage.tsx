@@ -43,7 +43,10 @@ export function GovernmentLoginPage() {
 
       {/* Column-reverse below the breakpoint puts authentication first on a phone while
           keeping the hero first in the document for everyone else. */}
-      <main id="main" className="flex flex-1 flex-col-reverse lg:grid lg:grid-cols-[60fr_40fr]">
+      <main
+        id="main"
+        className="flex flex-1 flex-col-reverse lg:grid lg:grid-cols-[44fr_56fr] xl:grid-cols-[60fr_40fr]"
+      >
         <Hero />
 
         <section
@@ -205,7 +208,7 @@ function Hero() {
   const image = resolved === 'dark' ? '/login-desert-night.webp' : '/login-desert-day.webp';
 
   return (
-    <section className="relative isolate flex min-h-[26rem] flex-col justify-between overflow-hidden px-6 py-8 sm:px-10 lg:min-h-0 lg:px-[3.75rem] lg:py-10">
+    <section className="relative isolate flex min-h-[26rem] flex-col justify-between overflow-hidden px-6 py-8 sm:px-10 lg:min-h-0 lg:px-8 lg:py-8 xl:px-[3.75rem] xl:py-10">
       <div
         aria-hidden
         className="absolute inset-0 -z-20"
@@ -239,14 +242,24 @@ function Hero() {
         aria-hidden
         className="absolute inset-0 -z-10 bg-[linear-gradient(96deg,var(--gov-hero-scrim-strong)_0%,var(--gov-hero-scrim-mid)_46%,transparent_78%)] rtl:bg-[linear-gradient(264deg,var(--gov-hero-scrim-strong)_0%,var(--gov-hero-scrim-mid)_46%,transparent_78%)]"
       />
-      <UnityLines className="pointer-events-none absolute end-0 top-[18%] -z-10 h-[16rem] w-[62%] opacity-90" />
+      {/* Dropped below xl: in a narrower hero the strokes have nowhere to run without
+          crossing the restricted badge, and decoration is the right thing to give up when
+          space is short. */}
+      <UnityLines className="pointer-events-none absolute end-0 top-[18%] -z-10 hidden h-[16rem] w-[62%] opacity-90 xl:block" />
 
+      {/*
+        Stepped in rem rather than sized with `vw`. A viewport unit does not grow with the
+        root font size, so it silently caps the heading the moment somebody asks for larger
+        text — the accessibility preference has to win, and only a rem ladder lets it.
+        The steps carry the reference size at the reference width and reduce it where the
+        hero column narrows.
+      */}
       <div className="max-w-[37.5rem]">
-        <h1 className="text-[clamp(2.25rem,4.2vw,3.625rem)] leading-[1.06] font-bold tracking-[-0.02em] text-balance text-[var(--gov-hero-text)]">
+        <h1 className="text-[2.25rem] leading-[1.06] font-bold tracking-[-0.02em] text-balance text-[var(--gov-hero-text)] sm:text-[2.5rem] xl:text-[3.125rem] 2xl:text-[3.625rem]">
           {t('gov.heroTitle')}
         </h1>
         <span className="mt-4 block h-px w-16 bg-[var(--gov-gold)]" aria-hidden />
-        <p className="mt-4 text-[clamp(0.9375rem,1.1vw,1.0625rem)] text-[var(--gov-hero-text-secondary)]">
+        <p className="mt-4 text-[0.9375rem] text-[var(--gov-hero-text-secondary)] xl:text-[1.0625rem]">
           {t('gov.heroPromise')}
         </p>
         <p className="mt-5 inline-flex items-center gap-2 rounded-full border border-[var(--gov-gold)] px-3.5 py-2 text-[0.75rem] font-semibold tracking-[0.06em] text-[var(--gov-gold-text)]">

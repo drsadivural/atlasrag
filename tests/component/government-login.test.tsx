@@ -140,7 +140,7 @@ describe('the sign-in screen', () => {
     const user = userEvent.setup();
 
     await screen.findByLabelText('Government email');
-    await user.type(screen.getByLabelText('Government email'), 'someone@gmail.com');
+    await user.type(screen.getByLabelText('Government email'), 'someone@outlook.com');
     await user.type(screen.getByLabelText(/^Password/), 'a-password');
     await user.click(screen.getByRole('button', { name: /sign in securely/i }));
 

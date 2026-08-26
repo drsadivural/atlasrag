@@ -103,7 +103,9 @@ test('refuses an address outside the approved domains, at the field', async ({ p
   await waitForSettled(page);
   await openCredentials(page);
 
-  await page.getByLabel('Government email').fill('someone@gmail.com');
+  // A domain this deployment does not accept. Which domains those are is configuration,
+  // so the message says the rule without saying anything about the account.
+  await page.getByLabel('Government email').fill('someone@outlook.com');
   await page.getByLabel(/^Password/).fill('a-password');
   await page.getByRole('button', { name: 'Sign in securely' }).click();
 
@@ -146,16 +148,18 @@ test('the help panel opens, lists real destinations and returns focus', async ({
 });
 
 test('every footer link opens a real page', async ({ page }) => {
-  for (const [name, path] of [
-    [/privacy notice/i, '/legal/privacy'],
-    [/^security$/i, '/legal/security'],
-    [/^accessibility$/i, '/legal/accessibility'],
+  for (const [name, path, heading] of [
+    [/privacy notice/i, '/legal/privacy', 'Privacy notice'],
+    [/^security$/i, '/legal/security', 'Security'],
+    [/^accessibility$/i, '/legal/accessibility', 'Accessibility'],
   ] as const) {
     await page.goto('/login');
     await waitForSettled(page);
     await page.getByRole('link', { name }).click();
     await expect(page).toHaveURL(new RegExp(path));
-    // A real page with real content, not an empty route.
-    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    // A real page with real content, not an empty route. Named rather than matched by
+    // level, because the sign-in heading is still in the tree mid-transition.
+    await expect(page.getByRole('heading', { level: 1, name: heading })).toBeVisible();
+    await expect(page.getByRole('listitem').first()).toBeVisible();
   }
 });
