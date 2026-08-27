@@ -487,6 +487,50 @@ export function ErrorState({
   );
 }
 
+/**
+ * A refresh that failed while the content it would have replaced is still on screen.
+ *
+ * This is deliberately not an ErrorState. ErrorState is what you show when there is
+ * nothing to show; putting it up in place of a rendered page because a background poll
+ * came back 429 throws away work the user can still read and act on. So the content
+ * stays, and this says — quietly, politely, out of the way — that what they are looking
+ * at has stopped updating.
+ *
+ * Callers gate this on a run of consecutive failures rather than the first one, because a
+ * strip that appears and disappears every couple of seconds is worse than no strip at all.
+ */
+export function StaleNotice({
+  message,
+  onRetry,
+  retrying,
+  className,
+}: {
+  message: string;
+  onRetry?: () => void;
+  retrying?: boolean;
+  className?: string;
+}) {
+  return (
+    <div
+      role="status"
+      className={cn(
+        'flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-[var(--uxe-radius-control)]',
+        'border border-[var(--uxe-warning-border)] bg-[var(--uxe-warning-bg)] px-3 py-2',
+        'text-[13px] text-[var(--uxe-text)]',
+        className,
+      )}
+    >
+      <span className="font-semibold text-[var(--uxe-warning-text)]">Live updates paused</span>
+      <span className="min-w-0 flex-1">{message}</span>
+      {onRetry && (
+        <Button variant="ghost" size="sm" onClick={onRetry} loading={retrying}>
+          Retry now
+        </Button>
+      )}
+    </div>
+  );
+}
+
 /* -------------------------------------------------------------------------- */
 /* Progress                                                                   */
 /* -------------------------------------------------------------------------- */

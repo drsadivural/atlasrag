@@ -120,7 +120,7 @@ export function ActivityPage() {
               ))}
             </div>
           </LoadingRegion>
-        ) : query.error ? (
+        ) : query.error && !query.data ? (
           <ErrorState
             message={query.error.message}
             traceId={query.error.traceId}

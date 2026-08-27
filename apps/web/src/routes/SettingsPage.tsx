@@ -117,7 +117,7 @@ export function SettingsPage() {
             <LoadingRegion label="Loading settings">
               <Skeleton className="h-64 w-full rounded-[var(--uxe-radius-card)]" />
             </LoadingRegion>
-          ) : query.error ? (
+          ) : query.error && !query.data ? (
             <ErrorState
               message={query.error.message}
               traceId={query.error.traceId}

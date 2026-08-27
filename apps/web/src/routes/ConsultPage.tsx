@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { hasStalled } from '../lib/staleness.js';
 import {
   AlertTriangle,
   ArrowRight,
@@ -33,6 +34,7 @@ import {
   DropdownMenu,
   EmptyState,
   ErrorState,
+  StaleNotice,
   Field,
   Gauge,
   Input,
@@ -180,6 +182,7 @@ export function ConsultPage() {
   }, [consultationId, queryClient, push]);
 
   const consultation = detail.data ?? null;
+  const detailStalled = consultation !== null && hasStalled(detail);
 
   return (
     <div className="flex h-[calc(100dvh-var(--uxe-header-height))] min-h-0 flex-col md:flex-row">
@@ -230,7 +233,7 @@ export function ConsultPage() {
           </div>
         ) : detail.isLoading ? (
           <ConsultSkeleton />
-        ) : detail.error ? (
+        ) : detail.error && !consultation ? (
           <div className="p-6">
             <ErrorState
               message={detail.error.message}
@@ -239,15 +242,25 @@ export function ConsultPage() {
             />
           </div>
         ) : consultation ? (
-          <ConsultationWorkspace
-            consultation={consultation}
-            answerStyle={answerStyle}
-            onAnswerStyleChange={setAnswerStyle}
-            taskMode={taskMode}
-            onTaskModeChange={setTaskMode}
-            onManageSources={() => setSourceDialogOpen(true)}
-            onOpenCitation={setOpenCitationId}
-          />
+          <>
+            {detailStalled && (
+              <StaleNotice
+                className="mx-4 mt-4 sm:mx-6"
+                message={detail.error?.message ?? 'This conversation has stopped refreshing.'}
+                onRetry={() => void detail.refetch()}
+                retrying={detail.isFetching}
+              />
+            )}
+            <ConsultationWorkspace
+              consultation={consultation}
+              answerStyle={answerStyle}
+              onAnswerStyleChange={setAnswerStyle}
+              taskMode={taskMode}
+              onTaskModeChange={setTaskMode}
+              onManageSources={() => setSourceDialogOpen(true)}
+              onOpenCitation={setOpenCitationId}
+            />
+          </>
         ) : null}
       </section>
 
@@ -1276,11 +1289,51 @@ function EvidencePanel({
     [consultation.messages],
   );
 
+  /*
+   * Preference writes are chained, and seeded from what the write itself returns.
+   *
+   * Every control in this panel saves through here, and the version travels with the patch
+   * so that two people editing the same consultation cannot silently overwrite one
+   * another. Asking the server to re-read the consultation afterwards, and taking the
+   * version from whatever that re-read produced, turned a second click inside one round
+   * trip into a race the user lost twice over: the patch carried a version the re-read had
+   * not yet refreshed, so the server — correctly — refused it as somebody else's edit; and
+   * React Query folded the second re-read into the first, which had been issued before the
+   * second change existed, so the panel snapped back to the earlier choice and stayed
+   * there. Either way the answer was "Could not save" for changing your mind too quickly.
+   *
+   * A write now waits for the one before it and takes the newer of the cached version and
+   * the one the previous write returned, and the response — which is the whole
+   * consultation — is written straight into the cache. There is no second read left to
+   * lose a race with. Optimistic concurrency is for two editors, not for one person
+   * pressing a button twice.
+   */
+  const lastWrite = useRef<Promise<ConsultationDetail | null>>(Promise.resolve(null));
+
   const update = useMutation({
-    mutationFn: (patch: Record<string, unknown>) =>
-      api.patch(`/consultations/${consultation.id}`, { ...patch, version: consultation.version }),
-    onSuccess: () =>
-      void queryClient.invalidateQueries({ queryKey: ['consultation', consultation.id] }),
+    mutationFn: (patch: Record<string, unknown>) => {
+      const run = lastWrite.current
+        .catch(() => null)
+        .then((previous) => {
+          const cached = queryClient.getQueryData<ConsultationDetail>([
+            'consultation',
+            consultation.id,
+          ]);
+          const version = Math.max(cached?.version ?? consultation.version, previous?.version ?? 0);
+          return api.patch<ConsultationDetail>(`/consultations/${consultation.id}`, {
+            ...patch,
+            version,
+          });
+        });
+      lastWrite.current = run;
+      return run;
+    },
+    // The response is the new state of the consultation, so seed it rather than asking
+    // for it again — and the next write in the chain gets the version it produced.
+    onSuccess: (updated) => {
+      queryClient.setQueryData(['consultation', consultation.id], updated);
+      void queryClient.invalidateQueries({ queryKey: ['consultations'] });
+    },
     onError: (error: ApiError) =>
       push({ tone: 'error', title: 'Could not save', description: error.message }),
   });

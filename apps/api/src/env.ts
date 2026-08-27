@@ -119,7 +119,18 @@ export const EnvSchema = z.object({
 
   RATE_LIMIT_DRIVER: z.enum(['memory', 'kv']).default('memory'),
   RATE_LIMIT_LOGIN_PER_15M: z.coerce.number().int().min(1).default(10),
-  RATE_LIMIT_API_PER_MINUTE: z.coerce.number().int().min(1).default(300),
+  /*
+   * Per signed-in user, not per IP, so a whole ministry behind one address is not one
+   * budget. The number has to clear what an attentive person actually generates: the
+   * knowledge list, a source detail, a consultation and a correction plan each poll every
+   * two to two and a half seconds while work is outstanding, which is around 110 requests
+   * a minute before they touch anything, and a page they navigate to costs another dozen.
+   * 300 left a single tab close enough to the ceiling that a second one crossed it, and
+   * what a user got for reading their own documents in two windows was "Too many
+   * requests". 600 carries three busy tabs and still refuses anything trying to enumerate
+   * a corpus.
+   */
+  RATE_LIMIT_API_PER_MINUTE: z.coerce.number().int().min(1).default(600),
   RATE_LIMIT_UPLOAD_PER_HOUR: z.coerce.number().int().min(1).default(200),
   RATE_LIMIT_CONSULT_PER_HOUR: z.coerce.number().int().min(1).default(120),
 

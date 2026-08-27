@@ -503,6 +503,60 @@ named in the request — `gpt-5.6-terra`, `gpt-5.6-sol` — are real and on the 
 identifier already saved in this workspace, plain `gpt-5.6`, is not among the 88 the key
 serves, which is why its health reads "Not configured".
 
+## The page that deleted itself when a refresh failed
+
+The suite caught this against the live host, not in a unit test: the desktop run of
+_generates a corrected edition_ could not find the button, and the keyboard run could not
+put the answer style back. Both had the same cause, visible in the failure snapshot —
+`Too many requests. Please slow down.` where the consultation had been.
+
+Two defects, one behind the other.
+
+**The refresh was allowed to destroy the page.** Every polling view rendered
+`query.error ? <ErrorState/> : <content/>`. React Query keeps the last good response when a
+_refetch_ fails, so a single 429 on a background poll replaced a finished answer, its
+citations and the correction controls with a full-page failure. Nothing had gone wrong with
+the content; only the refresh failed. The error state now appears when there is nothing to
+show, and a stalled refresh says so in a strip above content that stays put.
+
+**Deciding when to say so is not a count of failures.** `failureCount` looks like the
+signal and is not: React Query resets it at the start of every fetch, so with retries off
+for 4xx — right, since a permission error will not fix itself — it never climbs above one
+however long the outage runs. Measured instead is what the reader actually cares about,
+how far behind the numbers in front of them have fallen: the gap between the last success
+and the last failure. Four seconds, which at a two-second poll is the second consecutive
+miss.
+
+**And 300 requests a minute was too tight.** The budget is per signed-in user, so a
+ministry behind one address is not one bucket — that part was right. The number was not.
+Four views poll every two to two and a half seconds while work is outstanding, roughly 110
+requests a minute before anyone touches anything, and a page navigation costs another
+dozen. One tab sat close enough to the ceiling that a second one crossed it, and what a
+user got for reading their own documents in two windows was an error. 600 carries three
+busy tabs and still refuses anything trying to enumerate a corpus.
+
+## Changing your mind faster than the network
+
+The keyboard suite could not put the answer style back where it found it — but only when
+the whole suite ran, never on its own. Holding the _reads_ open for two seconds while
+leaving the writes alone made it happen every time, and showed two faults sharing one
+cause: every control in the evidence panel saved by asking the server to re-read the
+consultation afterwards.
+
+A second change inside one round trip then lost twice. The patch carried a version the
+re-read had not yet refreshed, so the server — correctly — refused it as somebody else's
+edit. And React Query folded the second re-read into the first, which had been issued
+before the second change existed, so the panel snapped back to the earlier choice and
+stayed there. Both endings read the same to the user: _Could not save_, for changing their
+mind too quickly.
+
+Writes are chained now and seeded from what the write itself returns — the response is the
+whole consultation — so there is no second read left to lose a race with. Optimistic
+concurrency is for two editors, not for one person pressing a button twice.
+
+The test that covers it fails on the old code in all three viewports and passes on the new,
+which is the only version of that sentence worth writing down.
+
 ## Confidence that moved on its own
 
 Found by the suite while the above was being verified: `computeConfidence` failed its own

@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useRef, useState, type DragEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { hasStalled } from '../lib/staleness.js';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -36,6 +37,7 @@ import {
   DropdownMenu,
   EmptyState,
   ErrorState,
+  StaleNotice,
   Field,
   FilterChip,
   Gauge,
@@ -435,6 +437,14 @@ export function KnowledgePage() {
             </div>
 
             <div className="p-3 sm:p-4">
+              {query.data && hasStalled(query) && (
+                <StaleNotice
+                  className="mb-3"
+                  message={query.error?.message ?? 'This list has stopped refreshing.'}
+                  onRetry={() => void query.refetch()}
+                  retrying={query.isFetching}
+                />
+              )}
               {query.isLoading ? (
                 <LoadingRegion label="Loading sources">
                   <div className="flex flex-col gap-2">
@@ -443,7 +453,7 @@ export function KnowledgePage() {
                     ))}
                   </div>
                 </LoadingRegion>
-              ) : query.error ? (
+              ) : query.error && !query.data ? (
                 <ErrorState
                   message={query.error.message}
                   traceId={query.error.traceId}

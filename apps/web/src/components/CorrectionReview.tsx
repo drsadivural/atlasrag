@@ -145,7 +145,7 @@ export function CorrectionReviewDialog({
             ))}
           </div>
         </LoadingRegion>
-      ) : plan.error ? (
+      ) : plan.error && !plan.data ? (
         <ErrorState
           message={plan.error.message}
           traceId={plan.error.traceId}

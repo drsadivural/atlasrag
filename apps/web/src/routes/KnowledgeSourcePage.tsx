@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { hasStalled } from '../lib/staleness.js';
 import {
   AlertTriangle,
   ArrowLeft,
@@ -23,6 +24,7 @@ import {
   ConfirmDialog,
   Dialog,
   ErrorState,
+  StaleNotice,
   Field,
   Input,
   LoadingRegion,
@@ -100,7 +102,9 @@ export function KnowledgeSourcePage() {
     );
   }
 
-  if (query.error) {
+  // Only when there is nothing to show. A failed poll while the source is on screen is
+  // reported by the strip below instead of replacing the page the user is reading.
+  if (query.error && !query.data) {
     return (
       <div className="p-6">
         <ErrorState
@@ -117,6 +121,14 @@ export function KnowledgeSourcePage() {
 
   return (
     <div className="mx-auto w-full max-w-[1200px] p-4 sm:p-6">
+      {hasStalled(query) && (
+        <StaleNotice
+          className="mb-3"
+          message={query.error?.message ?? 'This document has stopped refreshing.'}
+          onRetry={() => void query.refetch()}
+          retrying={query.isFetching}
+        />
+      )}
       <Button asChild variant="ghost" size="sm" className="mb-3">
         <Link to="/knowledge">
           <ArrowLeft className="h-4 w-4" aria-hidden />

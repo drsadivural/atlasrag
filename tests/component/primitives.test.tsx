@@ -12,6 +12,7 @@ import {
   LoadingRegion,
   ProgressBar,
   SegmentedControl,
+  StaleNotice,
   Select,
   SwitchField,
   Textarea,
@@ -347,6 +348,21 @@ describe('state components', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('The request timed out.');
     expect(screen.getByText(/01JQ8Z9CT2K/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /try again/i }));
+    expect(onRetry).toHaveBeenCalled();
+  });
+
+  it('reports a stalled refresh politely, and does not pose as a failure', async () => {
+    const onRetry = vi.fn();
+    render(<StaleNotice message="Too many requests. Please slow down." onRetry={onRetry} />);
+
+    // status, not alert: the content it sits above is still there and still correct, so
+    // this must not interrupt a screen reader mid-sentence the way a failure would.
+    const notice = screen.getByRole('status');
+    expect(notice).toHaveTextContent('Live updates paused');
+    expect(notice).toHaveTextContent('Too many requests. Please slow down.');
+    expect(screen.queryByRole('alert')).toBeNull();
+
+    await userEvent.click(screen.getByRole('button', { name: /retry now/i }));
     expect(onRetry).toHaveBeenCalled();
   });
 
