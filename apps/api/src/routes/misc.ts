@@ -865,15 +865,30 @@ export function settingsRoutes(deps: AppDeps) {
       if (!tenant) throw ApiError.unauthenticated();
       const input = body<typeof UpsertModelConfigRequest._output>(c);
 
+      /*
+       * A key already saved for this provider carries over to another of its models.
+       *
+       * Configurations are keyed by model, so choosing a different one from the list makes
+       * a new row — and asking somebody to paste the same account key again because they
+       * moved from one of the provider's models to another is a way of getting a working
+       * setup replaced by a broken one. The credential belongs to the account, not to the
+       * model name.
+       */
+      let inherited: string | null = null;
       if (input.provider !== 'deterministic' && !input.apiKey) {
         const existing = await deps.repos.settings.listModelConfigurations(tenant);
-        const hasStored = existing.some(
-          (row) =>
-            row.provider === input.provider &&
-            row.capability === input.capability &&
-            row.credentialEncrypted !== null,
+        const forProvider = existing.filter(
+          (row) => row.provider === input.provider && row.credentialEncrypted,
         );
-        if (!hasStored) {
+        // This row's own key first: a workspace holding two keys for one provider must not
+        // have one of them quietly replaced by the other on an unrelated edit.
+        inherited =
+          (
+            forProvider.find(
+              (row) => row.capability === input.capability && row.model === input.model,
+            ) ?? forProvider[0]
+          )?.credentialEncrypted ?? null;
+        if (!inherited) {
           throw ApiError.badRequest(
             `${input.provider} needs an API key before it can be enabled.`,
             {
@@ -887,13 +902,16 @@ export function settingsRoutes(deps: AppDeps) {
         capability: input.capability,
         provider: input.provider,
         model: input.model,
+        // Only OpenAI takes one. Storing it against another provider would put a setting
+        // in the database that nothing reads and the form would show back as if it applied.
+        reasoningEffort: input.provider === 'openai' ? input.reasoningEffort : null,
         isPrimary: input.isPrimary,
         isFallback: input.isFallback,
         enabled: input.enabled,
         // Encrypted before it touches the database; there is no read path back out.
         credentialEncrypted: input.apiKey
           ? await encryptSecret(input.apiKey, deps.env.ENCRYPTION_KEY)
-          : null,
+          : inherited,
       });
 
       await deps.repos.audit.record({
@@ -987,6 +1005,7 @@ function toModelConfiguration(row: {
   capability: string;
   provider: string;
   model: string;
+  reasoningEffort: string | null;
   isPrimary: boolean;
   isFallback: boolean;
   enabled: boolean;
@@ -1004,6 +1023,7 @@ function toModelConfiguration(row: {
     capability: row.capability as ModelConfiguration['capability'],
     provider: row.provider as ModelConfiguration['provider'],
     model: row.model,
+    reasoningEffort: row.reasoningEffort as ModelConfiguration['reasoningEffort'],
     isPrimary: row.isPrimary,
     isFallback: row.isFallback,
     enabled: row.enabled,

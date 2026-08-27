@@ -991,11 +991,22 @@ export const ModelCapability = z.enum([
   'document_generation',
 ]);
 
+/**
+ * How hard a reasoning model is asked to think before it answers.
+ *
+ * The provider's own levels, verified against its API rather than assumed: it rejects
+ * anything else by name. `none` is not the same as leaving this unset — unset sends no
+ * such parameter at all, which is what a model that has no reasoning mode requires.
+ */
+export const ReasoningEffort = z.enum(['none', 'low', 'medium', 'high', 'xhigh']);
+export type ReasoningEffort = z.infer<typeof ReasoningEffort>;
+
 export const ModelConfiguration = z.object({
   id: Id,
   capability: ModelCapability,
   provider: z.enum(['deterministic', 'anthropic', 'openai']),
   model: z.string(),
+  reasoningEffort: ReasoningEffort.nullable(),
   isPrimary: z.boolean(),
   isFallback: z.boolean(),
   enabled: z.boolean(),
@@ -1039,6 +1050,7 @@ export const UpsertModelConfigRequest = z.object({
   capability: ModelCapability,
   provider: z.enum(['deterministic', 'anthropic', 'openai']),
   model: z.string().min(1).max(120),
+  reasoningEffort: ReasoningEffort.nullable().default(null),
   isPrimary: z.boolean().default(true),
   isFallback: z.boolean().default(false),
   enabled: z.boolean().default(true),

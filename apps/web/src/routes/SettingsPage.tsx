@@ -452,6 +452,7 @@ function ModelsSection({ models, canEdit }: { models: ModelConfiguration[]; canE
                   </p>
                   <p className="text-[12px] text-[var(--uxe-text-secondary)]">
                     {model.capability}
+                    {model.reasoningEffort && ` · ${model.reasoningEffort} effort`}
                     {model.isPrimary && ' · primary'}
                     {model.isFallback && ' · fallback'}
                     {model.lastCheckedAt && ` · checked ${formatRelative(model.lastCheckedAt)}`}
@@ -536,6 +537,12 @@ function AddModelCard() {
   const [provider, setProvider] = useState('anthropic');
   const [capability, setCapability] = useState('chat');
   const [model, setModel] = useState('claude-sonnet-5');
+  /*
+   * 'default' rather than an empty string: Radix refuses an item with an empty value, and
+   * the distinction is real anyway — sending no reasoning_effort at all is what a model
+   * without a reasoning mode needs, and is not the same as the provider's own 'none'.
+   */
+  const [reasoningEffort, setReasoningEffort] = useState('default');
   const [apiKey, setApiKey] = useState('');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
   const [available, setAvailable] = useState<AvailableModelsResponse['models']>([]);
@@ -581,6 +588,7 @@ function AddModelCard() {
         capability,
         provider,
         model,
+        reasoningEffort: reasoningEffort === 'default' ? null : reasoningEffort,
         isPrimary: true,
         isFallback: false,
         enabled: true,
@@ -634,6 +642,7 @@ function AddModelCard() {
             onValueChange={(value) => {
               setProvider(value);
               setAvailable([]);
+              setReasoningEffort('default');
               setModel(
                 value === 'anthropic'
                   ? 'claude-sonnet-5'
@@ -672,6 +681,32 @@ function AddModelCard() {
           ) : (
             <Input id="model-name" value={model} onChange={(e) => setModel(e.target.value)} />
           )}
+        </Field>
+
+        <Field
+          label="Reasoning effort"
+          htmlFor="reasoning-effort"
+          hint={
+            provider === 'openai'
+              ? 'How hard a reasoning model thinks before answering. Leave on Model default unless the model has a reasoning mode — one that does not will reject the setting.'
+              : 'Only OpenAI models take this setting.'
+          }
+        >
+          <Select
+            value={reasoningEffort}
+            onValueChange={setReasoningEffort}
+            ariaLabel="Reasoning effort"
+            className="w-full"
+            disabled={provider !== 'openai'}
+            options={[
+              { value: 'default', label: 'Model default' },
+              { value: 'none', label: 'None' },
+              { value: 'low', label: 'Low' },
+              { value: 'medium', label: 'Medium' },
+              { value: 'high', label: 'High' },
+              { value: 'xhigh', label: 'Extra high' },
+            ]}
+          />
         </Field>
 
         <Field

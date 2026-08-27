@@ -534,6 +534,7 @@ export class SettingsRepository {
       capability: string;
       provider: string;
       model: string;
+      reasoningEffort: string | null;
       isPrimary: boolean;
       isFallback: boolean;
       enabled: boolean;
@@ -563,6 +564,7 @@ export class SettingsRepository {
           capability: input.capability,
           provider: input.provider,
           model: input.model,
+          reasoningEffort: input.reasoningEffort,
           isPrimary: input.isPrimary,
           isFallback: input.isFallback,
           enabled: input.enabled,
@@ -582,6 +584,7 @@ export class SettingsRepository {
             modelConfigurations.model,
           ],
           set: {
+            reasoningEffort: input.reasoningEffort,
             isPrimary: input.isPrimary,
             isFallback: input.isFallback,
             enabled: input.enabled,

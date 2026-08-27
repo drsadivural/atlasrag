@@ -557,6 +557,39 @@ concurrency is for two editors, not for one person pressing a button twice.
 The test that covers it fails on the old code in all three viewports and passes on the new,
 which is the only version of that sentence worth writing down.
 
+## Light, medium, high, extra high
+
+The models named in the request were half right in a way worth writing down. `gpt-5.6-sol`
+and `gpt-5.6-terra` are real and on the account. "5.6 sol light", "5.6 sol medium", "5.6 sol
+high" and "5.6 sol extra high" are not models at all — the catalogue offers one `sol` — and
+guessing which they were would have been exactly the sort of invention this codebase is not
+allowed to make.
+
+So it asked. A request carrying a deliberately invalid level came back naming the real
+ones: `none`, `low`, `medium`, `high`, `xhigh`. They are a parameter, not a product line,
+and this application was not sending it — the request would have gone out at whatever depth
+the provider defaults to, which is not the depth somebody who asked for extra high thinks
+they are getting.
+
+The setting now exists end to end, and three things about its shape are deliberate:
+
+**Unset is not `none`.** A model without a reasoning mode rejects the parameter outright,
+so an unconfigured effort has to mean _send nothing_, not _send none_.
+
+**A rejected `temperature` is dropped and retried; a rejected effort is not.** Temperature
+carries nobody's instruction — this code sends zero so a grounded answer does not wander,
+and a reasoning model that refuses it is already deterministic enough. The effort is
+somebody's setting, and answering at a depth they did not choose while reporting success is
+the failure mode this whole application exists to avoid.
+
+**A saved key follows the account, not the model name.** Configurations are keyed by model,
+so choosing a different one from the loaded list makes a new row; asking for the same key
+again is how a working provider gets replaced by an unconfigured one.
+
+What could not be checked from here: whether the app's existing request shape works against
+these models beyond the parameter question — the reasoning models may also refuse
+`response_format`, and that is not something to find out by guessing either.
+
 ## Confidence that moved on its own
 
 Found by the suite while the above was being verified: `computeConfidence` failed its own

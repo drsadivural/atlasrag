@@ -107,6 +107,8 @@ export const modelConfigurations = pgTable(
     capability: text('capability').notNull(), // chat | embedding | ocr | rerank | document_generation
     provider: text('provider').notNull(),
     model: text('model').notNull(),
+    /** none | low | medium | high | xhigh, or null for a model with no reasoning mode. */
+    reasoningEffort: text('reasoning_effort'),
     isPrimary: boolean('is_primary').notNull().default(true),
     isFallback: boolean('is_fallback').notNull().default(false),
     enabled: boolean('enabled').notNull().default(true),

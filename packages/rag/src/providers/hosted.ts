@@ -227,6 +227,25 @@ export class AnthropicChatProvider implements ChatProvider {
   }
 }
 
+/**
+ * A parameter the model refused, named by the provider in its own error.
+ *
+ * Reasoning models reject `temperature` outright rather than ignoring it, and which models
+ * those are is not something this codebase can know in advance — the list changes without
+ * us. Reading the refusal is more reliable than keeping a table of model names.
+ */
+function unsupportedParameter(body: string): string | null {
+  try {
+    const parsed = JSON.parse(body) as { error?: { param?: unknown; code?: unknown } };
+    const code = parsed.error?.code;
+    const param = parsed.error?.param;
+    if (typeof param !== 'string') return null;
+    return code === 'unsupported_parameter' || code === 'unsupported_value' ? param : null;
+  } catch {
+    return null;
+  }
+}
+
 export class OpenAIChatProvider implements ChatProvider {
   readonly id = 'openai' as const;
   readonly extractiveOnly = false;
@@ -237,29 +256,50 @@ export class OpenAIChatProvider implements ChatProvider {
     private readonly fetchImpl: typeof fetch = fetch,
     private readonly baseUrl = 'https://api.openai.com/v1',
     private readonly timeoutMs = 60_000,
+    /**
+     * How hard to ask the model to think. Omitted entirely when null: a model without a
+     * reasoning mode rejects the parameter, and the provider's own 'none' is a level, not
+     * an absence.
+     */
+    private readonly reasoningEffort: string | null = null,
   ) {}
 
   async compose(input: ComposeInput): Promise<ComposeResult> {
     const validIds = new Set(input.evidence.map((e) => e.citationId));
-    const response = await withTimeout(
-      this.fetchImpl(`${this.baseUrl}/chat/completions`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', authorization: `Bearer ${this.apiKey}` },
-        body: JSON.stringify({
-          model: this.model,
-          temperature: 0,
-          response_format: { type: 'json_object' },
-          messages: [
-            { role: 'system', content: systemPolicy(input.consultantName, input.locale) },
-            { role: 'user', content: buildUserPrompt(input) },
-          ],
-        }),
-      }),
-      this.timeoutMs,
-    );
+    const body: Record<string, unknown> = {
+      model: this.model,
+      temperature: 0,
+      response_format: { type: 'json_object' },
+      messages: [
+        { role: 'system', content: systemPolicy(input.consultantName, input.locale) },
+        { role: 'user', content: buildUserPrompt(input) },
+      ],
+    };
+    if (this.reasoningEffort) body.reasoning_effort = this.reasoningEffort;
+
+    let response = await this.post(body);
 
     if (!response.ok) {
-      throw ProviderError.fromStatus(response.status, await response.text().catch(() => ''));
+      const text = await response.text().catch(() => '');
+      const rejected = unsupportedParameter(text);
+      /*
+       * Only temperature, and only once.
+       *
+       * It is the one parameter here that carries no instruction from anybody — this code
+       * sends zero because a grounded answer should not wander, and a reasoning model that
+       * refuses it is already deterministic enough. A rejected `reasoning_effort`, by
+       * contrast, is somebody's setting being wrong, and dropping it would quietly answer
+       * at a different depth than the one they asked for. That must surface.
+       */
+      if (rejected === 'temperature' && rejected in body) {
+        delete body[rejected];
+        response = await this.post(body);
+        if (!response.ok) {
+          throw ProviderError.fromStatus(response.status, await response.text().catch(() => ''));
+        }
+      } else {
+        throw ProviderError.fromStatus(response.status, text);
+      }
     }
 
     const json = (await response.json()) as {
@@ -276,6 +316,17 @@ export class OpenAIChatProvider implements ChatProvider {
         outputTokens: json.usage?.completion_tokens ?? 0,
       },
     };
+  }
+
+  private post(body: Record<string, unknown>): Promise<Response> {
+    return withTimeout(
+      this.fetchImpl(`${this.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${this.apiKey}` },
+        body: JSON.stringify(body),
+      }),
+      this.timeoutMs,
+    );
   }
 
   async health(): Promise<ProviderHealth> {

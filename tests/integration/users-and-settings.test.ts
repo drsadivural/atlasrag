@@ -208,6 +208,69 @@ describe('workspace settings', () => {
     expect(settings.body.settings.general.workspaceName).not.toBe('Hijacked');
   }, 120_000);
 
+  it('carries a saved key across to another model from the same provider', async () => {
+    /*
+     * Configurations are keyed by model, so picking a different one from the loaded list
+     * makes a new row. Asking for the same account key again is how somebody ends up with
+     * a working provider replaced by an unconfigured one.
+     */
+    const first = await owner.client.post('/settings/models', {
+      provider: 'openai',
+      capability: 'chat',
+      model: 'gpt-5.6-terra',
+      apiKey: 'sk-test-not-a-real-key-111111111111',
+    });
+    expect(first.status).toBeLessThan(300);
+
+    const second = await owner.client.post<{
+      model: string;
+      hasCredential: boolean;
+      reasoningEffort: string | null;
+    }>('/settings/models', {
+      provider: 'openai',
+      capability: 'chat',
+      model: 'gpt-5.6-sol',
+      reasoningEffort: 'high',
+    });
+
+    expect(second.status).toBeLessThan(300);
+    expect(second.body.model).toBe('gpt-5.6-sol');
+    expect(second.body.hasCredential).toBe(true);
+    expect(second.body.reasoningEffort).toBe('high');
+
+    // Inheriting the key must not mean returning it.
+    const settings = await owner.client.get('/settings');
+    expect(JSON.stringify(settings.body)).not.toContain('sk-test-not-a-real-key-111111111111');
+  });
+
+  it('refuses a reasoning effort the provider does not offer', async () => {
+    const response = await owner.client.post('/settings/models', {
+      provider: 'openai',
+      capability: 'chat',
+      model: 'gpt-5.6-sol',
+      reasoningEffort: 'extreme',
+      apiKey: 'sk-test-not-a-real-key-222222222222',
+    });
+    // The levels are the provider's, checked at the contract rather than accepted and
+    // discovered to be wrong on the first question somebody asks.
+    expect(response.status).toBe(400);
+  });
+
+  it('stores no reasoning effort against a provider that has none', async () => {
+    const response = await owner.client.post<{ reasoningEffort: string | null }>(
+      '/settings/models',
+      {
+        provider: 'anthropic',
+        capability: 'chat',
+        model: 'claude-sonnet-5',
+        reasoningEffort: 'high',
+        apiKey: 'sk-test-not-a-real-key-333333333333',
+      },
+    );
+    expect(response.status).toBeLessThan(300);
+    expect(response.body.reasoningEffort).toBeNull();
+  });
+
   it('never returns a stored provider key, even to an owner', async () => {
     const configured = await owner.client.post('/settings/models', {
       provider: 'anthropic',

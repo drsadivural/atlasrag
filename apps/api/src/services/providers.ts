@@ -49,6 +49,9 @@ export async function probeProvider(
     model: string;
     capability: string;
     credentialEncrypted: string | null;
+    /** Checked as configured, so a level the model refuses shows up here rather than
+     * on the first real question somebody asks. */
+    reasoningEffort?: string | null;
   },
 ): Promise<ProviderHealth> {
   if (config.provider === 'deterministic') {
@@ -97,7 +100,14 @@ export async function probeProvider(
   const provider =
     config.provider === 'anthropic'
       ? new AnthropicChatProvider(apiKey, config.model)
-      : new OpenAIChatProvider(apiKey, config.model);
+      : new OpenAIChatProvider(
+          apiKey,
+          config.model,
+          undefined,
+          undefined,
+          undefined,
+          config.reasoningEffort ?? null,
+        );
 
   return provider.health();
 }
@@ -130,7 +140,14 @@ export async function providersForWorkspace(
       chat =
         chatConfig.provider === 'anthropic'
           ? new AnthropicChatProvider(apiKey, chatConfig.model)
-          : new OpenAIChatProvider(apiKey, chatConfig.model);
+          : new OpenAIChatProvider(
+              apiKey,
+              chatConfig.model,
+              undefined,
+              undefined,
+              undefined,
+              chatConfig.reasoningEffort,
+            );
       chatConfigId = chatConfig.id;
     } catch {
       // An undecryptable credential must not take the workspace offline; the deterministic
