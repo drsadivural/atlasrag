@@ -82,14 +82,34 @@ export function consultationRoutes(deps: AppDeps) {
       if (!tenant) throw ApiError.unauthenticated();
       const input = body<typeof CreateConsultationRequest._output>(c);
 
+      /*
+       * A consultation with nothing attached can answer nothing.
+       *
+       * Opening one used to leave the scope empty, so the first thing anybody saw was "No
+       * sources are selected" and an instruction to go and choose some — from a knowledge
+       * base they had already approved, every document of which they would have picked.
+       * Saying nothing about sources now means the approved ones, which is what "grounded
+       * in your approved sources" says on the same screen.
+       *
+       * Only when the field is absent. An explicit empty list is somebody saying none, and
+       * it stays none — that is the only way to open a consultation with no scope at all.
+       * The list is read through the repository, so it is filtered by what this caller may
+       * actually see rather than by what the workspace holds.
+       */
+      const sourceIds =
+        input.sourceIds ??
+        (
+          await deps.repos.sources.list(tenant, {
+            status: 'ready',
+            page: 1,
+            pageSize: 200,
+            sort: 'updated_desc',
+          })
+        ).items.map((source) => source.id);
+
       const consultation = await deps.repos.consultations.create(tenant, input);
-      if (input.sourceIds.length > 0) {
-        await deps.repos.consultations.setSources(
-          tenant,
-          consultation.id,
-          input.sourceIds,
-          'governing',
-        );
+      if (sourceIds.length > 0) {
+        await deps.repos.consultations.setSources(tenant, consultation.id, sourceIds, 'governing');
       }
 
       await deps.repos.audit.record({

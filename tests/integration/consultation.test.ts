@@ -233,6 +233,45 @@ describe('asking a question', () => {
     expect(answer.citations.every((c) => c.verified)).toBe(true);
   }, 120_000);
 
+  it('starts from the approved knowledge base when no sources are named', async () => {
+    /*
+     * Opening a consultation used to leave the scope empty, so the first thing anybody saw
+     * was "No sources are selected" and an instruction to go and choose some — from a
+     * knowledge base they had already approved, every document of which they would have
+     * picked. Saying nothing about sources now means the approved ones.
+     */
+    const created = await owner.client.post<{
+      id: string;
+      sources: Array<{ sourceId: string; role: string }>;
+    }>('/consultations', { title: 'Defaults', taskMode: 'ask' });
+
+    expect(created.status).toBeLessThan(300);
+    const attached = created.body.sources.map((s) => s.sourceId);
+    expect(attached).toContain(regulationId);
+    expect(created.body.sources.every((s) => s.role === 'governing')).toBe(true);
+
+    // And it can answer without anybody opening Manage sources first.
+    const result = await ask(
+      owner.client,
+      created.body.id,
+      'What illuminance does emergency lighting require?',
+    );
+    expect(result.answer?.citations.length).toBeGreaterThan(0);
+  }, 120_000);
+
+  it('still opens with nothing attached when an empty list is given', async () => {
+    // "I have not said" and "I have said none" are different, and only the second is an
+    // empty array. Collapsing them would leave no way to open an unscoped consultation.
+    const created = await owner.client.post<{ sources: unknown[] }>('/consultations', {
+      title: 'Deliberately empty',
+      taskMode: 'ask',
+      sourceIds: [],
+    });
+
+    expect(created.status).toBeLessThan(300);
+    expect(created.body.sources).toEqual([]);
+  });
+
   it('refuses to answer at all when no source is attached', async () => {
     const consultationId = await newConsultation([]);
     const result = await ask(owner.client, consultationId, 'What illuminance is required?');

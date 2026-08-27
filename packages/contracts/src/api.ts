@@ -107,6 +107,15 @@ export const SessionUser = z.object({
   theme: ThemePreference,
   emailVerified: z.boolean(),
   mfaEnabled: z.boolean(),
+  /**
+   * Administers accounts across the deployment.
+   *
+   * On the session because the screen has to know whether to offer the platform view at
+   * all — and because a control that is offered and then refused is worse than one that
+   * was never there. It is not permission by itself: every route behind it checks the
+   * flag server-side, and this copy only decides what is drawn.
+   */
+  isPlatformAdmin: z.boolean(),
   createdAt: Timestamp,
 });
 export type SessionUser = z.infer<typeof SessionUser>;
@@ -623,7 +632,14 @@ export const ConsultationsQuery = PageQuery.extend({
 export const CreateConsultationRequest = z.object({
   title: z.string().trim().min(1).max(200).default('New consultation'),
   taskMode: TaskMode.default('ask'),
-  sourceIds: z.array(Id).max(200).default([]),
+  /**
+   * Omit to start from the whole approved knowledge base; pass a list to narrow it.
+   *
+   * The distinction is between "I have not said" and "I have said none", and only the
+   * second is an empty array. Defaulting the omitted case here would erase that
+   * difference and leave no way to open a consultation with nothing attached.
+   */
+  sourceIds: z.array(Id).max(200).optional(),
 });
 export type CreateConsultationRequest = z.infer<typeof CreateConsultationRequest>;
 
@@ -1003,6 +1019,76 @@ export const InviteUserResponse = z.object({
   }),
 });
 export type InviteUserResponse = z.infer<typeof InviteUserResponse>;
+
+/**
+ * A user as a platform administrator sees them: identity, and where they belong.
+ *
+ * Deliberately not `WorkspaceUser`. That type answers "who is in this workspace", and its
+ * single role and status only mean anything inside one. Somebody can be an Owner in one
+ * workspace and read-only in another, so the memberships are a list and the row is about
+ * the person rather than about one of their seats.
+ */
+export const PlatformUser = z.object({
+  id: Id,
+  email: Email,
+  fullName: z.string(),
+  avatarUrl: z.string().nullable(),
+  status: z.enum(['active', 'suspended']),
+  isPlatformAdmin: z.boolean(),
+  emailVerified: z.boolean(),
+  hasPassword: z.boolean(),
+  lastActiveAt: Timestamp.nullable(),
+  createdAt: Timestamp,
+  memberships: z.array(
+    z.object({
+      workspaceId: Id,
+      workspaceName: z.string(),
+      role: Role,
+      status: z.enum(['active', 'invited', 'suspended']),
+    }),
+  ),
+});
+export type PlatformUser = z.infer<typeof PlatformUser>;
+
+export const PlatformUsersResponse = z.object({
+  items: z.array(PlatformUser),
+  total: z.number().int(),
+  page: z.number().int(),
+  pageSize: z.number().int(),
+});
+export type PlatformUsersResponse = z.infer<typeof PlatformUsersResponse>;
+
+/** Creating an account outright, rather than inviting somebody to make their own. */
+export const CreateUserRequest = z.object({
+  email: Email,
+  fullName: z.string().trim().min(1).max(120),
+  role: Role,
+  /**
+   * Optional. Given one, the account can sign in immediately and the administrator knows
+   * the password — which is why the alternative, leaving it out and sending a link for
+   * them to choose their own, is the better path and the one the form leads with.
+   */
+  password: z.string().min(8).max(200).optional(),
+});
+export type CreateUserRequest = z.infer<typeof CreateUserRequest>;
+
+/** What a password reset produced, told the same way an invitation is. */
+export const PasswordResetResponse = z.object({
+  delivery: z.object({
+    status: z.enum(['sent', 'not_configured', 'failed']),
+    driver: z.enum(['console', 'resend', 'smtp']),
+    detail: z.string().nullable(),
+    /** Returned only when nothing was emailed, so it can be delivered by hand. */
+    resetUrl: z.string().nullable(),
+  }),
+});
+export type PasswordResetResponse = z.infer<typeof PasswordResetResponse>;
+
+export const UpdatePlatformUserRequest = z.object({
+  status: z.enum(['active', 'suspended']).optional(),
+  isPlatformAdmin: z.boolean().optional(),
+});
+export type UpdatePlatformUserRequest = z.infer<typeof UpdatePlatformUserRequest>;
 
 export const InviteUserRequest = z.object({
   email: Email,

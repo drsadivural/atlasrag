@@ -128,10 +128,12 @@ export function ConsultPage() {
 
   const create = useMutation({
     mutationFn: () =>
+      // No sourceIds: the server starts from every approved source this person can see.
+      // Sending an empty list would mean "none", which is a different thing and is what
+      // left every new consultation unable to answer until somebody opened Manage sources.
       api.post<ConsultationDetail>('/consultations', {
         title: 'New consultation',
         taskMode: 'ask',
-        sourceIds: [],
       }),
     onSuccess: (created) => {
       void queryClient.invalidateQueries({ queryKey: ['consultations'] });

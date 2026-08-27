@@ -1,4 +1,4 @@
-import { and, count, desc, eq, gt, inArray, isNull, lt, or, sql } from 'drizzle-orm';
+import { and, count, desc, eq, gt, ilike, inArray, isNull, lt, or, sql } from 'drizzle-orm';
 import type { Database } from '../client.js';
 import {
   authFactors,
@@ -221,6 +221,92 @@ export class IdentityRepository {
       )
       .limit(1);
     return row ?? null;
+  }
+
+  /**
+   * Every account on the deployment, with the workspaces each belongs to.
+   *
+   * Takes no TenantContext because it deliberately crosses workspaces, which is why the
+   * caller must be a platform administrator and why the selection is identity only: an
+   * address, a name, a status, and which workspaces admitted them at what role. Nothing
+   * here reaches a document, a consultation or an answer.
+   */
+  async listAllUsers(params: { q?: string; limit: number; offset: number }) {
+    const term = params.q?.trim();
+    const where = and(
+      isNull(users.deletedAt),
+      term ? or(ilike(users.email, `%${term}%`), ilike(users.fullName, `%${term}%`)) : sql`true`,
+    );
+
+    const [rows, totalRow] = await Promise.all([
+      this.db
+        .select()
+        .from(users)
+        .where(where)
+        .orderBy(desc(users.isPlatformAdmin), users.email)
+        .limit(params.limit)
+        .offset(params.offset),
+      this.db.select({ value: count() }).from(users).where(where),
+    ]);
+
+    const ids = rows.map((row) => row.id);
+    const membershipRows =
+      ids.length === 0
+        ? []
+        : await this.db
+            .select({
+              userId: memberships.userId,
+              workspaceId: memberships.workspaceId,
+              workspaceName: workspaces.name,
+              role: memberships.role,
+              status: memberships.status,
+            })
+            .from(memberships)
+            .innerJoin(workspaces, eq(workspaces.id, memberships.workspaceId))
+            .where(and(inArray(memberships.userId, ids), isNull(memberships.deletedAt)));
+
+    const byUser = new Map<string, typeof membershipRows>();
+    for (const row of membershipRows) {
+      const list = byUser.get(row.userId) ?? [];
+      list.push(row);
+      byUser.set(row.userId, list);
+    }
+
+    return {
+      items: rows.map((row) => ({ user: row, memberships: byUser.get(row.id) ?? [] })),
+      total: Number(totalRow[0]?.value ?? 0),
+    };
+  }
+
+  /** Suspends or reactivates the account itself, across every workspace it belongs to. */
+  async setUserStatus(userId: string, status: 'active' | 'suspended') {
+    const [row] = await this.db
+      .update(users)
+      .set({ status, updatedAt: new Date() })
+      .where(eq(users.id, userId))
+      .returning();
+    if (!row) throw new NotFoundError('User');
+    return row;
+  }
+
+  /** Grants or revokes platform administration. Never callable through a workspace role. */
+  async setPlatformAdmin(userId: string, value: boolean) {
+    const [row] = await this.db
+      .update(users)
+      .set({ isPlatformAdmin: value, updatedAt: new Date() })
+      .where(eq(users.id, userId))
+      .returning();
+    if (!row) throw new NotFoundError('User');
+    return row;
+  }
+
+  /** How many platform administrators remain, so the last one cannot be demoted away. */
+  async countPlatformAdmins(): Promise<number> {
+    const [row] = await this.db
+      .select({ value: count() })
+      .from(users)
+      .where(and(eq(users.isPlatformAdmin, true), isNull(users.deletedAt)));
+    return Number(row?.value ?? 0);
   }
 
   async listMembers(ctx: TenantContext) {

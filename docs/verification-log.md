@@ -728,6 +728,47 @@ that removing somebody here does not strip them from groups in another workspace
 Three guards, the same as suspension: not yourself, not somebody at or above your level,
 never the last active Owner.
 
+## An authority that crosses workspaces, and stops there
+
+Platform administration is the first permission in this system that is not granted by a
+membership. Every other one is bounded by the workspace that granted it; this one exists so
+somebody can administer accounts across the deployment — see who exists, suspend them, get
+them back in, add them.
+
+The whole design is in what it does not carry. It reaches identities and nothing else:
+there is no route through it to a source, a consultation, an answer or an artifact, and the
+tenant checks every retrieval makes are untouched by the flag. Being able to administer the
+accounts is not permission to read what those accounts hold, and granting both with one
+boolean would have made it so. The test that matters most in that file asserts a platform
+administrator listing sources still sees only their own workspace's.
+
+Three smaller decisions worth keeping:
+
+**A reset is a link, never a password.** The endpoint does not accept one. An administrator
+who could set a password could sign in as that person; one who sends a link can only help
+them back in, and the difference is the entire point of the feature.
+
+**Add user leads with the link too.** Leaving the password blank sends one and nobody else
+ever knows it. Typing one is offered because sometimes it is what a situation needs, and
+the field says plainly that the administrator will know it.
+
+**Two lists, not one with a switch of meaning.** "Who is in this workspace" has a single
+role and status that mean something. Across a deployment somebody can be an Owner in one
+workspace and read-only in another, so the platform row is about the person and the
+memberships are a list.
+
+## A consultation that could not answer anything
+
+Opening one attached no sources, so the first thing anybody saw was "No sources are
+selected" and an instruction to go and choose some — from a knowledge base they had already
+approved, every document of which they would have picked. Saying nothing about sources now
+means the approved ones, which is what the same screen says two lines above.
+
+Only when the field is absent. An explicit empty list is somebody saying none and stays
+none, which is the only way left to open a consultation with no scope at all. The list is
+read through the repository, so it is filtered by what that caller may actually see rather
+than by what the workspace holds.
+
 ## Confidence that moved on its own
 
 Found by the suite while the above was being verified: `computeConfidence` failed its own

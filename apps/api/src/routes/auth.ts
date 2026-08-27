@@ -953,6 +953,7 @@ export async function issueSession(
     theme: string;
     emailVerifiedAt: Date | null;
     createdAt: Date;
+    isPlatformAdmin?: boolean;
   },
   workspaceId: string | null,
   rememberMe: boolean,
@@ -1003,6 +1004,7 @@ export async function issueSession(
       theme: user.theme,
       emailVerified: user.emailVerifiedAt !== null,
       createdAt: user.createdAt,
+      isPlatformAdmin: user.isPlatformAdmin === true,
     },
   });
 }
@@ -1030,6 +1032,7 @@ export async function buildSessionResponse(
       mfaEnabled: (await deps.repos.identity.listActiveFactors(sess.userId)).some(
         (f) => f.kind !== 'recovery',
       ),
+      isPlatformAdmin: sess.user.isPlatformAdmin,
       createdAt: sess.user.createdAt.toISOString(),
     },
     workspace: current

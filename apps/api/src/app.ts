@@ -56,6 +56,7 @@ import {
   systemRoutes,
   userRoutes,
 } from './routes/misc.js';
+import { platformRoutes } from './routes/platform.js';
 import { storageRoutes } from './routes/storage.js';
 import {
   ConsoleEmailDriver,
@@ -232,6 +233,10 @@ export function buildApp(options: BuildOptions = {}): BuiltApp {
   tenantScoped.route('/artifacts', artifactRoutes(deps));
   tenantScoped.route('/audit-events', auditRoutes(deps));
   tenantScoped.route('/users', userRoutes(deps));
+  // Crosses workspaces, so it carries its own guard rather than a workspace permission.
+  // It stays inside the tenant-scoped area because creating an account still has to place
+  // it somewhere, and that somewhere is the administrator's current workspace.
+  tenantScoped.route('/platform', platformRoutes(deps));
   tenantScoped.route('/settings', settingsRoutes(deps));
   tenantScoped.route('/connectors', connectorRoutes(deps));
 

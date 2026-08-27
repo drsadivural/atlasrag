@@ -204,6 +204,7 @@ export function session(deps: AppDeps): MiddlewareHandler<AppBindings> {
         theme: found.user.theme,
         emailVerified: found.user.emailVerifiedAt !== null,
         createdAt: found.user.createdAt,
+        isPlatformAdmin: found.user.isPlatformAdmin === true,
       },
     });
 
@@ -273,6 +274,32 @@ export function requireAuth(): MiddlewareHandler<AppBindings> {
     if (!sess) throw ApiError.unauthenticated();
     if (!sess.mfaSatisfied) {
       throw new ApiError(401, 'mfa_required', 'Complete two-factor authentication to continue.');
+    }
+    await next();
+  };
+}
+
+/**
+ * Rejects anybody who is not a platform administrator.
+ *
+ * Deliberately separate from `requirePermission`, which reads a role granted by a
+ * membership and is therefore bounded by the workspace that granted it. This authority is
+ * not: it exists so accounts can be administered across the deployment.
+ *
+ * What it does not do is open tenant data. Routes behind this guard touch identity and
+ * nothing else — no source, consultation, answer or artifact is reachable through it, and
+ * the tenant checks every retrieval makes are untouched by it. "Can administer the
+ * accounts" and "may read every customer's confidential filings" are different authorities
+ * and are not granted by the same flag.
+ */
+export function requirePlatformAdmin(): MiddlewareHandler<AppBindings> {
+  return async (c, next) => {
+    const sess = c.get('session');
+    if (!sess) throw ApiError.unauthenticated();
+    if (!sess.user.isPlatformAdmin) {
+      // Same shape as any other permission refusal: whether platform administration exists
+      // at all is not something an ordinary caller needs to learn from the error.
+      throw ApiError.forbidden('You do not have permission to do that.');
     }
     await next();
   };

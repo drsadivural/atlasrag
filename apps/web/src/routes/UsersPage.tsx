@@ -16,16 +16,470 @@ import {
   Field,
   Input,
   LoadingRegion,
+  SegmentedControl,
   Select,
   Skeleton,
   formatRelative,
   useToast,
 } from '@uxe/ui';
-import { ROLE_LABELS, type Role, type WorkspaceUser } from '@uxe/contracts';
+import {
+  ROLE_LABELS,
+  type PasswordResetResponse,
+  type PlatformUser,
+  type PlatformUsersResponse,
+  type Role,
+  type WorkspaceUser,
+} from '@uxe/contracts';
 import { type ApiError, api } from '../lib/api.js';
 import { useI18n } from '../lib/i18n.js';
 import { useSession } from '../lib/session.js';
 import { PageHeader } from '../components/PageHeader.js';
+
+/**
+ * Every account on the deployment, for somebody who administers accounts.
+ *
+ * A separate table rather than a mode of the workspace one, because the two answer
+ * different questions. "Who is in this workspace" has a single role and status that mean
+ * something; across the deployment somebody can be an Owner in one workspace and read-only
+ * in another, so the row is about the person and the memberships are a list.
+ *
+ * Nothing here reaches tenant data. The API behind it administers identities only — a
+ * platform administrator who wants to read a workspace's documents has to be given a
+ * membership like anybody else.
+ */
+function PlatformUsers() {
+  const { push } = useToast();
+  const queryClient = useQueryClient();
+  const { session } = useSession();
+  const [search, setSearch] = useState('');
+  const [issued, setIssued] = useState<{ email: string; url: string } | null>(null);
+
+  const query = useQuery<PlatformUsersResponse, ApiError>({
+    queryKey: ['platform-users', search],
+    queryFn: () =>
+      api.get<PlatformUsersResponse>(
+        `/platform/users?pageSize=100${search.trim() ? `&q=${encodeURIComponent(search.trim())}` : ''}`,
+      ),
+  });
+
+  const update = useMutation({
+    mutationFn: ({ id, patch }: { id: string; patch: Record<string, unknown> }) =>
+      api.patch(`/platform/users/${id}`, patch),
+    onSuccess: () => {
+      push({ tone: 'success', title: 'Account updated' });
+      void queryClient.invalidateQueries({ queryKey: ['platform-users'] });
+    },
+    onError: (error: ApiError) =>
+      push({ tone: 'error', title: 'Could not update the account', description: error.message }),
+  });
+
+  const reset = useMutation({
+    mutationFn: (user: PlatformUser) =>
+      api
+        .post<PasswordResetResponse>(`/platform/users/${user.id}/password-reset`)
+        .then((result) => ({ result, user })),
+    onSuccess: ({ result, user }) => {
+      if (result.delivery.status === 'sent') {
+        push({
+          tone: 'success',
+          title: 'Reset link sent',
+          description: `${user.email} can choose a new password from the link in their inbox.`,
+        });
+        return;
+      }
+      push({
+        tone: 'warning',
+        title: 'No email was sent',
+        description: result.delivery.detail ?? 'Send the link below to them yourself.',
+      });
+      if (result.delivery.resetUrl) setIssued({ email: user.email, url: result.delivery.resetUrl });
+    },
+    onError: (error: ApiError) =>
+      push({ tone: 'error', title: 'Could not issue a reset', description: error.message }),
+  });
+
+  return (
+    <Card flush className="mt-4 p-3 sm:p-4">
+      <div className="mb-3 flex flex-wrap items-center gap-3">
+        <Input
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder="Search by name or address…"
+          className="max-w-xs"
+          aria-label="Search accounts"
+        />
+        <span className="text-[13px] text-[var(--uxe-text-secondary)]">
+          {query.data ? `${query.data.total} account(s)` : ''}
+        </span>
+      </div>
+
+      {issued && (
+        <div
+          role="status"
+          className="mb-3 flex flex-col gap-2 rounded-[var(--uxe-radius-control)] border border-[var(--uxe-warning-border)] bg-[var(--uxe-warning-bg)] p-3"
+        >
+          <p className="text-[13px] font-semibold text-[var(--uxe-warning-text)]">
+            Reset link for {issued.email}
+          </p>
+          <code className="overflow-x-auto rounded-[var(--uxe-radius-control)] bg-[var(--uxe-surface)] px-2 py-1.5 font-[family-name:var(--uxe-font-mono)] text-[12px] break-all">
+            {issued.url}
+          </code>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                void navigator.clipboard
+                  .writeText(issued.url)
+                  .then(() => push({ tone: 'success', title: 'Link copied' }))
+                  .catch(() => push({ tone: 'error', title: 'Could not copy' }));
+              }}
+            >
+              Copy link
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setIssued(null)}>
+              Done
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {query.isLoading ? (
+        <LoadingRegion label="Loading accounts">
+          <div className="flex flex-col gap-2">
+            {[0, 1, 2].map((i) => (
+              <Skeleton key={i} className="h-14 w-full" />
+            ))}
+          </div>
+        </LoadingRegion>
+      ) : query.error && !query.data ? (
+        <ErrorState
+          message={query.error.message}
+          traceId={query.error.traceId}
+          onRetry={() => void query.refetch()}
+        />
+      ) : (
+        <DataTable
+          caption="Every account on this deployment"
+          rows={query.data?.items ?? []}
+          rowKey={(row) => row.id}
+          empty={<EmptyState title="No accounts match" description="Try a different search." />}
+          columns={[
+            {
+              key: 'name',
+              header: 'Account',
+              primary: true,
+              render: (row) => (
+                <div className="flex items-center gap-3">
+                  <Avatar name={row.fullName} src={row.avatarUrl} size={32} />
+                  <div className="min-w-0">
+                    <p className="truncate text-[14px] font-medium text-[var(--uxe-text)]">
+                      {row.fullName}
+                    </p>
+                    <p className="truncate text-[12px] text-[var(--uxe-text-secondary)]">
+                      {row.email}
+                    </p>
+                  </div>
+                </div>
+              ),
+            },
+            {
+              key: 'workspaces',
+              header: 'Workspaces',
+              render: (row) =>
+                row.memberships.length === 0 ? (
+                  <span className="text-[13px] text-[var(--uxe-text-secondary)]">None</span>
+                ) : (
+                  <div className="flex flex-wrap gap-1.5">
+                    {row.memberships.map((m) => (
+                      <Badge key={m.workspaceId} tone="neutral" size="sm">
+                        {m.workspaceName} · {ROLE_LABELS[m.role]}
+                        {m.status !== 'active' ? ` (${m.status})` : ''}
+                      </Badge>
+                    ))}
+                  </div>
+                ),
+            },
+            {
+              key: 'status',
+              header: 'Status',
+              render: (row) => (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <Badge tone={row.status === 'active' ? 'success' : 'danger'} size="sm">
+                    {row.status === 'active' ? 'Active' : 'Suspended'}
+                  </Badge>
+                  {row.isPlatformAdmin && (
+                    <Badge tone="brand" size="sm" icon={<ShieldCheck className="h-3 w-3" />}>
+                      Platform admin
+                    </Badge>
+                  )}
+                  {!row.hasPassword && (
+                    <Badge tone="warning" size="sm">
+                      No password set
+                    </Badge>
+                  )}
+                </div>
+              ),
+            },
+            {
+              key: 'actions',
+              header: '',
+              align: 'right',
+              render: (row) => {
+                const isSelf = row.id === session?.user.id;
+                return (
+                  <DropdownMenu
+                    label={`Actions for ${row.fullName}`}
+                    trigger={
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label={`Actions for ${row.fullName}`}
+                      >
+                        <KeyRound className="h-4 w-4" aria-hidden />
+                      </Button>
+                    }
+                    items={[
+                      {
+                        label: 'Send a password reset link',
+                        icon: <KeyRound className="h-4 w-4" aria-hidden />,
+                        onSelect: () => reset.mutate(row),
+                      },
+                      {
+                        label:
+                          row.status === 'suspended' ? 'Reactivate account' : 'Suspend account',
+                        icon: <UserX className="h-4 w-4" aria-hidden />,
+                        onSelect: () =>
+                          update.mutate({
+                            id: row.id,
+                            patch: { status: row.status === 'suspended' ? 'active' : 'suspended' },
+                          }),
+                        destructive: row.status !== 'suspended',
+                        disabled: isSelf,
+                        disabledReason: 'Change your own account from your profile',
+                        separatorBefore: true,
+                      },
+                      {
+                        label: row.isPlatformAdmin
+                          ? 'Revoke platform administration'
+                          : 'Make platform administrator',
+                        icon: <ShieldCheck className="h-4 w-4" aria-hidden />,
+                        onSelect: () =>
+                          update.mutate({
+                            id: row.id,
+                            patch: { isPlatformAdmin: !row.isPlatformAdmin },
+                          }),
+                        destructive: row.isPlatformAdmin,
+                        disabled: isSelf,
+                        disabledReason: 'You cannot change your own platform authority',
+                        separatorBefore: true,
+                      },
+                    ]}
+                  />
+                );
+              },
+            },
+          ]}
+        />
+      )}
+    </Card>
+  );
+}
+
+/**
+ * Creating an account outright.
+ *
+ * The difference from an invitation is who chooses the password. Left blank — which is the
+ * default and the better path — the account is created and a link is sent for them to
+ * choose their own, and nobody else ever knows it. Typed here, they can sign in at once
+ * and the administrator knows their password, which is sometimes what a situation needs
+ * and is said plainly rather than left to be discovered.
+ */
+function AddUserDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const { t } = useI18n();
+  const queryClient = useQueryClient();
+  const { push } = useToast();
+  const [email, setEmail] = useState('');
+  const [fullName, setFullName] = useState('');
+  const [role, setRole] = useState<Role>('member');
+  const [password, setPassword] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
+  const [issued, setIssued] = useState<{ email: string; url: string } | null>(null);
+
+  const create = useMutation({
+    mutationFn: () =>
+      api.post<{ user: PlatformUser; delivery: PasswordResetResponse['delivery'] | null }>(
+        '/platform/users',
+        { email, fullName, role, ...(password ? { password } : {}) },
+      ),
+    onSuccess: (result) => {
+      void queryClient.invalidateQueries({ queryKey: ['users'] });
+      void queryClient.invalidateQueries({ queryKey: ['platform-users'] });
+      setFieldErrors({});
+
+      if (password) {
+        push({
+          tone: 'success',
+          title: 'Account created',
+          description: `${email} can sign in with the password you set.`,
+        });
+        close();
+        return;
+      }
+
+      if (result.delivery?.status === 'sent') {
+        push({
+          tone: 'success',
+          title: 'Account created',
+          description: `${email} has been sent a link to choose a password.`,
+        });
+        close();
+        return;
+      }
+
+      push({
+        tone: 'warning',
+        title: 'Account created, but no email was sent',
+        description: result.delivery?.detail ?? 'Send the link below to them yourself.',
+      });
+      if (result.delivery?.resetUrl) setIssued({ email, url: result.delivery.resetUrl });
+    },
+    onError: (error: ApiError) => {
+      setFieldErrors(error.fieldErrors);
+      push({ tone: 'error', title: 'Could not create the account', description: error.message });
+    },
+  });
+
+  function close() {
+    setEmail('');
+    setFullName('');
+    setPassword('');
+    setIssued(null);
+    onOpenChange(false);
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => (next ? onOpenChange(true) : close())}
+      title="Add a user"
+      description="Creates the account immediately and puts it in this workspace."
+      size="sm"
+      footer={
+        <>
+          <Button variant="ghost" onClick={close}>
+            {t('common.cancel')}
+          </Button>
+          <Button
+            variant="primary"
+            loading={create.isPending}
+            disabled={!email.trim() || !fullName.trim()}
+            onClick={() => create.mutate()}
+          >
+            Create account
+          </Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-4">
+        {issued && (
+          <div
+            role="status"
+            className="flex flex-col gap-2 rounded-[var(--uxe-radius-control)] border border-[var(--uxe-warning-border)] bg-[var(--uxe-warning-bg)] p-3"
+          >
+            <p className="text-[13px] font-semibold text-[var(--uxe-warning-text)]">
+              {issued.email} was created, but no email was sent
+            </p>
+            <code className="overflow-x-auto rounded-[var(--uxe-radius-control)] bg-[var(--uxe-surface)] px-2 py-1.5 font-[family-name:var(--uxe-font-mono)] text-[12px] break-all">
+              {issued.url}
+            </code>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  void navigator.clipboard
+                    .writeText(issued.url)
+                    .then(() => push({ tone: 'success', title: 'Link copied' }))
+                    .catch(() => push({ tone: 'error', title: 'Could not copy' }));
+                }}
+              >
+                Copy link
+              </Button>
+              <Button variant="ghost" size="sm" onClick={close}>
+                Done
+              </Button>
+            </div>
+          </div>
+        )}
+
+        <Field
+          label={t('auth.workEmail')}
+          htmlFor="add-email"
+          error={fieldErrors.email?.[0]}
+          required
+        >
+          <Input
+            id="add-email"
+            type="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            placeholder={t('auth.emailPlaceholder')}
+            invalid={Boolean(fieldErrors.email)}
+            iconLeft={<Mail className="h-4 w-4" aria-hidden />}
+          />
+        </Field>
+
+        <Field
+          label={t('auth.fullName')}
+          htmlFor="add-name"
+          error={fieldErrors.fullName?.[0]}
+          required
+        >
+          <Input
+            id="add-name"
+            value={fullName}
+            onChange={(event) => setFullName(event.target.value)}
+            invalid={Boolean(fieldErrors.fullName)}
+          />
+        </Field>
+
+        <Field label={t('users.role')} htmlFor="add-role">
+          <Select
+            value={role}
+            onValueChange={(value) => setRole(value as Role)}
+            ariaLabel={t('users.role')}
+            className="w-full"
+            options={EDITABLE_ROLES.map((value) => ({ value, label: ROLE_LABELS[value] }))}
+          />
+        </Field>
+
+        <Field
+          label="Password (optional)"
+          htmlFor="add-password"
+          hint="Leave blank and they are sent a link to choose their own, which nobody else ever sees. Type one and they can sign in at once — but you will know it, so ask them to change it."
+          error={fieldErrors.password?.[0]}
+        >
+          <Input
+            id="add-password"
+            type="password"
+            autoComplete="new-password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            placeholder="Send a link instead"
+            invalid={Boolean(fieldErrors.password)}
+          />
+        </Field>
+      </div>
+    </Dialog>
+  );
+}
 
 /** Owner is excluded: transferring ownership is its own operation, not a dropdown. */
 const EDITABLE_ROLES: Role[] = [
@@ -46,6 +500,9 @@ export function UsersPage() {
   const [suspending, setSuspending] = useState<WorkspaceUser | null>(null);
   const [editing, setEditing] = useState<WorkspaceUser | null>(null);
   const [removing, setRemoving] = useState<WorkspaceUser | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
+  const [view, setView] = useState<'workspace' | 'platform'>('workspace');
+  const isPlatformAdmin = session?.user.isPlatformAdmin === true;
 
   const query = useQuery<WorkspaceUser[], ApiError>({
     queryKey: ['users'],
@@ -82,202 +539,235 @@ export function UsersPage() {
         title={t('users.title')}
         subtitle={t('users.subtitle')}
         actions={
-          can('member:invite') ? (
-            <Button variant="primary" onClick={() => setInviteOpen(true)}>
-              <UserPlus className="h-4 w-4" aria-hidden />
-              {t('users.invite')}
-            </Button>
-          ) : null
+          <div className="flex flex-wrap items-center gap-2">
+            {isPlatformAdmin && (
+              <Button variant="secondary" onClick={() => setAddOpen(true)}>
+                <UserPlus className="h-4 w-4" aria-hidden />
+                Add user
+              </Button>
+            )}
+            {can('member:invite') && (
+              <Button variant="primary" onClick={() => setInviteOpen(true)}>
+                <Mail className="h-4 w-4" aria-hidden />
+                {t('users.invite')}
+              </Button>
+            )}
+          </div>
         }
       />
 
-      <Card flush className="mt-5 p-3 sm:p-4">
-        {query.isLoading ? (
-          <LoadingRegion label="Loading members">
-            <div className="flex flex-col gap-2">
-              {[0, 1, 2].map((i) => (
-                <Skeleton key={i} className="h-14 w-full" />
-              ))}
-            </div>
-          </LoadingRegion>
-        ) : query.error && !query.data ? (
-          <ErrorState
-            message={query.error.message}
-            traceId={query.error.traceId}
-            onRetry={() => void query.refetch()}
-          />
-        ) : (
-          <DataTable
-            caption="Workspace members"
-            rows={query.data ?? []}
-            rowKey={(row) => row.id}
-            empty={
-              <EmptyState title="No members" description="Invite a colleague to collaborate." />
-            }
-            columns={[
-              {
-                key: 'name',
-                header: t('users.name'),
-                primary: true,
-                render: (row) => (
-                  <span className="flex min-w-0 items-center gap-2.5">
-                    <Avatar name={row.fullName} src={row.avatarUrl} size={32} />
-                    <span className="min-w-0">
-                      <span className="block truncate font-medium text-[var(--uxe-text)]">
-                        {row.fullName}
-                      </span>
-                      <span className="block truncate text-[12px] text-[var(--uxe-text-secondary)]">
-                        {row.email}
-                      </span>
-                    </span>
-                  </span>
-                ),
-              },
-              {
-                key: 'role',
-                header: t('users.role'),
-                render: (row) =>
-                  can('member:update') && row.id !== session?.user.id ? (
-                    <Select
-                      value={row.role}
-                      onValueChange={(value) =>
-                        update.mutate({ id: row.id, patch: { role: value } })
-                      }
-                      ariaLabel={`Role for ${row.fullName}`}
-                      size="sm"
-                      options={(Object.keys(ROLE_LABELS) as Role[]).map((role) => ({
-                        value: role,
-                        label: ROLE_LABELS[role],
-                      }))}
-                    />
-                  ) : (
-                    <Badge tone="neutral" size="sm">
-                      {ROLE_LABELS[row.role]}
-                    </Badge>
-                  ),
-              },
-              {
-                key: 'status',
-                header: t('users.status'),
-                render: (row) => (
-                  <Badge
-                    tone={
-                      row.status === 'active'
-                        ? 'success'
-                        : row.status === 'invited'
-                          ? 'info'
-                          : 'danger'
-                    }
-                    size="sm"
-                  >
-                    {row.status}
-                  </Badge>
-                ),
-              },
-              {
-                key: 'mfa',
-                header: t('users.mfa'),
-                render: (row) =>
-                  row.mfaEnabled ? (
-                    <Badge
-                      tone="success"
-                      size="sm"
-                      icon={<ShieldCheck className="h-3 w-3" aria-hidden />}
-                    >
-                      On
-                    </Badge>
-                  ) : (
-                    <Badge tone="neutral" size="sm">
-                      Off
-                    </Badge>
-                  ),
-              },
-              {
-                key: 'sources',
-                header: t('users.sources'),
-                align: 'right',
-                render: (row) => <span className="tabular-nums">{row.accessibleSourceCount}</span>,
-              },
-              {
-                key: 'lastActive',
-                header: t('users.lastActive'),
-                render: (row) => (
-                  <span className="whitespace-nowrap text-[var(--uxe-text-secondary)]">
-                    {row.lastActiveAt ? formatRelative(row.lastActiveAt) : '—'}
-                  </span>
-                ),
-              },
-              {
-                key: 'actions',
-                header: '',
-                align: 'right',
-                hideOnMobile: true,
-                render: (row) => (
-                  <DropdownMenu
-                    label={`Actions for ${row.fullName}`}
-                    trigger={
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label={`Actions for ${row.fullName}`}
-                      >
-                        <KeyRound className="h-4 w-4" aria-hidden />
-                      </Button>
-                    }
-                    items={[
-                      {
-                        label: t('users.revokeSessions'),
-                        icon: <KeyRound className="h-4 w-4" aria-hidden />,
-                        onSelect: () =>
-                          update.mutate({ id: row.id, patch: { revokeSessions: true } }),
-                        disabled: !can('member:update'),
-                        disabledReason: 'Your role cannot change member access',
-                      },
-                      {
-                        label: t('common.edit'),
-                        icon: <Pencil className="h-4 w-4" aria-hidden />,
-                        onSelect: () => setEditing(row),
-                        disabled: !can('member:update'),
-                        disabledReason: 'Your role cannot change member access',
-                        separatorBefore: true,
-                      },
-                      {
-                        label:
-                          row.status === 'suspended' ? t('users.reactivate') : t('users.suspend'),
-                        icon: <UserX className="h-4 w-4" aria-hidden />,
-                        onSelect: () =>
-                          row.status === 'suspended'
-                            ? update.mutate({ id: row.id, patch: { status: 'active' } })
-                            : setSuspending(row),
-                        destructive: row.status !== 'suspended',
-                        disabled: !can('member:suspend') || row.id === session?.user.id,
-                        disabledReason:
-                          row.id === session?.user.id
-                            ? 'You cannot suspend your own account'
-                            : 'Your role cannot suspend members',
-                        separatorBefore: true,
-                      },
-                      {
-                        label: t('users.remove'),
-                        icon: <Trash2 className="h-4 w-4" aria-hidden />,
-                        onSelect: () => setRemoving(row),
-                        destructive: true,
-                        disabled: !can('member:remove') || row.id === session?.user.id,
-                        disabledReason:
-                          row.id === session?.user.id
-                            ? 'You cannot remove your own account'
-                            : 'Your role cannot remove members',
-                      },
-                    ]}
-                  />
-                ),
-              },
+      {isPlatformAdmin && (
+        <div className="mt-4">
+          <SegmentedControl
+            value={view}
+            onValueChange={(value) => setView(value as 'workspace' | 'platform')}
+            ariaLabel="Which accounts to show"
+            options={[
+              { value: 'workspace', label: 'This workspace' },
+              { value: 'platform', label: 'Everyone' },
             ]}
           />
-        )}
-      </Card>
+        </div>
+      )}
+
+      {view === 'platform' ? (
+        <PlatformUsers />
+      ) : (
+        <>
+          <Card flush className="mt-5 p-3 sm:p-4">
+            {query.isLoading ? (
+              <LoadingRegion label="Loading members">
+                <div className="flex flex-col gap-2">
+                  {[0, 1, 2].map((i) => (
+                    <Skeleton key={i} className="h-14 w-full" />
+                  ))}
+                </div>
+              </LoadingRegion>
+            ) : query.error && !query.data ? (
+              <ErrorState
+                message={query.error.message}
+                traceId={query.error.traceId}
+                onRetry={() => void query.refetch()}
+              />
+            ) : (
+              <DataTable
+                caption="Workspace members"
+                rows={query.data ?? []}
+                rowKey={(row) => row.id}
+                empty={
+                  <EmptyState title="No members" description="Invite a colleague to collaborate." />
+                }
+                columns={[
+                  {
+                    key: 'name',
+                    header: t('users.name'),
+                    primary: true,
+                    render: (row) => (
+                      <span className="flex min-w-0 items-center gap-2.5">
+                        <Avatar name={row.fullName} src={row.avatarUrl} size={32} />
+                        <span className="min-w-0">
+                          <span className="block truncate font-medium text-[var(--uxe-text)]">
+                            {row.fullName}
+                          </span>
+                          <span className="block truncate text-[12px] text-[var(--uxe-text-secondary)]">
+                            {row.email}
+                          </span>
+                        </span>
+                      </span>
+                    ),
+                  },
+                  {
+                    key: 'role',
+                    header: t('users.role'),
+                    render: (row) =>
+                      can('member:update') && row.id !== session?.user.id ? (
+                        <Select
+                          value={row.role}
+                          onValueChange={(value) =>
+                            update.mutate({ id: row.id, patch: { role: value } })
+                          }
+                          ariaLabel={`Role for ${row.fullName}`}
+                          size="sm"
+                          options={(Object.keys(ROLE_LABELS) as Role[]).map((role) => ({
+                            value: role,
+                            label: ROLE_LABELS[role],
+                          }))}
+                        />
+                      ) : (
+                        <Badge tone="neutral" size="sm">
+                          {ROLE_LABELS[row.role]}
+                        </Badge>
+                      ),
+                  },
+                  {
+                    key: 'status',
+                    header: t('users.status'),
+                    render: (row) => (
+                      <Badge
+                        tone={
+                          row.status === 'active'
+                            ? 'success'
+                            : row.status === 'invited'
+                              ? 'info'
+                              : 'danger'
+                        }
+                        size="sm"
+                      >
+                        {row.status}
+                      </Badge>
+                    ),
+                  },
+                  {
+                    key: 'mfa',
+                    header: t('users.mfa'),
+                    render: (row) =>
+                      row.mfaEnabled ? (
+                        <Badge
+                          tone="success"
+                          size="sm"
+                          icon={<ShieldCheck className="h-3 w-3" aria-hidden />}
+                        >
+                          On
+                        </Badge>
+                      ) : (
+                        <Badge tone="neutral" size="sm">
+                          Off
+                        </Badge>
+                      ),
+                  },
+                  {
+                    key: 'sources',
+                    header: t('users.sources'),
+                    align: 'right',
+                    render: (row) => (
+                      <span className="tabular-nums">{row.accessibleSourceCount}</span>
+                    ),
+                  },
+                  {
+                    key: 'lastActive',
+                    header: t('users.lastActive'),
+                    render: (row) => (
+                      <span className="whitespace-nowrap text-[var(--uxe-text-secondary)]">
+                        {row.lastActiveAt ? formatRelative(row.lastActiveAt) : '—'}
+                      </span>
+                    ),
+                  },
+                  {
+                    key: 'actions',
+                    header: '',
+                    align: 'right',
+                    hideOnMobile: true,
+                    render: (row) => (
+                      <DropdownMenu
+                        label={`Actions for ${row.fullName}`}
+                        trigger={
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label={`Actions for ${row.fullName}`}
+                          >
+                            <KeyRound className="h-4 w-4" aria-hidden />
+                          </Button>
+                        }
+                        items={[
+                          {
+                            label: t('users.revokeSessions'),
+                            icon: <KeyRound className="h-4 w-4" aria-hidden />,
+                            onSelect: () =>
+                              update.mutate({ id: row.id, patch: { revokeSessions: true } }),
+                            disabled: !can('member:update'),
+                            disabledReason: 'Your role cannot change member access',
+                          },
+                          {
+                            label: t('common.edit'),
+                            icon: <Pencil className="h-4 w-4" aria-hidden />,
+                            onSelect: () => setEditing(row),
+                            disabled: !can('member:update'),
+                            disabledReason: 'Your role cannot change member access',
+                            separatorBefore: true,
+                          },
+                          {
+                            label:
+                              row.status === 'suspended'
+                                ? t('users.reactivate')
+                                : t('users.suspend'),
+                            icon: <UserX className="h-4 w-4" aria-hidden />,
+                            onSelect: () =>
+                              row.status === 'suspended'
+                                ? update.mutate({ id: row.id, patch: { status: 'active' } })
+                                : setSuspending(row),
+                            destructive: row.status !== 'suspended',
+                            disabled: !can('member:suspend') || row.id === session?.user.id,
+                            disabledReason:
+                              row.id === session?.user.id
+                                ? 'You cannot suspend your own account'
+                                : 'Your role cannot suspend members',
+                            separatorBefore: true,
+                          },
+                          {
+                            label: t('users.remove'),
+                            icon: <Trash2 className="h-4 w-4" aria-hidden />,
+                            onSelect: () => setRemoving(row),
+                            destructive: true,
+                            disabled: !can('member:remove') || row.id === session?.user.id,
+                            disabledReason:
+                              row.id === session?.user.id
+                                ? 'You cannot remove your own account'
+                                : 'Your role cannot remove members',
+                          },
+                        ]}
+                      />
+                    ),
+                  },
+                ]}
+              />
+            )}
+          </Card>
+        </>
+      )}
 
       <InviteDialog open={inviteOpen} onOpenChange={setInviteOpen} />
+      <AddUserDialog open={addOpen} onOpenChange={setAddOpen} />
 
       <EditMemberDialog member={editing} onOpenChange={(open) => !open && setEditing(null)} />
 

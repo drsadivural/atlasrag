@@ -119,10 +119,7 @@ export class ConsultationRepository {
     return row;
   }
 
-  async create(
-    ctx: TenantContext,
-    input: { title: string; taskMode: string; sourceIds: string[] },
-  ) {
+  async create(ctx: TenantContext, input: { title: string; taskMode: string }) {
     requirePermission(ctx, 'consultation:create');
     const id = newId();
 

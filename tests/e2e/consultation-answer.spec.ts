@@ -29,9 +29,12 @@ test.describe('asking a question', () => {
     await expect(page.getByText(/reviewing your sources/i)).toHaveCount(0);
   });
 
-  test('says a consultation has nothing in scope before the question is asked', async ({
-    page,
-  }) => {
+  test('opens on the approved knowledge base rather than on nothing', async ({ page }) => {
+    /*
+     * A new consultation used to attach no sources, so the first thing anybody saw was a
+     * warning and an instruction to go and choose some — from a knowledge base they had
+     * already approved, every document of which they would have picked.
+     */
     await page.goto('/consult');
     await waitForSettled(page);
     await page
@@ -40,9 +43,44 @@ test.describe('asking a question', () => {
       .click();
     await expect(page).toHaveURL(/\/consult\/[A-Z0-9]+/i, { timeout: 20_000 });
 
-    // With nothing selected the answer could only ever be "unable to determine", which is
-    // a poor way to find out. The warning belongs where it can still be acted on.
-    await expect(page.getByText(/No sources are selected/i)).toBeVisible();
+    await expect(page.getByPlaceholder(/Ask Ayumi/i)).toBeVisible();
+    await expect(page.getByText(/No sources are selected/i)).toHaveCount(0);
+  });
+
+  test('still says so when the scope has been emptied deliberately', async ({ page }) => {
+    /*
+     * The warning is right for a consultation that genuinely has nothing to answer from;
+     * what was wrong was meeting it before anybody had chosen anything.
+     *
+     * The empty scope is made through the API rather than by unticking the dialog, because
+     * this workspace holds over a hundred approved sources and clicking each one tests the
+     * checkbox rather than the warning. An explicit empty list is the one thing that still
+     * produces this state, so it is the thing to set.
+     */
+    await page.goto('/consult');
+    await waitForSettled(page);
+
+    // Sent from inside the page so it carries the session exactly as the app's own calls do:
+    // the request context is a separate client and does not hold the browser's cookies.
+    const consultation = await page.evaluate(async () => {
+      const csrf = document.cookie
+        .split('; ')
+        .find((part) => part.startsWith('uxe_csrf='))
+        ?.slice('uxe_csrf='.length);
+      const response = await fetch('/api/v1/consultations', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'content-type': 'application/json', 'x-csrf-token': csrf ?? '' },
+        body: JSON.stringify({ title: 'Deliberately unscoped', taskMode: 'ask', sourceIds: [] }),
+      });
+      if (!response.ok) throw new Error(`${response.status} ${await response.text()}`);
+      return (await response.json()) as { id: string };
+    });
+
+    await page.goto(`/consult/${consultation.id}`);
+    await waitForSettled(page);
+
+    await expect(page.getByText(/No sources are selected/i)).toBeVisible({ timeout: 20_000 });
     await expect(page.getByRole('link', { name: /open the knowledge base/i })).toBeVisible();
   });
 });

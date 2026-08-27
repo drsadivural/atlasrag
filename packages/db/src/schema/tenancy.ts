@@ -67,6 +67,14 @@ export const users = pgTable(
     locale: text('locale').notNull().default('en'),
     theme: text('theme').notNull().default('system'),
     status: text('status').notNull().default('active'),
+    /**
+     * Administers accounts across the deployment, not a workspace role.
+     *
+     * Carries no data access: documents, consultations and answers stay behind the tenant
+     * checks every retrieval makes. Administering accounts and reading every customer's
+     * filings are different authorities and are not granted by the same flag.
+     */
+    isPlatformAdmin: boolean('is_platform_admin').notNull().default(false),
     lastActiveAt: timestamp('last_active_at', { withTimezone: true, mode: 'date' }),
     failedLoginCount: integer('failed_login_count').notNull().default(0),
     lockedUntil: timestamp('locked_until', { withTimezone: true, mode: 'date' }),

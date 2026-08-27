@@ -76,6 +76,8 @@ export interface RequestSession {
     theme: string;
     emailVerified: boolean;
     createdAt: Date;
+    /** Administers accounts across the deployment. Never grants access to tenant data. */
+    isPlatformAdmin: boolean;
   };
 }
 
