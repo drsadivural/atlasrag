@@ -58,6 +58,7 @@ describe('UploadList', () => {
       id: 'u1',
       fileName: 'evacuation-plan.pdf',
       sizeBytes: 2_400_000,
+      uploadedBytes: 1_008_000,
       percent: 42,
       status: 'uploading',
       message: null,
@@ -66,6 +67,7 @@ describe('UploadList', () => {
       id: 'u2',
       fileName: 'lighting.xlsx',
       sizeBytes: 180_000,
+      uploadedBytes: 180_000,
       percent: 100,
       status: 'processing',
       message: null,
@@ -74,6 +76,7 @@ describe('UploadList', () => {
       id: 'u3',
       fileName: 'fire-code.pdf',
       sizeBytes: 9_100_000,
+      uploadedBytes: 9_100_000,
       percent: 100,
       status: 'duplicate',
       message: 'Already in this workspace as UAE Fire and Life Safety Code v3.',
@@ -82,11 +85,23 @@ describe('UploadList', () => {
       id: 'u4',
       fileName: 'corrupt.pdf',
       sizeBytes: 12_000,
+      uploadedBytes: 12_000,
       percent: 0,
       status: 'failed',
       message: 'The file could not be opened as a PDF. Re-export it and try again.',
     },
   ];
+
+  it('counts the bytes up while they are moving, and stops when they stop', () => {
+    render(<UploadList uploads={uploads} onDismiss={() => {}} />);
+
+    // A file's own size never changes, so printing it alone beside a moving bar reads as
+    // a number that is stuck — which is exactly how a 136MB upload looked.
+    expect(screen.getByText('984 KB of 2.3 MB · 42%')).toBeInTheDocument();
+
+    // Once the bytes have arrived there is nothing left to count.
+    expect(screen.getByText('176 KB')).toBeInTheDocument();
+  });
 
   it('shows measurable progress while a file is uploading', () => {
     render(<UploadList uploads={uploads} onDismiss={() => {}} />, { wrapper: Providers });

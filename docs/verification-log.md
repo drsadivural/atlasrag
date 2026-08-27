@@ -428,6 +428,31 @@ Verified on the live deployment: the workspace holding the reprocessed fire code
 `structure_analysis blocked 1/2` to every stage `complete 1/1`, and a fresh upload then
 reset the card to that upload alone.
 
+## A byte counter that never moved
+
+The upload bar advanced; the number beside it read "136 MB" from the first frame to the
+last. It was the file's own size — printed once, correct, and completely useless, because
+the one thing somebody watching a large upload wants to know is how much of it has gone.
+
+While bytes are moving the row now says how many: `71 MB of 120 MB · 59%`. When they stop,
+it goes back to the file's size, because there is nothing left to count.
+
+The figure comes from the transfer rather than from the percentage. A percentage rounded
+to a whole number moves in 1.4MB steps on a 136MB file, which looks like a counter
+sticking; and for a file sent in parts the count has to run across the whole file rather
+than restart at each part — the person watching is waiting for a document and has no idea
+it was cut into three.
+
+Verified on the live deployment with a 120MB upload, sampled as it ran:
+
+```
+1.1 MB of 120 MB · 1%      48 MB of 120 MB · 40%      96 MB of 120 MB · 80%
+15 MB of 120 MB · 12%      53 MB of 120 MB · 44%     108 MB of 120 MB · 90%
+33 MB of 120 MB · 27%      71 MB of 120 MB · 59%     120 MB of 120 MB · 100%
+```
+
+The readings either side of 48MB are the part boundary: it crosses without resetting.
+
 ## Reproducing
 
 ```bash

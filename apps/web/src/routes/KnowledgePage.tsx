@@ -185,6 +185,7 @@ export function KnowledgePage() {
         id: `${file.name}-${file.size}-${Date.now()}`,
         fileName: file.name,
         sizeBytes: file.size,
+        uploadedBytes: 0,
         percent: 0,
         status: 'uploading',
         message: null,
@@ -211,9 +212,13 @@ export function KnowledgePage() {
 
             try {
               const result = await uploadFile(ticket.uploadUrl, file, {
-                onProgress: (percent) =>
+                onProgress: (progress) =>
                   setUploads((current) =>
-                    current.map((u) => (u.id === entry.id ? { ...u, percent } : u)),
+                    current.map((u) =>
+                      u.id === entry.id
+                        ? { ...u, percent: progress.percent, uploadedBytes: progress.loaded }
+                        : u,
+                    ),
                   ),
               });
 
@@ -223,6 +228,7 @@ export function KnowledgePage() {
                     ? {
                         ...u,
                         percent: 100,
+                        uploadedBytes: file.size,
                         status: result.duplicate ? 'duplicate' : 'processing',
                         message: result.message ?? null,
                       }
@@ -628,6 +634,9 @@ export interface UploadState {
   id: string;
   fileName: string;
   sizeBytes: number;
+  /** Accepted so far. Kept in bytes rather than derived from the percentage, which is
+   *  rounded and would move the counter in jumps on a large file. */
+  uploadedBytes: number;
   percent: number;
   status: 'uploading' | 'processing' | 'duplicate' | 'failed';
   message: string | null;
@@ -902,8 +911,15 @@ export function UploadList({
                 <p className="truncate text-[14px] font-medium text-[var(--uxe-text)]">
                   {upload.fileName}
                 </p>
-                <p className="shrink-0 text-[12px] text-[var(--uxe-text-secondary)]">
-                  {formatBytes(upload.sizeBytes)}
+                {/*
+                  While the bytes are moving, say how many. The file's own size never
+                  changes, so printing it alone next to a moving bar reads as a number
+                  that is stuck.
+                */}
+                <p className="shrink-0 text-[12px] text-[var(--uxe-text-secondary)] tabular-nums">
+                  {upload.status === 'uploading'
+                    ? `${formatBytes(upload.uploadedBytes)} of ${formatBytes(upload.sizeBytes)} · ${upload.percent}%`
+                    : formatBytes(upload.sizeBytes)}
                 </p>
               </div>
               {upload.status === 'uploading' ? (

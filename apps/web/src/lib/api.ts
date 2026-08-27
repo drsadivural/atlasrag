@@ -162,11 +162,19 @@ export const UPLOAD_CHUNK_BYTES = 48 * 1024 * 1024;
  * across the whole file rather than restarting per part, because that is what the person
  * watching it cares about.
  */
+/** How far along an upload is, in bytes as well as in percent. */
+export interface UploadProgress {
+  percent: number;
+  /** Bytes accepted so far, across every part when the file is sent in several. */
+  loaded: number;
+  total: number;
+}
+
 export async function uploadFile(
   url: string,
   file: File,
   options: {
-    onProgress?: (percent: number) => void;
+    onProgress?: (progress: UploadProgress) => void;
     signal?: AbortSignal;
   } = {},
 ): Promise<UploadResult> {
@@ -186,9 +194,15 @@ export async function uploadFile(
     last = await putBody(url, part, file.type || 'application/octet-stream', {
       ...options,
       headers: { 'x-upload-part': String(index), 'x-upload-parts': String(total) },
-      onProgress: (partPercent) => {
-        const uploaded = before + (part.size * partPercent) / 100;
-        options.onProgress?.(Math.min(100, Math.round((uploaded / file.size) * 100)));
+      onProgress: (partProgress) => {
+        // Across the whole file, not this part: the person watching is waiting for a
+        // document, and has no idea it was cut into three.
+        const loaded = Math.min(file.size, before + partProgress.loaded);
+        options.onProgress?.({
+          percent: Math.min(100, Math.round((loaded / file.size) * 100)),
+          loaded,
+          total: file.size,
+        });
       },
     });
 
@@ -203,7 +217,7 @@ function putBody(
   body: Blob,
   contentType: string,
   options: {
-    onProgress?: (percent: number) => void;
+    onProgress?: (progress: UploadProgress) => void;
     signal?: AbortSignal;
     headers?: Record<string, string>;
   } = {},
@@ -220,7 +234,11 @@ function putBody(
 
     request.upload.addEventListener('progress', (event) => {
       if (event.lengthComputable) {
-        options.onProgress?.(Math.round((event.loaded / event.total) * 100));
+        options.onProgress?.({
+          percent: Math.round((event.loaded / event.total) * 100),
+          loaded: event.loaded,
+          total: event.total,
+        });
       }
     });
 
