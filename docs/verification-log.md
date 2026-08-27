@@ -405,6 +405,29 @@ shows the documents still in it with whatever the stage recorded against each: a
 count, an OCR confidence, or the reason it stopped. A job outlives the document it ran on,
 so one whose source has been deleted is left out rather than named.
 
+## Ready in the table, failed in the pipeline
+
+Both readings were true, and that was the problem. The pipeline counted every ingest job
+in the workspace, so a document that failed and was then reprocessed successfully appeared
+twice: once as the failure it used to be, once as the success it now is. The table showed
+the document, the pipeline showed the history.
+
+Two rules now define what the card counts.
+
+**The newest attempt per document wins.** A reprocess supersedes the attempt it replaced,
+which is what a reprocess is for. Nothing else makes "Ready" and "failed at structure
+analysis" impossible to hold at the same time.
+
+**The card is the current batch, not a lifetime total.** Everything still working, plus
+everything started within ten minutes of the newest job. Uploading a file starts a new
+batch rather than adding one more row to a tally nobody can find their document in — which
+is what makes the card useful for the thing people actually use it for, watching an upload
+go through.
+
+Verified on the live deployment: the workspace holding the reprocessed fire code went from
+`structure_analysis blocked 1/2` to every stage `complete 1/1`, and a fresh upload then
+reset the card to that upload alone.
+
 ## Reproducing
 
 ```bash

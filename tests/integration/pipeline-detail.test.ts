@@ -107,3 +107,53 @@ describe('the indexing pipeline', () => {
     }
   });
 });
+
+/**
+ * What the pipeline counts.
+ *
+ * Not a lifetime total. A document that failed and was reprocessed successfully is a
+ * document that succeeded, and a new upload is a new batch rather than one more row on a
+ * tally nobody can find their file in.
+ */
+describe('what the pipeline counts', () => {
+  it('keeps only the newest attempt for a document', async () => {
+    // Fails in extraction, so structure analysis never runs and the stage stays blocked.
+    const uploaded = await uploadFixture(harness, owner.client, 'encrypted.pdf', { wait: true });
+
+    const before = (await pipeline()).find((s) => s.stage === 'extraction');
+    expect(before?.state).toBe('blocked');
+
+    // Reprocessing produces a second job for the same document. Counting both is how a
+    // file reads Ready in the table and failed in the pipeline at the same time.
+    await owner.client.post(`/sources/${uploaded.sourceId}/reprocess`, undefined, {
+      idempotencyKey: `reprocess-${uploaded.sourceId}`,
+    });
+
+    const stages = await pipeline();
+    const extraction = stages.find((s) => s.stage === 'extraction');
+    // One document, one attempt counted — whatever the outcome of that attempt.
+    expect(extraction?.total).toBe(1);
+  });
+
+  it('starts a new batch when a new document arrives', async () => {
+    await uploadFixture(harness, owner.client, 'regulation-native.pdf', { wait: true });
+    const first = (await pipeline()).find((s) => s.stage === 'malware_scan');
+    expect(first?.total).toBe(1);
+
+    await uploadFixture(harness, owner.client, 'policy.docx', { wait: true });
+
+    // Both arrived within the same batch window, so both are on screen: a folder dropped
+    // in one go stays together while its documents queue.
+    const second = (await pipeline()).find((s) => s.stage === 'malware_scan');
+    expect(second?.total).toBe(2);
+  });
+
+  it('reports nothing when the workspace has never ingested anything', async () => {
+    const stages = await pipeline();
+    for (const stage of stages) {
+      expect(stage.total).toBe(0);
+      expect(stage.state).toBe('idle');
+      expect(stage.documents).toHaveLength(0);
+    }
+  });
+});

@@ -1004,9 +1004,38 @@ async function buildPipelineView(deps: AppDeps, workspaceId: string) {
 
   const list = await deps.repos.pipeline.recentIngestJobs(workspaceId);
 
+  /*
+   * What the pipeline is about: the work happening now, not a lifetime total.
+   *
+   * Two rules, and both matter.
+   *
+   * The newest attempt per document wins. A document that failed and was then reprocessed
+   * successfully is a document that succeeded; counting the superseded failure as well is
+   * how a file reads "Ready" in the table and "failed" in the pipeline at the same time.
+   *
+   * And the view is the current batch: everything still working, plus everything started
+   * alongside the newest job. Uploading a file starts a new batch rather than adding one
+   * more row to a running total nobody can find their document in.
+   */
+  const newestPerSource = new Map<string, (typeof list)[number]>();
+  for (const job of list) {
+    // `list` arrives newest first, so the first sighting of a document is its latest job.
+    const key = job.targetId ?? job.id;
+    if (!newestPerSource.has(key)) newestPerSource.set(key, job);
+  }
+
+  const candidates = [...newestPerSource.values()];
+  const newestAt = candidates[0]?.createdAt?.getTime() ?? null;
+  const batch = candidates.filter(
+    (job) =>
+      job.status === 'queued' ||
+      job.status === 'running' ||
+      (newestAt !== null && job.createdAt.getTime() >= newestAt - BATCH_WINDOW_MS),
+  );
+
   // Titles for the documents a stage may need to name. Resolved once for the whole view
   // rather than per stage, since the same handful of documents appear across all eight.
-  const targetIds = [...new Set(list.map((job) => job.targetId).filter(Boolean))] as string[];
+  const targetIds = [...new Set(batch.map((job) => job.targetId).filter(Boolean))] as string[];
   const titles = await deps.repos.pipeline.titlesForSources(targetIds);
 
   return stages.map((stage) => {
@@ -1021,7 +1050,7 @@ async function buildPipelineView(deps: AppDeps, workspaceId: string) {
       startedAt: string | null;
     }> = [];
 
-    for (const job of list) {
+    for (const job of batch) {
       const entry = (job.stages ?? []).find((s) => s.key === stage);
       if (!entry) continue;
       if (entry.state === 'complete' || entry.state === 'skipped') completed += 1;
@@ -1046,7 +1075,7 @@ async function buildPipelineView(deps: AppDeps, workspaceId: string) {
       }
     }
 
-    const total = list.length;
+    const total = batch.length;
     return {
       stage,
       completed,
@@ -1068,6 +1097,14 @@ async function buildPipelineView(deps: AppDeps, workspaceId: string) {
 
 /** Enough to explain a stall without turning a summary card into a table. */
 const MAX_STAGE_DOCUMENTS = 25;
+
+/**
+ * How close together two uploads have to be to count as the same batch.
+ *
+ * Long enough that a folder dropped in one go stays together while its documents queue,
+ * short enough that yesterday's work is not still on screen while today's uploads.
+ */
+const BATCH_WINDOW_MS = 10 * 60 * 1000;
 
 function rankState(state: 'running' | 'failed' | 'pending'): number {
   return state === 'failed' ? 0 : state === 'running' ? 1 : 2;

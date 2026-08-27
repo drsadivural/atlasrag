@@ -846,12 +846,14 @@ export class PipelineRepository {
   async recentIngestJobs(workspaceId: string, limit = 200) {
     return this.db
       .select({
+        id: processingJobs.id,
         stages: processingJobs.stages,
         status: processingJobs.status,
         // Carried so a blocked stage can name the document that blocked it rather than
-        // only counting it.
+        // only counting it, and so the view can keep the newest attempt per document.
         targetId: processingJobs.targetId,
         startedAt: processingJobs.startedAt,
+        createdAt: processingJobs.createdAt,
       })
       .from(processingJobs)
       .where(
