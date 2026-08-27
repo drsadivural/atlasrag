@@ -376,6 +376,35 @@ Verified end to end against the live hostname with a genuine 136MB PDF: three pa
 48MB, 202 on each, assembled, ingested and `ready`. The parts are scratch and are deleted
 as soon as the file exists, including on the failure paths.
 
+## A 1348-page fire code quarantined by a wrapped line
+
+The upload completed and the document then went nowhere. The job had **succeeded**; the
+document was `quarantined`. Reading the stages showed why: malware scan clean, extraction
+complete at 1348 pages, and structure analysis failed with the single word "Quarantined".
+
+The recorded reason was a `role_confusion` hit on this excerpt:
+
+> …the fire strategy and overall intent of the proposed glazing
+> **system:** a. The minimum fire rating specified relates to a full syste…
+
+The rule was `/^\s*(system|assistant|developer)\s*[:>]\s*/im`. With the multiline flag,
+`^` matches the head of _any_ line, so a regulation that happens to wrap before the word
+"system" and continue with a list colon reads as somebody impersonating the system role.
+On a long technical document that is not an edge case; it is inevitable.
+
+The rule now requires the label to begin the text, follow a blank line, or follow a line
+that ended a sentence — which is how an injected role header actually appears, and is not
+how a wrapped noun does. Every injection shape in the suite still matches, and the fire
+code no longer does. The reprocessed document is `ready`.
+
+**Two supporting defects fixed in the same pass.** The stage recorded the verdict rather
+than the reason, so the pipeline said "Quarantined" and nothing about what to do next; it
+now carries the explanation. And the pipeline card was a set of counters — a stage could
+say it was blocked without naming the document that blocked it. Each stage now opens, and
+shows the documents still in it with whatever the stage recorded against each: a page
+count, an OCR confidence, or the reason it stopped. A job outlives the document it ran on,
+so one whose source has been deleted is left out rather than named.
+
 ## Reproducing
 
 ```bash

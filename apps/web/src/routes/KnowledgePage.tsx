@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangle,
   CheckCircle2,
+  ChevronRight,
   Circle,
   CloudUpload,
   Database,
@@ -1083,8 +1084,37 @@ const STAGE_LABELS: Record<string, string> = {
   validation: 'Validation',
 };
 
+/**
+ * What each stage does, in one line.
+ *
+ * Shown when a stage is opened, because the stage names are the pipeline's vocabulary and
+ * not everybody reading the screen shares it.
+ */
+const STAGE_DESCRIPTIONS: Record<string, string> = {
+  malware_scan: 'Every uploaded file is scanned before anything reads it.',
+  extraction: 'Text is read from the document, and scanned pages go through OCR.',
+  structure_analysis:
+    'Headings, clauses and tables are identified, and the text is screened for instructions aimed at the assistant.',
+  chunking: 'The document is divided into passages small enough to retrieve precisely.',
+  embeddings: 'Each passage is turned into a vector so it can be found by meaning.',
+  lexical_index: 'Each passage is indexed by its words so exact terms can be found.',
+  citation_map:
+    'Every passage is mapped back to its page and character range, so a quotation can be re-located in the original.',
+  validation: 'The indexed document is checked against the original before it is used for answers.',
+};
+
+/**
+ * The indexing pipeline.
+ *
+ * Each stage opens. A count says a stage is blocked; it does not say which document
+ * blocked it or why, and that is the one thing somebody looking at a stalled pipeline
+ * actually needs. Opening a stage names the documents still in it and shows what the
+ * stage recorded against each — a page count, an OCR confidence, or the reason it
+ * stopped. A stage with nothing outstanding says so rather than opening on an empty box.
+ */
 function PipelineCard({ pipeline }: { pipeline: SourcesResponse['pipeline'] }) {
   const { t } = useI18n();
+  const [open, setOpen] = useState<string | null>(null);
 
   return (
     <Card>
@@ -1092,51 +1122,132 @@ function PipelineCard({ pipeline }: { pipeline: SourcesResponse['pipeline'] }) {
         <CardTitle>{t('knowledge.indexingPipeline')}</CardTitle>
       </CardHeader>
 
-      <ul className="flex flex-col gap-3">
+      <ul className="flex flex-col gap-1">
         {pipeline.map((stage) => {
           const percent = stage.total === 0 ? 0 : (stage.completed / stage.total) * 100;
+          const expanded = open === stage.stage;
+          const panelId = `pipeline-${stage.stage}`;
+
           return (
             <li key={stage.stage}>
-              <div className="flex items-center justify-between gap-3">
-                <span className="flex min-w-0 items-center gap-2">
-                  {stage.state === 'complete' ? (
-                    <CheckCircle2
-                      className="h-4 w-4 shrink-0 text-[var(--uxe-success)]"
+              <button
+                type="button"
+                onClick={() => setOpen(expanded ? null : stage.stage)}
+                aria-expanded={expanded}
+                aria-controls={panelId}
+                className="w-full rounded-[var(--uxe-radius-control)] px-1.5 py-1.5 text-start transition-colors hover:bg-[var(--uxe-surface-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--uxe-cobalt)]"
+              >
+                <span className="flex items-center justify-between gap-3">
+                  <span className="flex min-w-0 items-center gap-2">
+                    <ChevronRight
+                      className={cn(
+                        'h-3.5 w-3.5 shrink-0 text-[var(--uxe-text-tertiary)] transition-transform',
+                        expanded && 'rotate-90',
+                      )}
                       aria-hidden
                     />
-                  ) : stage.state === 'blocked' ? (
-                    <XCircle className="h-4 w-4 shrink-0 text-[var(--uxe-danger)]" aria-hidden />
-                  ) : stage.state === 'running' ? (
-                    <Loader2
-                      className="h-4 w-4 shrink-0 animate-[uxe-spin_1s_linear_infinite] text-[var(--uxe-info)]"
-                      aria-hidden
-                    />
-                  ) : (
-                    <Circle
-                      className="h-4 w-4 shrink-0 text-[var(--uxe-text-tertiary)]"
-                      aria-hidden
-                    />
-                  )}
-                  <span className="truncate text-[13px] font-medium text-[var(--uxe-text)]">
-                    {STAGE_LABELS[stage.stage] ?? stage.stage}
+                    {stage.state === 'complete' ? (
+                      <CheckCircle2
+                        className="h-4 w-4 shrink-0 text-[var(--uxe-success)]"
+                        aria-hidden
+                      />
+                    ) : stage.state === 'blocked' ? (
+                      <XCircle className="h-4 w-4 shrink-0 text-[var(--uxe-danger)]" aria-hidden />
+                    ) : stage.state === 'running' ? (
+                      <Loader2
+                        className="h-4 w-4 shrink-0 animate-[uxe-spin_1s_linear_infinite] text-[var(--uxe-info)]"
+                        aria-hidden
+                      />
+                    ) : (
+                      <Circle
+                        className="h-4 w-4 shrink-0 text-[var(--uxe-text-tertiary)]"
+                        aria-hidden
+                      />
+                    )}
+                    <span className="truncate text-[13px] font-medium text-[var(--uxe-text)]">
+                      {STAGE_LABELS[stage.stage] ?? stage.stage}
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-[12px] text-[var(--uxe-text-secondary)] tabular-nums">
+                    {stage.completed} / {stage.total}
                   </span>
                 </span>
-                <span className="shrink-0 text-[12px] text-[var(--uxe-text-secondary)] tabular-nums">
-                  {stage.completed} / {stage.total}
-                </span>
-              </div>
-              <ProgressBar
-                value={percent}
-                tone={
-                  stage.state === 'blocked'
-                    ? 'danger'
-                    : stage.state === 'complete'
-                      ? 'success'
-                      : 'brand'
-                }
-                label={`${STAGE_LABELS[stage.stage]}: ${stage.completed} of ${stage.total}`}
-                className="mt-1.5"
-              />
+                <ProgressBar
+                  value={percent}
+                  tone={
+                    stage.state === 'blocked'
+                      ? 'danger'
+                      : stage.state === 'complete'
+                        ? 'success'
+                        : 'brand'
+                  }
+                  label={`${STAGE_LABELS[stage.stage]}: ${stage.completed} of ${stage.total}`}
+                  className="mt-1.5"
+                />
+              </button>
+
+              {expanded && (
+                <div
+                  id={panelId}
+                  className="ms-6 mt-1 mb-2 rounded-[var(--uxe-radius-control)] border border-[var(--uxe-border)] bg-[var(--uxe-surface-sunken)] p-3"
+                >
+                  <p className="text-[12px] text-[var(--uxe-text-secondary)]">
+                    {STAGE_DESCRIPTIONS[stage.stage]}
+                  </p>
+
+                  {stage.documents.length === 0 ? (
+                    <p className="mt-2 text-[12px] text-[var(--uxe-text-tertiary)]">
+                      {stage.total === 0
+                        ? t('knowledge.stageNothingYet')
+                        : t('knowledge.stageAllThrough', { count: stage.total })}
+                    </p>
+                  ) : (
+                    <ul className="mt-2 flex flex-col gap-2">
+                      {stage.documents.map((document) => (
+                        <li key={`${document.sourceId}-${document.state}`}>
+                          <Link
+                            to={`/knowledge/${document.sourceId}`}
+                            className="flex items-start gap-2 rounded-[var(--uxe-radius-control)] p-1 hover:bg-[var(--uxe-surface-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--uxe-cobalt)]"
+                          >
+                            {document.state === 'failed' ? (
+                              <XCircle
+                                className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--uxe-danger)]"
+                                aria-hidden
+                              />
+                            ) : document.state === 'running' ? (
+                              <Loader2
+                                className="mt-0.5 h-3.5 w-3.5 shrink-0 animate-[uxe-spin_1s_linear_infinite] text-[var(--uxe-info)]"
+                                aria-hidden
+                              />
+                            ) : (
+                              <Circle
+                                className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--uxe-text-tertiary)]"
+                                aria-hidden
+                              />
+                            )}
+                            <span className="min-w-0">
+                              <span className="block truncate text-[12px] font-medium text-[var(--uxe-text)]">
+                                {document.title}
+                              </span>
+                              {/* The stage's own words: why it stopped, or how far it got. */}
+                              <span
+                                className={cn(
+                                  'block text-[12px] leading-snug',
+                                  document.state === 'failed'
+                                    ? 'text-[var(--uxe-danger-text)]'
+                                    : 'text-[var(--uxe-text-secondary)]',
+                                )}
+                              >
+                                {document.detail ?? t(`knowledge.stageState.${document.state}`)}
+                              </span>
+                            </span>
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
             </li>
           );
         })}

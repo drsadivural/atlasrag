@@ -127,7 +127,9 @@ export async function runIngestion(
   const screening = screenExtractedText(fullText);
   if (screening.quarantine) {
     const reason = quarantineReason(screening.signals);
-    await jobs.updateStage(input.jobId, 'structure_analysis', 'failed', 'Quarantined');
+    // The reason, not the verdict. "Quarantined" on its own tells whoever opens the
+    // pipeline that something stopped and nothing about what to do next.
+    await jobs.updateStage(input.jobId, 'structure_analysis', 'failed', reason);
     await sources.setSourceStatus(input.sourceId, {
       status: 'quarantined',
       failureReason: reason,

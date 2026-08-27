@@ -413,6 +413,11 @@ export const en = {
   'gov.mfaVerify': 'Verify and continue',
   'gov.offline': 'You appear to be offline. Reconnect and try again.',
   'knowledge.syncFrom': 'Sync from {label}',
+  'knowledge.stageNothingYet': 'No documents have reached this stage yet.',
+  'knowledge.stageAllThrough': 'All {count} recent documents went through this stage.',
+  'knowledge.stageState.running': 'In progress',
+  'knowledge.stageState.failed': 'Stopped here',
+  'knowledge.stageState.pending': 'Waiting',
   'knowledge.connectorNeedsSetup': '{label} is not set up yet',
   'knowledge.connectorNeedsSetupHint':
     'An administrator needs to connect it before its files can be imported.',

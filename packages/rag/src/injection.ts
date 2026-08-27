@@ -51,7 +51,17 @@ const RULES: Rule[] = [
     id: 'role_confusion',
     category: 'role_confusion',
     severity: 'high',
-    pattern: /^\s*(system|assistant|developer)\s*[:>]\s*/im,
+    /*
+     * A role label standing on its own, not a sentence that happens to break before one.
+     *
+     * Anchoring on the start of a line alone is far too eager on real documents: a
+     * regulation that wraps as "...the proposed glazing\nsystem: a. The minimum fire
+     * rating..." puts "system:" at the head of a line, and a 1348-page fire code was
+     * quarantined for it. The label has to begin the text, follow a blank line, or follow
+     * a line that ended a sentence — which is how an injected role header actually
+     * appears, and is not how a wrapped noun does.
+     */
+    pattern: /(?:^|\n[ \t]*\n[ \t]*|[.!?][ \t]*\n[ \t]*)(system|assistant|developer)[ \t]*[:>]/i,
   },
   {
     id: 'act_as',

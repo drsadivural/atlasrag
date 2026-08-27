@@ -1004,22 +1004,56 @@ async function buildPipelineView(deps: AppDeps, workspaceId: string) {
 
   const list = await deps.repos.pipeline.recentIngestJobs(workspaceId);
 
+  // Titles for the documents a stage may need to name. Resolved once for the whole view
+  // rather than per stage, since the same handful of documents appear across all eight.
+  const targetIds = [...new Set(list.map((job) => job.targetId).filter(Boolean))] as string[];
+  const titles = await deps.repos.pipeline.titlesForSources(targetIds);
+
   return stages.map((stage) => {
     let completed = 0;
     let running = 0;
     let blocked = 0;
+    const documents: Array<{
+      sourceId: string;
+      title: string;
+      state: 'running' | 'failed' | 'pending';
+      detail: string | null;
+      startedAt: string | null;
+    }> = [];
+
     for (const job of list) {
       const entry = (job.stages ?? []).find((s) => s.key === stage);
       if (!entry) continue;
       if (entry.state === 'complete' || entry.state === 'skipped') completed += 1;
       else if (entry.state === 'running') running += 1;
       else if (entry.state === 'failed') blocked += 1;
+
+      // A finished stage has nothing left to explain; the rest are what somebody opens
+      // the stage to read.
+      if (entry.state === 'running' || entry.state === 'failed' || entry.state === 'pending') {
+        // A job outlives the document it ran on. One whose source has since been deleted
+        // has no title here and is left out rather than named as something removed.
+        const title = job.targetId ? titles.get(job.targetId) : undefined;
+        if (job.targetId && title && documents.length < MAX_STAGE_DOCUMENTS) {
+          documents.push({
+            sourceId: job.targetId,
+            title,
+            state: entry.state === 'pending' ? 'pending' : entry.state,
+            detail: entry.detail ?? null,
+            startedAt: job.startedAt?.toISOString() ?? null,
+          });
+        }
+      }
     }
+
     const total = list.length;
     return {
       stage,
       completed,
       total,
+      // Failures first: a stage is opened because something stopped, not because
+      // something is still going.
+      documents: documents.sort((a, b) => rankState(a.state) - rankState(b.state)),
       state:
         blocked > 0
           ? ('blocked' as const)
@@ -1030,4 +1064,11 @@ async function buildPipelineView(deps: AppDeps, workspaceId: string) {
               : ('idle' as const),
     };
   });
+}
+
+/** Enough to explain a stall without turning a summary card into a table. */
+const MAX_STAGE_DOCUMENTS = 25;
+
+function rankState(state: 'running' | 'failed' | 'pending'): number {
+  return state === 'failed' ? 0 : state === 'running' ? 1 : 2;
 }

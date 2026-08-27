@@ -845,7 +845,14 @@ export class PipelineRepository {
 
   async recentIngestJobs(workspaceId: string, limit = 200) {
     return this.db
-      .select({ stages: processingJobs.stages, status: processingJobs.status })
+      .select({
+        stages: processingJobs.stages,
+        status: processingJobs.status,
+        // Carried so a blocked stage can name the document that blocked it rather than
+        // only counting it.
+        targetId: processingJobs.targetId,
+        startedAt: processingJobs.startedAt,
+      })
       .from(processingJobs)
       .where(
         and(
@@ -855,5 +862,21 @@ export class PipelineRepository {
       )
       .orderBy(desc(processingJobs.createdAt))
       .limit(limit);
+  }
+
+  /**
+   * Titles for a set of sources, so a stage can name the document it is stuck on.
+   *
+   * Deleted sources are left out, and a caller that finds no title should drop the entry:
+   * a job outlives the document it ran on, and a pipeline that still lists a document
+   * somebody removed is reporting work that no longer matters.
+   */
+  async titlesForSources(sourceIds: string[]): Promise<Map<string, string>> {
+    if (sourceIds.length === 0) return new Map();
+    const rows = await this.db
+      .select({ id: sources.id, title: sources.title })
+      .from(sources)
+      .where(and(inArray(sources.id, sourceIds), isNull(sources.deletedAt)));
+    return new Map(rows.map((row) => [row.id, row.title]));
   }
 }

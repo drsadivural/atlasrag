@@ -316,6 +316,24 @@ export const SourcesResponse = paginated(SourceSummary).extend({
       completed: z.number().int(),
       total: z.number().int(),
       state: z.enum(['complete', 'running', 'blocked', 'idle']),
+      /**
+       * The documents behind the number, so a stage can be opened and read.
+       *
+       * A count alone says a stage is blocked without saying which document blocked it or
+       * why, which is the one thing somebody looking at a stalled pipeline needs. Only the
+       * documents that are still working or that stopped are listed; a stage that finished
+       * cleanly has nothing to explain.
+       */
+      documents: z.array(
+        z.object({
+          sourceId: Id,
+          title: z.string(),
+          state: z.enum(['running', 'failed', 'pending']),
+          /** What the stage recorded: a page count, an OCR confidence, or why it stopped. */
+          detail: z.string().nullable(),
+          startedAt: Timestamp.nullable(),
+        }),
+      ),
     }),
   ),
   knowledgeHealth: z.object({
