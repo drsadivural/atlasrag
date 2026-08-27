@@ -92,7 +92,7 @@ function GovernmentHeader({
   return (
     <header className="flex h-[4.75rem] shrink-0 items-center justify-between border-b border-[var(--gov-header-border)] bg-[var(--gov-header)] px-4 sm:px-8 lg:px-[3.75rem]">
       <div className="flex min-w-0 items-center gap-3">
-        <GovernmentMark className="h-8 w-8 shrink-0 text-[var(--gov-gold)]" />
+        <GovernmentMark className="h-7 w-auto shrink-0 select-none" />
         <span className="truncate text-[1.0625rem] font-bold text-[var(--gov-header-text)] sm:text-[1.1875rem]">
           {t('gov.brand')}
         </span>

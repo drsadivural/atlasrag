@@ -1010,6 +1010,31 @@ export const ModelConfiguration = z.object({
 });
 export type ModelConfiguration = z.infer<typeof ModelConfiguration>;
 
+/**
+ * Asking a provider what it will serve.
+ *
+ * The key may be one just typed into the form and not yet saved, which is why it can be
+ * supplied here; it is used for the one request and never stored by this call.
+ */
+export const AvailableModelsRequest = z.object({
+  provider: z.enum(['openai', 'anthropic']),
+  capability: z.string().min(1).max(40),
+  apiKey: z.string().max(400).optional(),
+});
+export type AvailableModelsRequest = z.infer<typeof AvailableModelsRequest>;
+
+export const AvailableModelsResponse = z.object({
+  provider: z.enum(['openai', 'anthropic']),
+  models: z.array(
+    z.object({
+      id: z.string(),
+      label: z.string(),
+      createdAt: Timestamp.nullable(),
+    }),
+  ),
+});
+export type AvailableModelsResponse = z.infer<typeof AvailableModelsResponse>;
+
 export const UpsertModelConfigRequest = z.object({
   capability: ModelCapability,
   provider: z.enum(['deterministic', 'anthropic', 'openai']),

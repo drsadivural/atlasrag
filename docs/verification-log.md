@@ -480,6 +480,41 @@ can only ever answer "unable to determine — none are currently selected". Corr
 poor way to learn it after waiting. The composer now says so before the question is sent,
 with a way to fix it.
 
+## The consultant, the logo, and asking a provider what it serves
+
+**A composite rather than a sticker.** The two supplied portraits were cut from their
+backgrounds by flooding in from the borders rather than by a brightness threshold — the
+white headdress is as bright as the backdrop, and a threshold punches holes in it. Each
+figure is then graded towards its scene's own key light (warm and lifted at midday, dim
+cool and desaturated at night) and given a contact shadow, because a cut-out dropped
+straight onto a photograph keeps the light of wherever it was shot and reads as a sticker.
+
+**The mark is two files, not one recoloured by CSS.** The navy letterforms vanish on the
+dark header, and the orange chevron must not be lifted with them — it is the accent and
+the only part that stays exactly as drawn in both themes.
+
+**Model identifiers are asked for, not guessed.** Settings → Models now has _Load available
+models_, which asks the provider which models the workspace's own key will actually serve
+and turns the free-text field into a list. It fails closed like every other provider here:
+no key, no list, and a message naming the variable.
+
+That answered a question this codebase had no business answering from memory. The models
+named in the request — `gpt-5.6-terra`, `gpt-5.6-sol` — are real and on the account; the
+identifier already saved in this workspace, plain `gpt-5.6`, is not among the 88 the key
+serves, which is why its health reads "Not configured".
+
+## Confidence that moved on its own
+
+Found by the suite while the above was being verified: `computeConfidence` failed its own
+"deterministic for identical inputs" test, by roughly 1e-13. It read `new Date()` and fed
+it into a recency term, so the same answer scored fractionally differently on every
+recomputation.
+
+Recency is measured in years and has no business knowing what minute it is. The instant is
+truncated to the day now — for a supplied timestamp as well as for the default, because a
+caller that passes one is entitled to the same guarantee. A number printed beside a
+citation should not depend on when somebody looked at it.
+
 ## Reproducing
 
 ```bash

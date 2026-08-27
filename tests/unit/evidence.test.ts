@@ -358,6 +358,23 @@ describe('computeConfidence', () => {
     expect(a.overall).toBe(b.overall);
   });
 
+  it('does not drift with the clock between one call and the next', () => {
+    // Recency is measured in years and has no business knowing what minute it is. Reading
+    // the clock straight made the same answer score fractionally differently every time it
+    // was recomputed, which is not what a number printed beside a citation should do.
+    const morning = computeConfidence({
+      ...base,
+      coverage: coverage(1),
+      now: new Date('2026-08-27T06:00:00Z'),
+    });
+    const evening = computeConfidence({
+      ...base,
+      coverage: coverage(1),
+      now: new Date('2026-08-27T23:59:59Z'),
+    });
+    expect(morning.overall).toBe(evening.overall);
+  });
+
   it('drops when citations fail verification', () => {
     const verified = computeConfidence({ ...base, coverage: coverage(1) });
     const unverified = computeConfidence({

@@ -1,38 +1,28 @@
 import { usePrefersReducedMotion } from '../../lib/preferences.js';
+import { useTheme } from '../../lib/theme.js';
 
 /**
- * The geometric UXE mark.
+ * The UXE mark.
  *
- * An eight-pointed interlaced figure drawn as strokes rather than an imported bitmap, so
- * it stays crisp at any size and takes its colour from the surrounding theme. It is the
- * product's own mark: no emblem, seal or coat of arms is used or implied anywhere on this
- * page.
+ * Two files rather than one recoloured by CSS: the navy letterforms vanish on the dark
+ * header, and the orange chevron must not be lifted with them — it is the accent, and the
+ * only part of the mark that stays exactly as drawn in both themes. The pair is swapped by
+ * `<picture>` so the browser chooses before paint and neither flashes.
  */
 export function GovernmentMark({ className }: { className?: string }) {
+  const { resolved } = useTheme();
+
   return (
-    <svg
-      viewBox="0 0 40 40"
-      className={className}
-      role="img"
+    <img
+      src={resolved === 'dark' ? '/uxelogo-dark.png' : '/uxelogo.png'}
+      width={488}
+      height={179}
+      alt=""
       aria-hidden
-      focusable="false"
-      fill="none"
-    >
-      <path
-        d="M20 2.5 30.5 7.5 35.5 18 30.5 28.5 20 33.5 9.5 28.5 4.5 18 9.5 7.5Z"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M20 8 27 11.5 30.5 18.5 27 25.5 20 29 13 25.5 9.5 18.5 13 11.5Z"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        strokeLinejoin="round"
-        opacity="0.75"
-      />
-      <path d="M20 13.5 23.2 20 20 26.5 16.8 20Z" fill="currentColor" opacity="0.9" />
-    </svg>
+      decoding="async"
+      className={className}
+      draggable={false}
+    />
   );
 }
 

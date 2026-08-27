@@ -38,6 +38,7 @@ import {
   useToast,
 } from '@uxe/ui';
 import type {
+  AvailableModelsResponse,
   ConnectorProvider,
   ConnectorsResponse,
   ModelConfiguration,
@@ -525,6 +526,9 @@ function HealthBadge({
   );
 }
 
+/** What this form starts with before anybody has chosen anything. */
+const PLACEHOLDER_MODELS = new Set(['claude-sonnet-5', 'gpt-4.1', 'uxe-extractive-v1']);
+
 function AddModelCard() {
   const { t } = useI18n();
   const queryClient = useQueryClient();
@@ -534,6 +538,42 @@ function AddModelCard() {
   const [model, setModel] = useState('claude-sonnet-5');
   const [apiKey, setApiKey] = useState('');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
+  const [available, setAvailable] = useState<AvailableModelsResponse['models']>([]);
+
+  const load = useMutation({
+    mutationFn: () =>
+      api.post<AvailableModelsResponse>('/settings/models/available', {
+        provider,
+        capability,
+        // A key typed here but not yet saved is still the key to ask with.
+        ...(apiKey ? { apiKey } : {}),
+      }),
+    onSuccess: (result) => {
+      setAvailable(result.models);
+      if (result.models.length === 0) {
+        push({
+          tone: 'info',
+          title: 'No models for this capability',
+          description: 'This key serves none that match. Try another capability.',
+        });
+        return;
+      }
+      // Newest first. A value the user typed or picked is kept; one of this form's own
+      // starting guesses is replaced, because those are placeholders rather than choices
+      // and leaving one selected is how somebody ends up saving a model they never chose.
+      const newest = result.models[0];
+      if (newest) {
+        setModel((current) =>
+          PLACEHOLDER_MODELS.has(current) || !result.models.some((m) => m.id === current)
+            ? newest.id
+            : current,
+        );
+      }
+      push({ tone: 'success', title: `${result.models.length} model(s) available` });
+    },
+    onError: (error: ApiError) =>
+      push({ tone: 'error', title: 'Could not read the model list', description: error.message }),
+  });
 
   const save = useMutation({
     mutationFn: () =>
@@ -572,7 +612,10 @@ function AddModelCard() {
         <Field label="Capability" htmlFor="capability">
           <Select
             value={capability}
-            onValueChange={setCapability}
+            onValueChange={(value) => {
+              setCapability(value);
+              setAvailable([]);
+            }}
             ariaLabel="Capability"
             className="w-full"
             options={[
@@ -590,6 +633,7 @@ function AddModelCard() {
             value={provider}
             onValueChange={(value) => {
               setProvider(value);
+              setAvailable([]);
               setModel(
                 value === 'anthropic'
                   ? 'claude-sonnet-5'
@@ -608,8 +652,26 @@ function AddModelCard() {
           />
         </Field>
 
-        <Field label="Model" htmlFor="model-name">
-          <Input id="model-name" value={model} onChange={(e) => setModel(e.target.value)} />
+        <Field
+          label="Model"
+          htmlFor="model-name"
+          hint={
+            available.length > 0
+              ? `${available.length} model(s) offered by this key`
+              : 'Load the list to choose from what this key can actually use.'
+          }
+        >
+          {available.length > 0 ? (
+            <Select
+              value={model}
+              onValueChange={setModel}
+              ariaLabel="Model"
+              className="w-full"
+              options={available.map((entry) => ({ value: entry.id, label: entry.label }))}
+            />
+          ) : (
+            <Input id="model-name" value={model} onChange={(e) => setModel(e.target.value)} />
+          )}
         </Field>
 
         <Field
@@ -632,14 +694,30 @@ function AddModelCard() {
         </Field>
       </div>
 
-      <Button
-        variant="primary"
-        className="mt-4 self-start"
-        loading={save.isPending}
-        onClick={() => save.mutate()}
-      >
-        {t('settings.save')}
-      </Button>
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        <Button variant="primary" loading={save.isPending} onClick={() => save.mutate()}>
+          {t('settings.save')}
+        </Button>
+
+        {/*
+          Ask the provider rather than guess.
+          
+          A list written into this file goes stale the week after it is written, and a
+          typed identifier that does not exist fails at the first request with an error
+          nobody can act on. This asks the account which models it will actually serve.
+        */}
+        {provider !== 'deterministic' && (
+          <Button
+            variant="secondary"
+            loading={load.isPending}
+            onClick={() => load.mutate()}
+            disabled={load.isPending}
+          >
+            <RefreshCw className="h-4 w-4" aria-hidden />
+            Load available models
+          </Button>
+        )}
+      </div>
     </Card>
   );
 }

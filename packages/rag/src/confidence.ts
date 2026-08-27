@@ -93,7 +93,19 @@ export interface ConfidenceInput {
  * identical number.
  */
 export function computeConfidence(input: ConfidenceInput): ConfidenceBreakdown {
-  const now = input.now ?? new Date();
+  /*
+   * Truncated to the day.
+   *
+   * Recency is how old a regulation is, measured in years — a signal with no business
+   * knowing what minute it is. Reading the clock straight made the same answer score
+   * fractionally differently on every recomputation, which is not what a number printed
+   * next to a citation should do, and quietly broke the promise two paragraphs above this
+   * one that identical inputs produce an identical result.
+   *
+   * Applied to a supplied instant too, not only to the default: a caller that passes a
+   * timestamp is entitled to the same guarantee.
+   */
+  const now = startOfUtcDay(input.now ?? new Date());
 
   // 1. How much of the answer is actually backed by verified evidence.
   const evidenceCoverage = clamp01(input.coverage.score);
@@ -139,6 +151,11 @@ export function computeConfidence(input: ConfidenceInput): ConfidenceBreakdown {
     contradictionPenalty,
     overall,
   };
+}
+
+/** Midnight UTC of the given instant. */
+function startOfUtcDay(at: Date): Date {
+  return new Date(Date.UTC(at.getUTCFullYear(), at.getUTCMonth(), at.getUTCDate()));
 }
 
 function computeRecency(dates: Array<Date | null>, now: Date): number {

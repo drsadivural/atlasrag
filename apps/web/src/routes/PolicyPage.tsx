@@ -20,7 +20,7 @@ export function PolicyPage({ policy }: { policy: Policy }) {
   return (
     <div data-surface="government" className="min-h-dvh bg-[var(--gov-page)]">
       <header className="flex h-[4.75rem] items-center gap-3 border-b border-[var(--gov-header-border)] bg-[var(--gov-header)] px-4 sm:px-8 lg:px-[3.75rem]">
-        <GovernmentMark className="h-8 w-8 text-[var(--gov-gold)]" />
+        <GovernmentMark className="h-7 w-auto select-none" />
         <span className="text-[1.0625rem] font-bold text-[var(--gov-header-text)]">
           {t('gov.brand')}
         </span>

@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import {
   AuditQuery,
+  AvailableModelsRequest,
   DashboardQuery,
   InviteUserRequest,
   ReportsQuery,
@@ -19,7 +20,8 @@ import {
   type WorkspaceUser,
 } from '@uxe/contracts';
 import { computeKnowledgeHealth, KNOWLEDGE_HEALTH_FORMULA, findExcerpt } from '@uxe/rag';
-import { encryptSecret, randomToken, sha256Hex } from '@uxe/auth';
+import { decryptSecret, encryptSecret, randomToken, sha256Hex } from '@uxe/auth';
+import type { TenantContext } from '@uxe/db';
 import type { AppBindings, AppDeps } from '../context.js';
 import { ApiError } from '../errors.js';
 import { body, query, requireId, validateJson, validateQuery } from '../middleware/validate.js';
@@ -27,6 +29,11 @@ import { clientIp, requirePermission, userAgent } from '../middleware/index.js';
 import { mergeSettings, workspaceSettingsFrom } from '../services/settings.js';
 import { EmailTemplates } from '../services/email.js';
 import { probeProvider } from '../services/providers.js';
+import {
+  forCapability,
+  listAvailableModels,
+  ModelCatalogueError,
+} from '../services/model-catalogue.js';
 
 /* -------------------------------------------------------------------------- */
 /* Dashboard                                                                  */
@@ -908,6 +915,53 @@ export function settingsRoutes(deps: AppDeps) {
     },
   );
 
+  /**
+   * The models a provider will serve for this workspace's key.
+   *
+   * The key may be one just typed into the form and not yet saved, so it is accepted in
+   * the body; otherwise the workspace's stored credential is used, and failing that the
+   * deployment's own. Nothing is ever echoed back — the response is a list of identifiers.
+   */
+  app.post(
+    '/models/available',
+    requirePermission('settings:models'),
+    validateJson(AvailableModelsRequest),
+    async (c) => {
+      const tenant = c.get('tenant');
+      if (!tenant) throw ApiError.unauthenticated();
+      const input = body<typeof AvailableModelsRequest._output>(c);
+
+      const apiKey = input.apiKey || (await resolveProviderKey(deps, tenant, input.provider));
+      if (!apiKey) {
+        throw new ApiError(
+          400,
+          'provider_unconfigured',
+          `No API key is stored for ${input.provider}. Enter one above, or set ${input.provider === 'openai' ? 'OPENAI_API_KEY' : 'ANTHROPIC_API_KEY'} for this deployment.`,
+          { details: { provider: input.provider } },
+        );
+      }
+
+      try {
+        const models = await listAvailableModels(input.provider, apiKey);
+        return c.json({
+          provider: input.provider,
+          models: forCapability(models, input.capability),
+        });
+      } catch (error) {
+        if (error instanceof ModelCatalogueError) {
+          // A rejected key is the caller's to fix; anything else is the provider's, and is
+          // reported as a dependency rather than as a bad request.
+          throw error.status === 401 || error.status === 403
+            ? new ApiError(400, 'provider_unconfigured', error.message)
+            : new ApiError(502, 'dependency_unavailable', error.message, {
+                retryable: error.retryable,
+              });
+        }
+        throw error;
+      }
+    },
+  );
+
   app.post('/models/:id/test', requirePermission('settings:models'), async (c) => {
     const tenant = c.get('tenant');
     if (!tenant) throw ApiError.unauthenticated();
@@ -1042,3 +1096,22 @@ export function systemRoutes(deps: AppDeps) {
 }
 
 export { formatLocator };
+
+/**
+ * The key to ask a provider with: the workspace's own first, then the deployment's.
+ *
+ * A workspace that brings its own key is asking about its own account, and the answer can
+ * differ — model availability is granted per organisation.
+ */
+async function resolveProviderKey(
+  deps: AppDeps,
+  tenant: TenantContext,
+  provider: 'openai' | 'anthropic',
+): Promise<string> {
+  const stored = await deps.repos.settings.listModelConfigurations(tenant);
+  const row = stored.find((entry) => entry.provider === provider && entry.credentialEncrypted);
+  if (row?.credentialEncrypted) {
+    return decryptSecret(row.credentialEncrypted, deps.env.ENCRYPTION_KEY);
+  }
+  return provider === 'openai' ? deps.env.OPENAI_API_KEY : deps.env.ANTHROPIC_API_KEY;
+}

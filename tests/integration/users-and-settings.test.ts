@@ -276,3 +276,50 @@ describe('dashboard', () => {
     expect(dashboard.body.recentConsultations).toHaveLength(0);
   });
 });
+
+/**
+ * Asking a provider which models it will serve.
+ *
+ * The endpoint that stops anybody typing a model identifier that does not exist. It fails
+ * closed like every other provider in this application: no key, no list, and a message
+ * naming the variable rather than a silent empty dropdown.
+ */
+describe('available models', () => {
+  it('refuses to ask when no key is stored, and says which variable is missing', async () => {
+    const response = await owner.client.post<{ error: { code: string; message: string } }>(
+      '/settings/models/available',
+      { provider: 'openai', capability: 'chat' },
+    );
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe('provider_unconfigured');
+    expect(response.body.error.message).toContain('OPENAI_API_KEY');
+  });
+
+  it('names the Anthropic variable when Anthropic is asked for', async () => {
+    const response = await owner.client.post<{ error: { message: string } }>(
+      '/settings/models/available',
+      { provider: 'anthropic', capability: 'chat' },
+    );
+    expect(response.body.error.message).toContain('ANTHROPIC_API_KEY');
+  });
+
+  it('rejects a provider this application cannot talk to', async () => {
+    const response = await owner.client.post('/settings/models/available', {
+      provider: 'deterministic',
+      capability: 'chat',
+    });
+    // The deterministic engine has no catalogue to read; asking for one is a malformed
+    // request rather than an empty answer.
+    expect(response.status).toBe(400);
+  });
+
+  it('requires permission to configure models', async () => {
+    const member = await addMember(harness, owner, 'member');
+    const response = await member.client.post('/settings/models/available', {
+      provider: 'openai',
+      capability: 'chat',
+    });
+    expect(response.status).toBe(403);
+  });
+});
