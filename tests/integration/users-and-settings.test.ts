@@ -271,6 +271,68 @@ describe('workspace settings', () => {
     expect(response.body.reasoningEffort).toBeNull();
   });
 
+  it('lets somebody who accepted an invitation actually use the workspace', async () => {
+    /*
+     * The accept path minted the session with mfaSatisfied: false. The account is brand
+     * new and has no authenticator enrolled, so there was no challenge it could answer —
+     * every request after joining came back "Complete two-factor authentication to
+     * continue", with no way forward and no way back.
+     */
+    const invited = await owner.client.post<{
+      delivery: { acceptUrl: string | null };
+    }>('/users/invite', { email: 'joiner@example.test', role: 'member' });
+    const token = /token=([A-Za-z0-9_-]+)/.exec(invited.body.delivery.acceptUrl ?? '')?.[1];
+
+    const joiner = new Client(harness);
+    const accepted = await joiner.post('/auth/invitations/accept', {
+      token,
+      fullName: 'Joiner Person',
+      password: 'An0ther-Str0ng-Passphrase!',
+    });
+    expect(accepted.status).toBeLessThan(300);
+
+    // The session the accept just minted has to work for an ordinary read.
+    const dashboard = await joiner.get('/dashboard');
+    expect(dashboard.status).toBeLessThan(300);
+  });
+
+  it('removes a member, revokes their sessions and keeps them off the list', async () => {
+    const member = await addMember(harness, owner, 'member');
+
+    const before = await member.client.get('/dashboard');
+    expect(before.status).toBeLessThan(300);
+
+    const removed = await owner.client.request('DELETE', `/users/${member.userId}`);
+    expect(removed.status).toBe(204);
+
+    // Access stops now, not at the next token expiry.
+    const after = await member.client.get('/dashboard');
+    expect(after.status).toBeGreaterThanOrEqual(400);
+
+    const list = await owner.client.get<Array<{ id: string }>>('/users');
+    expect(list.body.some((u) => u.id === member.userId)).toBe(false);
+  }, 120_000);
+
+  it('refuses to remove the last owner, or yourself', async () => {
+    const self = await owner.client.request('DELETE', `/users/${owner.userId}`);
+    expect(self.status).toBe(403);
+
+    // Still there, and still able to work.
+    const list = await owner.client.get<Array<{ id: string }>>('/users');
+    expect(list.body.some((u) => u.id === owner.userId)).toBe(true);
+  });
+
+  it('refuses a removal from someone without the permission', async () => {
+    const victim = await addMember(harness, owner, 'member');
+    const bystander = await addMember(harness, owner, 'member');
+
+    const attempt = await bystander.client.request('DELETE', `/users/${victim.userId}`);
+    expect(attempt.status).toBe(403);
+
+    const stillWorks = await victim.client.get('/dashboard');
+    expect(stillWorks.status).toBeLessThan(300);
+  }, 180_000);
+
   it('does not claim to have sent an email it could not send', async () => {
     /*
      * An invitation is a membership and a message. The membership always succeeds; the

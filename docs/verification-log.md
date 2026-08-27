@@ -686,6 +686,48 @@ chosen by `ALLOW_PUBLIC_REGISTRATION` and answered by the config endpoint the sc
 already asks. The screen never offers a route the API would refuse, or withholds one it
 would allow.
 
+## Locked out of the workspace you just joined
+
+Reported as: the invitation link says _Something went wrong — complete two-factor
+authentication to continue._
+
+The accept endpoint minted its session with `mfaSatisfied: false`. The account is created
+by that same request, has no authenticator enrolled, and there is no challenge it could
+answer — so `requireAuth` refused everything after the accept, with no way forward and no
+way back. A second factor is satisfied when there is none to satisfy; somebody who does
+hold one keeps the gate, because an invitation link is not a way around their own
+authenticator.
+
+## Signed up, and could not sign in
+
+Reported as: after signing up, the password is not accepted. Reproduced in one line —
+invite an address, then register with it, and the API answers `"status":"registered"` for
+an account it did not create. The invitation had already made the user row, with no
+password on it.
+
+The response is right and has to stay: a different answer for an address that exists tells
+any stranger which addresses are registered. Setting the password here instead would fix
+the symptom and hand anybody who guesses an invited address the account it was meant for —
+the invitation goes to a mailbox precisely so that holding the mailbox is the test.
+
+So the caller still learns nothing and the mailbox learns everything. What went there was
+a _verification_ email, which reads as "your new account is ready" and is the opposite of
+what happened; it is now a notice that says this address already has an account, here is
+how to sign in, and — when one is still pending — open the invitation instead.
+
+## Removing somebody
+
+`member:remove` had been in the permission catalogue and in the Owner and Admin grants from
+the beginning, with no endpoint and no control: a translated label for an action that did
+not exist. It exists now, soft, because the audit trail names actors by id and hard-deleting
+the row would leave every entry they ever produced pointing at nothing. Sessions are revoked
+in the same breath — the point of removing access is that it stops now, not at the next
+token expiry — and group memberships go too, scoped through the workspace's own groups so
+that removing somebody here does not strip them from groups in another workspace.
+
+Three guards, the same as suspension: not yourself, not somebody at or above your level,
+never the last active Owner.
+
 ## Confidence that moved on its own
 
 Found by the suite while the above was being verified: `computeConfidence` failed its own

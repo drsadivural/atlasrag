@@ -91,9 +91,41 @@ export function authRoutes(deps: AppDeps) {
 
     const existing = await deps.repos.identity.findUserByEmail(input.email);
     if (existing) {
-      // Registering an existing address must not confirm that it exists. The response is
-      // identical to a success, and the account holder gets an email instead.
-      await sendVerificationEmail(deps, existing.id, existing.email, existing.fullName);
+      /*
+       * Registering an existing address must not confirm that it exists, so the response
+       * is byte-identical to the success path and no account is touched. What was wrong
+       * was what went to the mailbox: a *verification* email, which reads as "your new
+       * account is ready" and is the opposite of what happened.
+       *
+       * That mattered most to somebody who had been invited. The invitation creates the
+       * user row with no password, so signing up afterwards took this branch, said
+       * "Account created", and left them with an account they could not sign in to and no
+       * way to find out why. Setting the password here instead would fix the symptom and
+       * hand anybody who guesses an invited address the account it was meant for — the
+       * invitation goes to a mailbox precisely so that holding the mailbox is the test.
+       *
+       * So the mailbox gets the truth and the caller gets nothing: this address already
+       * has an account, here is how to sign in, and if an invitation is still waiting,
+       * open that instead.
+       */
+      const pendingInvitation = await deps.repos.identity.hasPendingInvitation(existing.email);
+      await deps.services.email
+        .send({
+          to: existing.email,
+          ...EmailTemplates.accountExists({
+            fullName: existing.fullName,
+            signInUrl: `${deps.env.PUBLIC_APP_URL}/login`,
+            resetUrl: `${deps.env.PUBLIC_APP_URL}/forgot-password`,
+            pendingInvitation,
+          }),
+        })
+        .catch((error: unknown) => {
+          // A mail failure must not change the shape or timing of this response, or it
+          // becomes the oracle the whole branch exists to avoid.
+          deps.logger.warn('register.existing_notice_failed', {
+            reason: error instanceof Error ? error.message : 'unknown',
+          });
+        });
       // Same status as the success path, not only the same body: a different status code
       // is an enumeration oracle on its own. That holds whether or not confirmation is
       // required — the caller must not be able to tell the two branches apart, so no
@@ -743,7 +775,22 @@ export function authRoutes(deps: AppDeps) {
       summary: `${fresh.fullName} accepted an invitation as ${invitation.role.replace(/_/g, ' ')}.`,
     });
 
-    const session = await issueSession(deps, c, fresh, invitation.workspaceId, false, false);
+    /*
+     * A second factor is satisfied when there is none to satisfy.
+     *
+     * This minted the session with `mfaSatisfied: false`, which locked every person who
+     * accepted an invitation out of the workspace they had just joined: the account is
+     * brand new, has no authenticator enrolled, and there is no challenge it could answer
+     * — so `requireAuth` refused every request after the accept with "Complete two-factor
+     * authentication to continue", with no way forward and no way back.
+     *
+     * A user who does hold a factor keeps the gate, exactly as on the sign-in path: an
+     * invitation link is not a way around somebody's own second factor.
+     */
+    const factors = await deps.repos.identity.listActiveFactors(fresh.id);
+    const hasFactor = factors.some((f) => f.kind === 'totp' || f.kind === 'webauthn');
+
+    const session = await issueSession(deps, c, fresh, invitation.workspaceId, false, !hasFactor);
     return c.json(session, 200);
   });
 

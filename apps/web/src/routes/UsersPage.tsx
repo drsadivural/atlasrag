@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { InviteUserResponse } from '@uxe/contracts';
-import { KeyRound, Mail, ShieldCheck, UserPlus, Users, UserX } from 'lucide-react';
+import { KeyRound, Mail, Pencil, ShieldCheck, Trash2, UserPlus, Users, UserX } from 'lucide-react';
 import {
   Avatar,
   Badge,
@@ -27,6 +27,16 @@ import { useI18n } from '../lib/i18n.js';
 import { useSession } from '../lib/session.js';
 import { PageHeader } from '../components/PageHeader.js';
 
+/** Owner is excluded: transferring ownership is its own operation, not a dropdown. */
+const EDITABLE_ROLES: Role[] = [
+  'read_only',
+  'member',
+  'reviewer',
+  'knowledge_manager',
+  'consultant',
+  'admin',
+];
+
 export function UsersPage() {
   const { t } = useI18n();
   const { can, session } = useSession();
@@ -34,10 +44,23 @@ export function UsersPage() {
   const { push } = useToast();
   const [inviteOpen, setInviteOpen] = useState(false);
   const [suspending, setSuspending] = useState<WorkspaceUser | null>(null);
+  const [editing, setEditing] = useState<WorkspaceUser | null>(null);
+  const [removing, setRemoving] = useState<WorkspaceUser | null>(null);
 
   const query = useQuery<WorkspaceUser[], ApiError>({
     queryKey: ['users'],
     queryFn: () => api.get<WorkspaceUser[]>('/users'),
+  });
+
+  const remove = useMutation({
+    mutationFn: (id: string) => api.delete(`/users/${id}`),
+    onSuccess: () => {
+      push({ tone: 'success', title: 'Member removed' });
+      setRemoving(null);
+      void queryClient.invalidateQueries({ queryKey: ['users'] });
+    },
+    onError: (error: ApiError) =>
+      push({ tone: 'error', title: 'Could not remove them', description: error.message }),
   });
 
   const update = useMutation({
@@ -211,6 +234,14 @@ export function UsersPage() {
                         disabledReason: 'Your role cannot change member access',
                       },
                       {
+                        label: t('common.edit'),
+                        icon: <Pencil className="h-4 w-4" aria-hidden />,
+                        onSelect: () => setEditing(row),
+                        disabled: !can('member:update'),
+                        disabledReason: 'Your role cannot change member access',
+                        separatorBefore: true,
+                      },
+                      {
                         label:
                           row.status === 'suspended' ? t('users.reactivate') : t('users.suspend'),
                         icon: <UserX className="h-4 w-4" aria-hidden />,
@@ -226,6 +257,17 @@ export function UsersPage() {
                             : 'Your role cannot suspend members',
                         separatorBefore: true,
                       },
+                      {
+                        label: t('users.remove'),
+                        icon: <Trash2 className="h-4 w-4" aria-hidden />,
+                        onSelect: () => setRemoving(row),
+                        destructive: true,
+                        disabled: !can('member:remove') || row.id === session?.user.id,
+                        disabledReason:
+                          row.id === session?.user.id
+                            ? 'You cannot remove your own account'
+                            : 'Your role cannot remove members',
+                      },
                     ]}
                   />
                 ),
@@ -236,6 +278,19 @@ export function UsersPage() {
       </Card>
 
       <InviteDialog open={inviteOpen} onOpenChange={setInviteOpen} />
+
+      <EditMemberDialog member={editing} onOpenChange={(open) => !open && setEditing(null)} />
+
+      <ConfirmDialog
+        open={removing !== null}
+        onOpenChange={(open) => !open && setRemoving(null)}
+        title={`Remove ${removing?.fullName ?? ''} from this workspace?`}
+        description={`${removing?.email ?? 'They'} loses access immediately, every session is revoked, and their group memberships here are cleared. Their name stays on the audit trail. You can invite them again later, but nothing they had is restored.`}
+        confirmLabel={t('users.remove')}
+        destructive
+        loading={remove.isPending}
+        onConfirm={() => removing && remove.mutate(removing.id)}
+      />
 
       <ConfirmDialog
         open={suspending !== null}
@@ -250,6 +305,129 @@ export function UsersPage() {
         }
       />
     </div>
+  );
+}
+
+/**
+ * Changing what somebody can do here.
+ *
+ * Role and status only. A name and an address belong to the person, not to the workspace
+ * that admitted them, and an administrator quietly editing either would produce an audit
+ * trail attributing actions to a name its owner never chose.
+ */
+function EditMemberDialog({
+  member,
+  onOpenChange,
+}: {
+  member: WorkspaceUser | null;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const { t } = useI18n();
+  const queryClient = useQueryClient();
+  const { push } = useToast();
+  const { session } = useSession();
+  const [role, setRole] = useState<Role>('member');
+  const [status, setStatus] = useState<WorkspaceUser['status']>('active');
+
+  // Re-seeded during render on the open transition: an effect would show the previous
+  // member's role for a frame before correcting itself.
+  const [openedFor, setOpenedFor] = useState<string | null>(null);
+  if (member && member.id !== openedFor) {
+    setOpenedFor(member.id);
+    setRole(member.role);
+    setStatus(member.status === 'suspended' ? 'suspended' : 'active');
+  }
+  if (!member && openedFor !== null) setOpenedFor(null);
+
+  const save = useMutation({
+    mutationFn: () =>
+      api.patch(`/users/${member?.id ?? ''}`, {
+        role,
+        // An invitation that has not been accepted has no active/suspended state to set,
+        // and sending one would activate a membership nobody has claimed.
+        ...(member?.status === 'invited' ? {} : { status }),
+      }),
+    onSuccess: () => {
+      push({
+        tone: 'success',
+        title: 'Member updated',
+        description:
+          role !== member?.role
+            ? 'Their sessions were revoked so the new role takes effect immediately.'
+            : undefined,
+      });
+      void queryClient.invalidateQueries({ queryKey: ['users'] });
+      onOpenChange(false);
+    },
+    onError: (error: ApiError) =>
+      push({ tone: 'error', title: 'Could not update them', description: error.message }),
+  });
+
+  const isSelf = member?.id === session?.user.id;
+
+  return (
+    <Dialog
+      open={member !== null}
+      onOpenChange={onOpenChange}
+      title={member ? `Edit ${member.fullName}` : 'Edit member'}
+      description={member?.email}
+      size="sm"
+      footer={
+        <>
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+            {t('common.cancel')}
+          </Button>
+          <Button variant="primary" loading={save.isPending} onClick={() => save.mutate()}>
+            {t('common.save')}
+          </Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-4">
+        <Field
+          label={t('users.role')}
+          htmlFor="edit-role"
+          hint="Changing this revokes their sessions, so the new role applies at once."
+        >
+          <Select
+            value={role}
+            onValueChange={(value) => setRole(value as Role)}
+            ariaLabel={t('users.role')}
+            className="w-full"
+            options={EDITABLE_ROLES.map((value) => ({
+              value,
+              label: ROLE_LABELS[value],
+            }))}
+          />
+        </Field>
+
+        {member?.status !== 'invited' && (
+          <Field
+            label={t('users.status')}
+            htmlFor="edit-status"
+            hint={isSelf ? 'You cannot suspend your own account.' : undefined}
+          >
+            <Select
+              value={status}
+              onValueChange={(value) => setStatus(value as WorkspaceUser['status'])}
+              ariaLabel={t('users.status')}
+              className="w-full"
+              disabled={isSelf}
+              options={[
+                { value: 'active', label: 'Active' },
+                { value: 'suspended', label: 'Suspended' },
+              ]}
+            />
+          </Field>
+        )}
+
+        {member?.status === 'invited' && (
+          <p className="text-[13px] text-[var(--uxe-text-secondary)]">
+            This invitation has not been accepted yet. The role applies when they join.
+          </p>
+        )}
+      </div>
+    </Dialog>
   );
 }
 

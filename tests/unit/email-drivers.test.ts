@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { SmtpEmailDriver } from '../../apps/api/src/services/email.js';
+import { EmailTemplates, SmtpEmailDriver } from '../../apps/api/src/services/email.js';
 
 /**
  * SMTP.
@@ -116,5 +116,51 @@ describe('SmtpEmailDriver', () => {
     );
 
     expect(await driver.health()).toEqual({ ok: false, detail: 'SMTP_HOST is not configured.' });
+  });
+});
+
+describe('the account-exists notice', () => {
+  /*
+   * The API cannot say "that address already has an account" without telling any stranger
+   * which addresses are registered, so it says nothing and the mailbox gets the truth.
+   * These cases are about the mailbox getting enough of it to act on.
+   */
+  it('points at signing in and at resetting a forgotten password', () => {
+    const message = EmailTemplates.accountExists({
+      fullName: 'Sadi Vural',
+      signInUrl: 'https://consultnow.example/login',
+      resetUrl: 'https://consultnow.example/forgot-password',
+      pendingInvitation: false,
+    });
+
+    expect(message.text).toContain('https://consultnow.example/login');
+    expect(message.text).toContain('https://consultnow.example/forgot-password');
+    expect(message.html).toContain('https://consultnow.example/login');
+  });
+
+  it('says to open the invitation when one is still waiting', () => {
+    // The case that was silently failing: invited, then signed up, then told "Account
+    // created" for an account with no password on it.
+    const message = EmailTemplates.accountExists({
+      fullName: 'Sadi Vural',
+      signInUrl: 'https://consultnow.example/login',
+      resetUrl: 'https://consultnow.example/forgot-password',
+      pendingInvitation: true,
+    });
+
+    expect(message.text).toMatch(/invitation waiting/i);
+    expect(message.html).toMatch(/invitation waiting/i);
+  });
+
+  it('escapes a display name rather than letting it write markup', () => {
+    const message = EmailTemplates.accountExists({
+      fullName: '<img src=x onerror=alert(1)>',
+      signInUrl: 'https://consultnow.example/login',
+      resetUrl: 'https://consultnow.example/forgot-password',
+      pendingInvitation: false,
+    });
+
+    expect(message.html).not.toContain('<img src=x');
+    expect(message.html).toContain('&lt;img');
   });
 });

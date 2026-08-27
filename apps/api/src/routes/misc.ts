@@ -730,6 +730,41 @@ export function userRoutes(deps: AppDeps) {
     },
   );
 
+  app.delete('/:id', requirePermission('member:remove'), async (c) => {
+    const tenant = c.get('tenant');
+    const session = c.get('session');
+    if (!tenant || !session) throw ApiError.unauthenticated();
+    const targetId = requireId(c, 'id');
+
+    const before = await deps.repos.identity.getMembershipAnyStatus(targetId, tenant.workspaceId);
+    if (!before) throw ApiError.notFound('Member');
+    const user = await deps.repos.identity.findUserById(targetId);
+
+    const { revokedSessions } = await deps.repos.identity.removeMembership(tenant, targetId);
+
+    await deps.repos.audit.record({
+      organizationId: tenant.organizationId,
+      workspaceId: tenant.workspaceId,
+      actorUserId: tenant.userId,
+      actorName: session.user.fullName,
+      action: 'member.removed',
+      category: 'permission',
+      targetType: 'user',
+      targetId,
+      targetLabel: user?.email ?? targetId,
+      ipAddress: clientIp(c),
+      userAgent: userAgent(c),
+      traceId: tenant.traceId,
+      summary: `Removed ${user?.fullName ?? targetId} from the workspace${
+        revokedSessions > 0 ? `; revoked ${revokedSessions} session(s)` : ''
+      }.`,
+      before: { role: before.role, status: before.status },
+      after: { status: 'removed', deletedAt: new Date().toISOString() },
+    });
+
+    return c.body(null, 204);
+  });
+
   app.patch(
     '/:id',
     requirePermission('member:update'),

@@ -289,6 +289,83 @@ export class IdentityRepository {
    * Owner nor demote an Owner. The check lives here rather than in the route so a queue
    * consumer or script cannot skip it.
    */
+  /**
+   * Removes somebody from a workspace.
+   *
+   * Soft, and deliberately: the audit trail names the actor by user id, and hard-deleting
+   * the row would leave every entry they ever produced pointing at nothing. Their sessions
+   * go immediately — the point of removing access is that it stops now, not at the next
+   * token expiry — and the rows that carry authority, group memberships, go with them so a
+   * later re-invitation starts from nothing rather than silently restoring what they had.
+   *
+   * The same three guards as suspension, for the same reasons: not yourself, not somebody
+   * at or above your own level, and never the last active Owner.
+   */
+  async removeMembership(ctx: TenantContext, targetUserId: string) {
+    requirePermission(ctx, 'member:remove');
+    const target = await this.getMembershipAnyStatus(targetUserId, ctx.workspaceId);
+    if (!target) throw new NotFoundError('Member');
+
+    if (targetUserId === ctx.userId) {
+      throw new AuthorizationError('member:remove', 'You cannot remove your own account');
+    }
+    if (!canAssignRole(ctx.role, target.role as Role, target.role as Role)) {
+      throw new AuthorizationError(
+        'member:remove',
+        'You cannot remove somebody at or above your own level',
+      );
+    }
+    if (target.role === 'owner') {
+      const [remaining] = await this.db
+        .select({ value: count() })
+        .from(memberships)
+        .where(
+          and(
+            eq(memberships.workspaceId, ctx.workspaceId),
+            eq(memberships.role, 'owner'),
+            eq(memberships.status, 'active'),
+            isNull(memberships.deletedAt),
+          ),
+        );
+      if (Number(remaining?.value ?? 0) <= 1) {
+        throw new AuthorizationError(
+          'member:remove',
+          'A workspace must keep at least one active Owner',
+        );
+      }
+    }
+
+    await this.db.transaction(async (tx) => {
+      // Group membership is scoped through the group, which belongs to the workspace, so
+      // the join is how "their groups here" is expressed — a plain delete by user id would
+      // strip them from groups in every other workspace they belong to.
+      const workspaceGroups = await tx
+        .select({ id: groups.id })
+        .from(groups)
+        .where(eq(groups.workspaceId, ctx.workspaceId));
+      const groupIds = workspaceGroups.map((g) => g.id);
+      if (groupIds.length > 0) {
+        await tx
+          .delete(groupMembers)
+          .where(
+            and(eq(groupMembers.userId, targetUserId), inArray(groupMembers.groupId, groupIds)),
+          );
+      }
+      await tx
+        .update(memberships)
+        // `deletedAt` is the marker, and the only one: every membership query already
+        // filters on it, and inventing a 'removed' status would say the same thing twice
+        // in a column whose permitted values are checked in the database.
+        .set({ deletedAt: new Date(), version: target.version + 1 })
+        .where(
+          and(eq(memberships.workspaceId, ctx.workspaceId), eq(memberships.userId, targetUserId)),
+        );
+    });
+
+    const revoked = await this.revokeAllSessionsForUser(targetUserId);
+    return { role: target.role, revokedSessions: revoked };
+  }
+
   async updateMembership(
     ctx: TenantContext,
     targetUserId: string,
@@ -791,6 +868,29 @@ export class IdentityRepository {
       )
       .limit(1);
     return row ?? null;
+  }
+
+  /**
+   * Whether this address has an invitation still waiting to be accepted.
+   *
+   * Read without a tenant context on purpose: the caller is the registration endpoint,
+   * which has no session and is deciding what to put in an email to the address itself. It
+   * returns a boolean rather than the invitation, so nothing about which workspace invited
+   * whom can leak through it.
+   */
+  async hasPendingInvitation(email: string): Promise<boolean> {
+    const [row] = await this.db
+      .select({ id: invitations.id })
+      .from(invitations)
+      .where(
+        and(
+          eq(invitations.email, email.toLowerCase()),
+          eq(invitations.status, 'pending'),
+          gt(invitations.expiresAt, new Date()),
+        ),
+      )
+      .limit(1);
+    return row !== undefined;
   }
 
   async acceptInvitation(invitationId: string) {

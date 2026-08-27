@@ -245,6 +245,37 @@ export const EmailTemplates = {
     };
   },
 
+  /**
+   * Sent when somebody tries to register an address that already has an account.
+   *
+   * The API cannot say so in its response without telling any stranger which addresses are
+   * registered, so it says nothing and the mailbox gets the truth instead. Only the person
+   * holding the mailbox learns anything, which is the whole point.
+   */
+  accountExists(input: {
+    fullName: string;
+    signInUrl: string;
+    resetUrl: string;
+    pendingInvitation: boolean;
+  }): Omit<EmailMessage, 'to'> {
+    const lead = input.pendingInvitation
+      ? 'You already have an invitation waiting, so signing up again will not create a second account. Open the invitation you were sent to choose a password and join.'
+      : 'You already have an account with this address, so signing up again will not create a second one.';
+
+    return {
+      subject: 'You already have an account',
+      tag: 'account-exists',
+      text: `Hello ${input.fullName},\n\nSomebody just tried to sign up with this address.\n\n${lead}\n\nSign in: ${input.signInUrl}\nForgotten your password: ${input.resetUrl}\n\nIf this was not you, nothing has changed and no action is needed.`,
+      html: layout(
+        'You already have an account',
+        `<p style="font-size:15px;line-height:1.6">Hello ${escapeHtml(input.fullName)}, somebody just tried to sign up with this address.</p>
+         <p style="font-size:15px;line-height:1.6">${escapeHtml(lead)}</p>
+         <p style="font-size:14px;color:#667085">Forgotten your password? <a href="${escapeHtml(input.resetUrl)}">Choose a new one</a>. If this was not you, nothing has changed.</p>`,
+        { label: 'Sign in', url: input.signInUrl },
+      ),
+    };
+  },
+
   magicLink(input: { url: string; expiresInMinutes: number }): Omit<EmailMessage, 'to'> {
     return {
       subject: 'Your sign-in link',
