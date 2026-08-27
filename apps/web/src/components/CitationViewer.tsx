@@ -213,7 +213,7 @@ function Detail({ label, children }: { label: string; children: React.ReactNode 
   return (
     <>
       <dt className="text-[var(--uxe-text-secondary)]">{label}</dt>
-      <dd className="text-right font-medium text-[var(--uxe-text)]">{children}</dd>
+      <dd className="text-end font-medium text-[var(--uxe-text)]">{children}</dd>
     </>
   );
 }

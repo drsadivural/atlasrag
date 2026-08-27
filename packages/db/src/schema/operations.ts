@@ -114,6 +114,8 @@ export const modelConfigurations = pgTable(
     enabled: boolean('enabled').notNull().default(true),
     /** AES-256-GCM ciphertext. There is no API path that reads this back out. */
     credentialEncrypted: text('credential_encrypted'),
+    /** Last four characters only — enough to recognise a key, useless to anyone else. */
+    credentialLast4: text('credential_last4'),
     health: text('health').notNull().default('unknown'),
     healthDetail: text('health_detail'),
     lastCheckedAt: timestamp('last_checked_at', { withTimezone: true, mode: 'date' }),

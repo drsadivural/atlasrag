@@ -875,6 +875,7 @@ export function settingsRoutes(deps: AppDeps) {
        * model name.
        */
       let inherited: string | null = null;
+      let inheritedLast4: string | null = null;
       if (input.provider !== 'deterministic' && !input.apiKey) {
         const existing = await deps.repos.settings.listModelConfigurations(tenant);
         const forProvider = existing.filter(
@@ -882,12 +883,12 @@ export function settingsRoutes(deps: AppDeps) {
         );
         // This row's own key first: a workspace holding two keys for one provider must not
         // have one of them quietly replaced by the other on an unrelated edit.
-        inherited =
-          (
-            forProvider.find(
-              (row) => row.capability === input.capability && row.model === input.model,
-            ) ?? forProvider[0]
-          )?.credentialEncrypted ?? null;
+        const donor =
+          forProvider.find(
+            (row) => row.capability === input.capability && row.model === input.model,
+          ) ?? forProvider[0];
+        inherited = donor?.credentialEncrypted ?? null;
+        inheritedLast4 = donor?.credentialLast4 ?? null;
         if (!inherited) {
           throw ApiError.badRequest(
             `${input.provider} needs an API key before it can be enabled.`,
@@ -912,6 +913,7 @@ export function settingsRoutes(deps: AppDeps) {
         credentialEncrypted: input.apiKey
           ? await encryptSecret(input.apiKey, deps.env.ENCRYPTION_KEY)
           : inherited,
+        credentialLast4: input.apiKey ? input.apiKey.slice(-4) : inheritedLast4,
       });
 
       await deps.repos.audit.record({
@@ -997,6 +999,35 @@ export function settingsRoutes(deps: AppDeps) {
     return c.json(toModelConfiguration(refreshed));
   });
 
+  app.delete('/models/:id', requirePermission('settings:models'), async (c) => {
+    const tenant = c.get('tenant');
+    if (!tenant) throw ApiError.unauthenticated();
+    const id = requireId(c, 'id');
+    const config = await deps.repos.settings.getModelConfiguration(tenant, id);
+
+    await deps.repos.settings.deleteModelConfiguration(tenant, id);
+
+    // Removing a provider changes what answers are produced with, so it belongs in the
+    // trail beside the changes that added it. The key itself never appears here.
+    await deps.repos.audit.record({
+      organizationId: tenant.organizationId,
+      workspaceId: tenant.workspaceId,
+      actorUserId: tenant.userId,
+      actorName: c.get('session')?.user.fullName ?? 'Unknown',
+      action: 'settings.model_removed',
+      category: 'settings',
+      targetType: 'model_configuration',
+      targetId: id,
+      targetLabel: `${config.provider} ${config.model}`,
+      ipAddress: clientIp(c),
+      userAgent: userAgent(c),
+      traceId: tenant.traceId,
+      summary: `Removed the ${config.capability} provider ${config.provider} ${config.model}.`,
+    });
+
+    return c.body(null, 204);
+  });
+
   return app;
 }
 
@@ -1010,6 +1041,7 @@ function toModelConfiguration(row: {
   isFallback: boolean;
   enabled: boolean;
   credentialEncrypted: string | null;
+  credentialLast4: string | null;
   health: string;
   healthDetail: string | null;
   lastCheckedAt: Date | null;
@@ -1027,8 +1059,10 @@ function toModelConfiguration(row: {
     isPrimary: row.isPrimary,
     isFallback: row.isFallback,
     enabled: row.enabled,
-    // Only whether a credential exists is exposed, never any part of the credential.
+    // Whether a credential exists, and the four characters that let its owner recognise
+    // which one. Never any part that could be used.
     hasCredential: row.credentialEncrypted !== null,
+    credentialLast4: row.credentialLast4,
     health: row.health as ModelConfiguration['health'],
     healthDetail: row.healthDetail,
     lastCheckedAt: row.lastCheckedAt?.toISOString() ?? null,

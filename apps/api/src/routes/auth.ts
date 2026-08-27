@@ -45,6 +45,7 @@ import {
   type Role,
   type SessionResponse,
 } from '@uxe/contracts';
+import type { Locale } from '@uxe/contracts';
 import { newId } from '@uxe/db';
 import type { AppBindings, AppDeps, RequestSession } from '../context.js';
 import { ApiError } from '../errors.js';
@@ -976,7 +977,7 @@ export async function buildSessionResponse(
       fullName: sess.user.fullName,
       avatarUrl: sess.user.avatarUrl,
       title: sess.user.title,
-      locale: sess.user.locale as 'en' | 'ja',
+      locale: sess.user.locale as Locale,
       theme: sess.user.theme as 'light' | 'dark' | 'system',
       emailVerified: sess.user.emailVerified,
       mfaEnabled: (await deps.repos.identity.listActiveFactors(sess.userId)).some(
@@ -992,6 +993,7 @@ export async function buildSessionResponse(
           slug: current.slug,
           role: current.role as Role,
           isDefault: current.isDefault,
+          locale: current.locale as Locale,
         }
       : null,
     workspaces: workspaces.map((w) => ({
@@ -1001,6 +1003,7 @@ export async function buildSessionResponse(
       slug: w.slug,
       role: w.role as Role,
       isDefault: w.isDefault,
+      locale: w.locale as Locale,
     })),
     permissions: current ? [...permissionsForRole(current.role as Role)] : [],
     csrfToken: await deriveCsrfToken(sess.csrfSecret),

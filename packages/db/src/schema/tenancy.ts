@@ -37,7 +37,7 @@ export const workspaces = pgTable(
     slug: text('slug').notNull(),
     isDefault: boolean('is_default').notNull().default(false),
     locale: text('locale').notNull().default('en'),
-    timezone: text('timezone').notNull().default('UTC'),
+    timezone: text('timezone').notNull().default('Asia/Dubai'),
     brandColor: text('brand_color').notNull().default('#3156F5'),
     logoUrl: text('logo_url'),
     /** Consultant persona + answer defaults + security/retention policy for this workspace. */

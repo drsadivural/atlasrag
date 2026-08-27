@@ -124,7 +124,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <div className="flex min-h-dvh flex-1">
         {/* Persistent rail, desktop only. */}
         <aside
-          className="hidden shrink-0 border-r border-[var(--uxe-border)] bg-[var(--uxe-surface)] xl:flex xl:flex-col"
+          className="hidden shrink-0 border-e border-[var(--uxe-border)] bg-[var(--uxe-surface)] xl:flex xl:flex-col"
           style={{ width: 'var(--uxe-nav-width)' }}
         >
           <SidebarContent entries={visible} />
@@ -143,7 +143,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               role="dialog"
               aria-modal="true"
               aria-label={t('nav.mainLabel')}
-              className="absolute inset-y-0 left-0 flex w-[var(--uxe-nav-width)] flex-col border-r border-[var(--uxe-border)] bg-[var(--uxe-surface)] shadow-[var(--uxe-shadow-xl)]"
+              className="absolute inset-y-0 start-0 flex w-[var(--uxe-nav-width)] flex-col border-e border-[var(--uxe-border)] bg-[var(--uxe-surface)] shadow-[var(--uxe-shadow-xl)]"
             >
               <div className="flex items-center justify-end p-2">
                 <Button
@@ -387,7 +387,7 @@ function TopBar({ onOpenMenu }: { onOpenMenu: () => void }) {
         />
       </form>
 
-      <div className="ml-auto flex items-center gap-2">
+      <div className="ms-auto flex items-center gap-2">
         <NavLink
           to="/activity"
           className="relative rounded-[var(--uxe-radius-control)] p-2 text-[var(--uxe-text-secondary)] hover:bg-[var(--uxe-surface-hover)]"
@@ -406,10 +406,10 @@ function TopBar({ onOpenMenu }: { onOpenMenu: () => void }) {
               // button with no accessible name at all. The label is stated explicitly so it
               // reads the same at every width.
               aria-label={`${session.user.fullName} — ${t('common.profile')}`}
-              className="flex items-center gap-2.5 rounded-[var(--uxe-radius-control-lg)] border border-[var(--uxe-border)] bg-[var(--uxe-surface)] p-1 pr-2.5 transition-colors hover:bg-[var(--uxe-surface-hover)]"
+              className="flex items-center gap-2.5 rounded-[var(--uxe-radius-control-lg)] border border-[var(--uxe-border)] bg-[var(--uxe-surface)] p-1 pe-2.5 transition-colors hover:bg-[var(--uxe-surface-hover)]"
             >
               <Avatar name={session.user.fullName} src={session.user.avatarUrl} size={30} />
-              <span className="hidden min-w-0 text-left sm:block">
+              <span className="hidden min-w-0 text-start sm:block">
                 <span className="block truncate text-[13px] leading-tight font-semibold text-[var(--uxe-text)]">
                   {session.user.fullName}
                 </span>

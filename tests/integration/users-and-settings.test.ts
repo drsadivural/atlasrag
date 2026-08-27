@@ -271,6 +271,61 @@ describe('workspace settings', () => {
     expect(response.body.reasoningEffort).toBeNull();
   });
 
+  it('names a saved key by its last four characters and nothing more', async () => {
+    const saved = await owner.client.post<{ id: string; credentialLast4: string | null }>(
+      '/settings/models',
+      {
+        provider: 'openai',
+        capability: 'chat',
+        model: 'gpt-5.6-terra',
+        apiKey: 'sk-test-not-a-real-key-abcd1234',
+      },
+    );
+    expect(saved.status).toBeLessThan(300);
+    // Enough for its owner to recognise which key is stored; useless to anybody else.
+    expect(saved.body.credentialLast4).toBe('1234');
+
+    const settings = await owner.client.get('/settings');
+    const body = JSON.stringify(settings.body);
+    expect(body).not.toContain('sk-test-not-a-real-key-abcd1234');
+  });
+
+  it('removes a configuration and its key on request', async () => {
+    const saved = await owner.client.post<{ id: string }>('/settings/models', {
+      provider: 'anthropic',
+      capability: 'rerank',
+      model: 'claude-rerank-test',
+      apiKey: 'sk-test-not-a-real-key-444444444444',
+    });
+    expect(saved.status).toBeLessThan(300);
+
+    const removed = await owner.client.request('DELETE', `/settings/models/${saved.body.id}`);
+    expect(removed.status).toBe(204);
+
+    const settings = await owner.client.get<{ models: Array<{ id: string }> }>('/settings');
+    expect(settings.body.models.some((m) => m.id === saved.body.id)).toBe(false);
+
+    // Gone means gone: a second delete has nothing to find.
+    const again = await owner.client.request('DELETE', `/settings/models/${saved.body.id}`);
+    expect(again.status).toBe(404);
+  });
+
+  it('refuses to let a member remove a provider', async () => {
+    const saved = await owner.client.post<{ id: string }>('/settings/models', {
+      provider: 'anthropic',
+      capability: 'ocr',
+      model: 'claude-ocr-test',
+      apiKey: 'sk-test-not-a-real-key-555555555555',
+    });
+    const member = await addMember(harness, owner, 'member');
+
+    const attempt = await member.client.request('DELETE', `/settings/models/${saved.body.id}`);
+    expect(attempt.status).toBe(403);
+
+    const settings = await owner.client.get<{ models: Array<{ id: string }> }>('/settings');
+    expect(settings.body.models.some((m) => m.id === saved.body.id)).toBe(true);
+  }, 120_000);
+
   it('never returns a stored provider key, even to an owner', async () => {
     const configured = await owner.client.post('/settings/models', {
       provider: 'anthropic',

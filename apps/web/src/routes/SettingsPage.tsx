@@ -22,6 +22,7 @@ import {
   Badge,
   Button,
   Card,
+  ConfirmDialog,
   CardHeader,
   CardTitle,
   ErrorState,
@@ -175,6 +176,55 @@ function ReadOnlyNotice() {
   );
 }
 
+/*
+ * The zones this product is actually used from, Gulf first.
+ *
+ * A free-text field asked people to remember that the IANA name for Dubai is Asia/Dubai
+ * and spell it exactly, and accepted "Dubai", "GST" and "UTC+4" — none of which any date
+ * formatter understands. The list is short on purpose: a full tz database is eight hundred
+ * entries, most of them irrelevant to the entities using this, and the current value is
+ * always shown even if it is not on the list.
+ */
+const TIMEZONES = [
+  'Asia/Dubai',
+  'Asia/Riyadh',
+  'Asia/Qatar',
+  'Asia/Kuwait',
+  'Asia/Bahrain',
+  'Asia/Muscat',
+  'Asia/Baghdad',
+  'Asia/Tehran',
+  'Asia/Karachi',
+  'Asia/Kolkata',
+  'Asia/Singapore',
+  'Asia/Tokyo',
+  'Africa/Cairo',
+  'Europe/Istanbul',
+  'Europe/London',
+  'Europe/Paris',
+  'Europe/Berlin',
+  'America/New_York',
+  'America/Chicago',
+  'America/Los_Angeles',
+  'Australia/Sydney',
+  'UTC',
+] as const;
+
+/** "Asia/Dubai — Dubai (GMT+4)", built from the zone itself rather than a hand-kept table. */
+function timezoneLabel(zone: string): string {
+  const city = zone.split('/').at(-1)?.replace(/_/g, ' ') ?? zone;
+  try {
+    const offset =
+      new Intl.DateTimeFormat('en', { timeZone: zone, timeZoneName: 'shortOffset' })
+        .formatToParts(new Date(0))
+        .find((part) => part.type === 'timeZoneName')?.value ?? '';
+    return offset ? `${city} (${offset})` : city;
+  } catch {
+    // An unknown zone must still be selectable rather than vanishing from the list.
+    return zone;
+  }
+}
+
 function GeneralSection({ settings, canEdit }: { settings: WorkspaceSettings; canEdit: boolean }) {
   const { t } = useI18n();
   const save = useSaveSettings();
@@ -208,6 +258,7 @@ function GeneralSection({ settings, canEdit }: { settings: WorkspaceSettings; ca
             className="w-full"
             options={[
               { value: 'en', label: 'English' },
+              { value: 'ar', label: 'العربية (Arabic)' },
               { value: 'ja', label: '日本語 (Japanese)' },
             ]}
           />
@@ -218,11 +269,16 @@ function GeneralSection({ settings, canEdit }: { settings: WorkspaceSettings; ca
           htmlFor="timezone"
           hint="Used for dates in reports and the activity log."
         >
-          <Input
-            id="timezone"
+          <Select
             value={timezone}
-            onChange={(e) => setTimezone(e.target.value)}
+            onValueChange={setTimezone}
+            ariaLabel="Timezone"
             disabled={!canEdit}
+            className="w-full"
+            options={(TIMEZONES.includes(timezone as (typeof TIMEZONES)[number])
+              ? [...TIMEZONES]
+              : [timezone, ...TIMEZONES]
+            ).map((zone) => ({ value: zone, label: timezoneLabel(zone) }))}
           />
         </Field>
 
@@ -397,6 +453,19 @@ function ModelsSection({ models, canEdit }: { models: ModelConfiguration[]; canE
   const { t } = useI18n();
   const queryClient = useQueryClient();
   const { push } = useToast();
+  const [editing, setEditing] = useState<ModelConfiguration | null>(null);
+  const [removing, setRemoving] = useState<ModelConfiguration | null>(null);
+
+  const remove = useMutation({
+    mutationFn: (id: string) => api.delete(`/settings/models/${id}`),
+    onSuccess: () => {
+      push({ tone: 'success', title: 'Provider removed' });
+      setRemoving(null);
+      void queryClient.invalidateQueries({ queryKey: ['settings'] });
+    },
+    onError: (error: ApiError) =>
+      push({ tone: 'error', title: 'Could not remove it', description: error.message }),
+  });
 
   const test = useMutation({
     mutationFn: (id: string) => api.post<ModelConfiguration>(`/settings/models/${id}/test`),
@@ -465,18 +534,27 @@ function ModelsSection({ models, canEdit }: { models: ModelConfiguration[]; canE
                     size="sm"
                     icon={<KeyRound className="h-3 w-3" aria-hidden />}
                   >
-                    Key saved
+                    {/* Enough to recognise which key was saved; useless to anyone else. */}
+                    {model.credentialLast4 ? `Key ····${model.credentialLast4}` : 'Key saved'}
                   </Badge>
                 )}
                 {canEdit && (
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => test.mutate(model.id)}
-                    loading={test.isPending && test.variables === model.id}
-                  >
-                    {t('settings.testConnection')}
-                  </Button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => test.mutate(model.id)}
+                      loading={test.isPending && test.variables === model.id}
+                    >
+                      {t('settings.testConnection')}
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => setEditing(model)}>
+                      {t('common.edit')}
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => setRemoving(model)}>
+                      {t('common.delete')}
+                    </Button>
+                  </div>
                 )}
               </li>
             ))}
@@ -484,7 +562,26 @@ function ModelsSection({ models, canEdit }: { models: ModelConfiguration[]; canE
         )}
       </Card>
 
-      {canEdit && <AddModelCard />}
+      {canEdit && <AddModelCard editing={editing} onDoneEditing={() => setEditing(null)} />}
+
+      <ConfirmDialog
+        open={removing !== null}
+        onOpenChange={(open) => !open && setRemoving(null)}
+        title="Remove this provider?"
+        description={
+          removing
+            ? `${removing.provider} ${removing.model} will stop being used for ${removing.capability}, and its stored key is deleted. ${
+                removing.isPrimary
+                  ? 'It is the primary for that capability, so answers fall back to the deterministic engine until another is set.'
+                  : ''
+              }`
+            : ''
+        }
+        confirmLabel={t('common.delete')}
+        destructive
+        loading={remove.isPending}
+        onConfirm={() => removing && remove.mutate(removing.id)}
+      />
     </div>
   );
 }
@@ -527,15 +624,52 @@ function HealthBadge({
   );
 }
 
+const CAPABILITY_LABELS: Record<string, string> = {
+  chat: 'Chat / reasoning',
+  embedding: 'Embeddings',
+  rerank: 'Reranking',
+  ocr: 'OCR / vision',
+  document_generation: 'Document generation',
+};
+
 /** What this form starts with before anybody has chosen anything. */
 const PLACEHOLDER_MODELS = new Set(['claude-sonnet-5', 'gpt-4.1', 'uxe-extractive-v1']);
 
-function AddModelCard() {
+/**
+ * What a model identifier says it is for.
+ *
+ * Mirrors the filter the API applies to a provider's catalogue, so the capability the form
+ * saves is the one the chosen model can actually serve. Deliberately generous in the same
+ * way: anything unrecognised is chat, because this has to keep working when a provider
+ * ships something nobody here has heard of.
+ */
+function capabilityForModel(id: string): string {
+  if (/embed/i.test(id)) return 'embedding';
+  if (/rerank/i.test(id)) return 'rerank';
+  if (/whisper|transcribe|speech|audio|vision|ocr/i.test(id)) return 'ocr';
+  return 'chat';
+}
+
+function AddModelCard({
+  editing,
+  onDoneEditing,
+}: {
+  editing: ModelConfiguration | null;
+  onDoneEditing: () => void;
+}) {
   const { t } = useI18n();
   const queryClient = useQueryClient();
   const { push } = useToast();
   const [provider, setProvider] = useState('anthropic');
   const [capability, setCapability] = useState('chat');
+  /*
+   * Capability is derived from the model unless somebody says otherwise.
+   *
+   * Asking for it first is backwards: the person knows which model they want, and the
+   * identifier already says what it is for. The control stays available for the case the
+   * derivation gets wrong, and opening it is what stops the derivation overriding them.
+   */
+  const [capabilityManual, setCapabilityManual] = useState(false);
   const [model, setModel] = useState('claude-sonnet-5');
   /*
    * 'default' rather than an empty string: Radix refuses an item with an empty value, and
@@ -547,22 +681,37 @@ function AddModelCard() {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
   const [available, setAvailable] = useState<AvailableModelsResponse['models']>([]);
 
+  const effectiveCapability = capabilityManual ? capability : capabilityForModel(model);
+
+  /*
+   * Loading the list when the form is opened on an existing row, or when a key arrives.
+   *
+   * Choosing a model is the point of this form, and it cannot be done from a text field
+   * that offers nothing. The debounce is for typing, and the length floor keeps it from
+   * firing on the first three characters of a paste.
+   */
+  const [loadKey, setLoadKey] = useState('');
+
   const load = useMutation({
-    mutationFn: () =>
-      api.post<AvailableModelsResponse>('/settings/models/available', {
-        provider,
-        capability,
-        // A key typed here but not yet saved is still the key to ask with.
-        ...(apiKey ? { apiKey } : {}),
-      }),
+    mutationFn: (options: { silent?: boolean } = {}) =>
+      api
+        .post<AvailableModelsResponse>('/settings/models/available', {
+          provider,
+          capability: effectiveCapability,
+          // A key typed here but not yet saved is still the key to ask with.
+          ...(apiKey ? { apiKey } : {}),
+        })
+        .then((result) => ({ ...result, silent: options.silent === true })),
     onSuccess: (result) => {
       setAvailable(result.models);
       if (result.models.length === 0) {
-        push({
-          tone: 'info',
-          title: 'No models for this capability',
-          description: 'This key serves none that match. Try another capability.',
-        });
+        if (!result.silent) {
+          push({
+            tone: 'info',
+            title: 'No models for this capability',
+            description: 'This key serves none that match. Try another capability.',
+          });
+        }
         return;
       }
       // Newest first. A value the user typed or picked is kept; one of this form's own
@@ -576,16 +725,55 @@ function AddModelCard() {
             : current,
         );
       }
-      push({ tone: 'success', title: `${result.models.length} model(s) available` });
+      if (!result.silent) {
+        push({ tone: 'success', title: `${result.models.length} model(s) available` });
+      }
     },
-    onError: (error: ApiError) =>
-      push({ tone: 'error', title: 'Could not read the model list', description: error.message }),
+    // A list fetched on the user's behalf that fails is not worth interrupting them over:
+    // the field stays a text input and the button is still there to try deliberately.
+    onError: (error: ApiError, variables) => {
+      if (variables?.silent) return;
+      push({ tone: 'error', title: 'Could not read the model list', description: error.message });
+    },
   });
+
+  const loadModels = load.mutate;
+
+  /*
+   * A key that has arrived, or a row opened for editing, fetches the list by itself.
+   *
+   * `loadKey` is the trigger rather than `apiKey` so the request fires once per settled
+   * value: without it every keystroke of a pasted key would queue another call.
+   */
+  useEffect(() => {
+    if (provider === 'deterministic') return;
+    if (loadKey.length < 12) return;
+    const timer = setTimeout(() => loadModels({ silent: true }), 500);
+    return () => clearTimeout(timer);
+  }, [loadKey, provider, loadModels]);
+
+  // Opening an existing configuration: fill the form with it, and fetch what its provider
+  // serves so the model field is a list rather than a box to retype an identifier into.
+  const [editingId, setEditingId] = useState<string | null>(null);
+  if (editing && editing.id !== editingId) {
+    setEditingId(editing.id);
+    setProvider(editing.provider);
+    setCapability(editing.capability);
+    setCapabilityManual(true);
+    setModel(editing.model);
+    setReasoningEffort(editing.reasoningEffort ?? 'default');
+    setApiKey('');
+    setAvailable([]);
+    setFieldErrors({});
+    // A stored key cannot be read back, so the list is asked for with the saved one.
+    setLoadKey(editing.hasCredential ? `stored:${editing.id}` : '');
+  }
+  if (!editing && editingId !== null) setEditingId(null);
 
   const save = useMutation({
     mutationFn: () =>
       api.post('/settings/models', {
-        capability,
+        capability: effectiveCapability,
         provider,
         model,
         reasoningEffort: reasoningEffort === 'default' ? null : reasoningEffort,
@@ -602,6 +790,7 @@ function AddModelCard() {
       });
       setApiKey('');
       setFieldErrors({});
+      onDoneEditing();
       void queryClient.invalidateQueries({ queryKey: ['settings'] });
     },
     onError: (error: ApiError) => {
@@ -613,27 +802,59 @@ function AddModelCard() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Add or update a provider</CardTitle>
+        <CardTitle>
+          {editing ? `Edit ${editing.provider} · ${editing.model}` : 'Add or update a provider'}
+        </CardTitle>
       </CardHeader>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Field label="Capability" htmlFor="capability">
-          <Select
-            value={capability}
-            onValueChange={(value) => {
-              setCapability(value);
-              setAvailable([]);
-            }}
-            ariaLabel="Capability"
-            className="w-full"
-            options={[
-              { value: 'chat', label: 'Chat / reasoning' },
-              { value: 'embedding', label: 'Embeddings' },
-              { value: 'rerank', label: 'Reranking' },
-              { value: 'ocr', label: 'OCR / vision' },
-              { value: 'document_generation', label: 'Document generation' },
-            ]}
-          />
+        <Field
+          label="Capability"
+          htmlFor="capability"
+          hint={
+            capabilityManual
+              ? 'Set by hand. Clear it to go back to reading the model name.'
+              : `Read from the model name: ${CAPABILITY_LABELS[effectiveCapability] ?? effectiveCapability}.`
+          }
+        >
+          {capabilityManual ? (
+            <div className="flex items-center gap-2">
+              <Select
+                value={capability}
+                onValueChange={(value) => {
+                  setCapability(value);
+                  setAvailable([]);
+                }}
+                ariaLabel="Capability"
+                className="w-full"
+                options={Object.entries(CAPABILITY_LABELS).map(([value, label]) => ({
+                  value,
+                  label,
+                }))}
+              />
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setCapabilityManual(false);
+                  setAvailable([]);
+                }}
+              >
+                Auto
+              </Button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <Input
+                id="capability"
+                readOnly
+                value={CAPABILITY_LABELS[effectiveCapability] ?? effectiveCapability}
+              />
+              <Button variant="ghost" size="sm" onClick={() => setCapabilityManual(true)}>
+                Change
+              </Button>
+            </div>
+          )}
         </Field>
 
         <Field label="Provider" htmlFor="provider">
@@ -720,7 +941,10 @@ function AddModelCard() {
             type="password"
             autoComplete="off"
             value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
+            onChange={(e) => {
+              setApiKey(e.target.value);
+              setLoadKey(e.target.value);
+            }}
             placeholder={provider === 'deterministic' ? 'Not required' : 'sk-…'}
             disabled={provider === 'deterministic'}
             invalid={Boolean(fieldErrors.apiKey)}
@@ -745,7 +969,7 @@ function AddModelCard() {
           <Button
             variant="secondary"
             loading={load.isPending}
-            onClick={() => load.mutate()}
+            onClick={() => load.mutate({})}
             disabled={load.isPending}
           >
             <RefreshCw className="h-4 w-4" aria-hidden />

@@ -590,6 +590,67 @@ What could not be checked from here: whether the app's existing request shape wo
 these models beyond the parameter question — the reasoning models may also refuse
 `response_format`, and that is not something to find out by guessing either.
 
+## The document nobody read
+
+Reported as: upload a document, ask whether it satisfies the regulations, get a clause of
+the code back with nothing said about the file. The cause was a single missing line, and
+finding it turned up four more faults stacked behind it.
+
+**The upload was never attached.** `POST /consultations/:id/uploads` created the source and
+the ticket and enqueued the indexing, and never joined the finished document to the
+conversation. `addSource` existed, took a role, and had no callers anywhere in the
+codebase. So the file indexed perfectly and sat outside the conversation's scope, and the
+only thing in scope to answer from was the code. It is attached now when indexing
+completes — not at upload time, because the version has to be promoted first and the
+pinned version is what makes the answer reproducible.
+
+**Already indexed is not already attached.** The same bytes arriving a second time hit
+duplicate detection, which discarded the new source and returned "already in your knowledge
+base". For a conversation that means the upload appears to succeed and reviews nothing. The
+existing copy is attached instead.
+
+**A thousand-page code drowns a three-page submittal.** Both corpora were retrieved and
+ranked together, and a code has hundreds of passages on any topic where a submittal has
+one. Each role now gets its own retrieval and a guaranteed share — a third to the project
+side, which is the smaller corpus while the obligation still has to be quoted in full.
+
+**"All reviewed requirements are met", having reviewed none.** Asking a compliance question
+inside a conversation runs the answering path, not the full review, so it reached assembly
+with no findings — and the compliance branch ended at that sentence whenever nothing had
+failed. Zero of zero is not a pass. With nothing tested it now falls through to describing
+the evidence, and the reason names both documents rather than going silent.
+
+**The headline was a quotation.** Asked for a headline the model returns the most relevant
+sentence it was given, so somebody who asked whether their submittal complies read a clause
+of the fire code, mid-sentence. A headline already sitting inside a verified excerpt is a
+quotation rather than a conclusion and is refused; a decided question is headed by the
+question, which invents nothing and sits under the verdict where an answer belongs.
+
+Separately: choosing the Yes / No style now always produces a verdict. Reading the
+question's grammar is the right guess when nobody has said what they want, but a screen
+showing no verdict at all to somebody who asked for exactly one has ignored the only
+instruction it was given.
+
+## Words the page broke in half
+
+Visible in the quotation above before it was fixed: _the capaci- ty of the pump sets_. A
+hyphen a typesetter put at a line end comes out of a PDF as a real character, and
+collapsing the newline after it leaves that — in the stored page text, in every chunk built
+from it, and so in the sentence printed under an answer as what the regulation says. It
+does not say that.
+
+The join is narrow: a letter, a hyphen, whitespace, a lower-case letter. `fire-rated` has
+no whitespace and is left alone; a dash with a space before it does not match; a capital
+after the break says the break was not one.
+
+Worth recording is what the fix broke. Excerpt verification builds its own normalised copy
+of the page, character by character, to keep an index map back to the original — so
+rejoining only the needle meant a genuine quotation could no longer be found in the
+haystack. Every citation quoting a wrapped word went unverified, coverage collapsed, and a
+working consultation started answering "the selected sources do not answer this question".
+The live probe caught it one request later. Both sides join now, and there is a test that
+fails if they ever disagree again.
+
 ## Confidence that moved on its own
 
 Found by the suite while the above was being verified: `computeConfidence` failed its own

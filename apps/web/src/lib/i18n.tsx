@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useMemo, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, type ReactNode } from 'react';
 import type { Locale } from '@uxe/contracts';
 import { en } from './locales/en.js';
 import { ja, type Catalogue } from './locales/ja.js';
@@ -59,6 +59,29 @@ export function I18nProvider({ locale, children }: { locale: Locale; children: R
     }),
     [locale, t],
   );
+
+  /*
+   * The document element, not only this subtree.
+   *
+   * `dir` on a wrapper does turn the text round, but the page itself is laid out by the
+   * root: the scrollbar stays on the left, `position: fixed` overlays keep measuring from
+   * the wrong edge, and anything portalled to document.body — every dialog and toast here
+   * is — never sees the attribute at all. `lang` goes with it, because a screen reader
+   * choosing a voice reads the root.
+   */
+  useEffect(() => {
+    const root = document.documentElement;
+    const previousDir = root.getAttribute('dir');
+    const previousLang = root.getAttribute('lang');
+    root.setAttribute('dir', value.dir);
+    root.setAttribute('lang', locale);
+    return () => {
+      if (previousDir === null) root.removeAttribute('dir');
+      else root.setAttribute('dir', previousDir);
+      if (previousLang === null) root.removeAttribute('lang');
+      else root.setAttribute('lang', previousLang);
+    };
+  }, [value.dir, locale]);
 
   return (
     <I18nContext.Provider value={value}>

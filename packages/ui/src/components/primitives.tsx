@@ -213,7 +213,7 @@ export function Field({ label, htmlFor, error, hint, required, children, classNa
       <label htmlFor={htmlFor} className="text-[13px] font-medium text-[var(--uxe-text)]">
         {label}
         {required && (
-          <span className="ml-0.5 text-[var(--uxe-danger)]" aria-hidden>
+          <span className="ms-0.5 text-[var(--uxe-danger)]" aria-hidden>
             *
           </span>
         )}
@@ -273,8 +273,8 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
           // Longhand on both sides rather than `px-3` plus an override: Tailwind emits the
           // shorthand after the longhand, so `px-3` would win and the icon would sit on
           // top of the text.
-          iconLeft ? 'pl-10' : 'pl-3',
-          iconRight ? 'pr-10' : 'pr-3',
+          iconLeft ? 'ps-10' : 'ps-3',
+          iconRight ? 'pe-10' : 'pe-3',
           invalid
             ? 'border-[var(--uxe-danger)] focus:border-[var(--uxe-danger)] focus:ring-[var(--uxe-danger)]/25'
             : 'border-[var(--uxe-border)]',

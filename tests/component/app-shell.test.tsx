@@ -32,6 +32,7 @@ function sessionFor(role: Role): SessionResponse {
       slug: 'marina-tower',
       role,
       isDefault: true,
+      locale: 'en',
     },
     workspaces: [
       {
@@ -41,6 +42,7 @@ function sessionFor(role: Role): SessionResponse {
         slug: 'marina-tower',
         role,
         isDefault: true,
+        locale: 'en',
       },
       {
         id: 'ws-2',
@@ -49,6 +51,7 @@ function sessionFor(role: Role): SessionResponse {
         slug: 'downtown-mall',
         role,
         isDefault: false,
+        locale: 'en',
       },
     ],
     permissions: [...ROLE_PERMISSIONS[role]],

@@ -187,6 +187,7 @@ export class IdentityRepository {
         name: workspaces.name,
         slug: workspaces.slug,
         isDefault: workspaces.isDefault,
+        locale: workspaces.locale,
         role: memberships.role,
       })
       .from(memberships)

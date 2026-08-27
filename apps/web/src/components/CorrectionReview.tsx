@@ -119,7 +119,7 @@ export function CorrectionReviewDialog({
       size="xl"
       footer={
         <>
-          <span className="mr-auto text-[13px] text-[var(--uxe-text-secondary)]">
+          <span className="me-auto text-[13px] text-[var(--uxe-text-secondary)]">
             {acceptedCount} accepted · {pendingCount} still to review
           </span>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>

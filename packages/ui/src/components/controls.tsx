@@ -211,7 +211,7 @@ export function Select({
                 <SelectPrimitive.ItemIndicator className="mt-0.5">
                   <Check className="h-3.5 w-3.5" aria-hidden />
                 </SelectPrimitive.ItemIndicator>
-                <span className={cn('min-w-0', !option.description && 'data-[state=checked]:ml-0')}>
+                <span className={cn('min-w-0', !option.description && 'data-[state=checked]:ms-0')}>
                   <SelectPrimitive.ItemText>{option.label}</SelectPrimitive.ItemText>
                   {option.description && (
                     <span className="mt-0.5 block text-[12px] text-[var(--uxe-text-secondary)]">

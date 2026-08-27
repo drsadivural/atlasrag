@@ -7,6 +7,7 @@ import {
   embeddingInput,
   screenExtractedText,
   quarantineReason,
+  rejoinHyphenatedLines,
   type Chunk,
   type ExtractedPage,
 } from '@uxe/rag';
@@ -121,6 +122,16 @@ export async function runIngestion(
     'complete',
     `${extraction.pageCount} page(s)${extraction.ocrApplied ? ', OCR applied' : ''}`,
   );
+
+  /*
+   * Words the typesetter broke across a line are put back together before anything else
+   * reads them, so the stored page text, the chunks built from it and every quotation
+   * shown to a reader all say the same thing — and say it the way the document does.
+   */
+  extraction.pages = extraction.pages.map((page) => ({
+    ...page,
+    text: rejoinHyphenatedLines(page.text),
+  }));
 
   // --- 3. Injection screening --------------------------------------------
   const fullText = extraction.pages.map((p) => p.text).join('\n');

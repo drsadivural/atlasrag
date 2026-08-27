@@ -58,6 +58,14 @@ interface RawSettings {
   notifications?: Partial<WorkspaceSettings['notifications']>;
 }
 
+/**
+ * Gulf Standard Time.
+ *
+ * The entities this is built for are in the UAE, and a workspace that silently formats
+ * every report and audit line in UTC is four hours wrong on every date somebody checks.
+ */
+export const DEFAULT_TIMEZONE = 'Asia/Dubai';
+
 export function workspaceSettingsFrom(
   stored: Record<string, unknown>,
   workspaceName: string,
@@ -76,8 +84,8 @@ export function workspaceSettingsFrom(
     general: {
       workspaceName,
       slug: overrides.slug ?? 'main',
-      locale: (overrides.locale ?? 'en') as 'en' | 'ja',
-      timezone: overrides.timezone ?? 'UTC',
+      locale: (overrides.locale ?? 'en') as WorkspaceSettings['general']['locale'],
+      timezone: overrides.timezone ?? DEFAULT_TIMEZONE,
       brandColor: overrides.brandColor ?? '#3156F5',
       logoUrl: overrides.logoUrl ?? null,
     },

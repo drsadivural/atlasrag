@@ -195,7 +195,7 @@ export function DashboardPage() {
                     columns={[
                       {
                         key: 'title',
-                        header: 'Consultation',
+                        header: t('table.consultation'),
                         primary: true,
                         render: (row) => (
                           <span className="flex items-center gap-2.5">
@@ -211,12 +211,12 @@ export function DashboardPage() {
                       },
                       {
                         key: 'status',
-                        header: 'Status',
+                        header: t('table.status'),
                         render: (row) => <StatusBadge status={row.status} />,
                       },
                       {
                         key: 'compliance',
-                        header: 'Compliance',
+                        header: t('table.compliance'),
                         align: 'right',
                         render: (row) =>
                           row.complianceScore === null ? (
@@ -238,7 +238,7 @@ export function DashboardPage() {
                       },
                       {
                         key: 'sources',
-                        header: 'Sources',
+                        header: t('table.sources'),
                         align: 'right',
                         render: (row) => (
                           <span className="text-[var(--uxe-cobalt)] tabular-nums">
@@ -248,7 +248,7 @@ export function DashboardPage() {
                       },
                       {
                         key: 'updated',
-                        header: 'Updated',
+                        header: t('table.updated'),
                         render: (row) => (
                           <span className="whitespace-nowrap text-[var(--uxe-text-secondary)]">
                             {formatRelative(row.updatedAt, locale)}
@@ -257,7 +257,7 @@ export function DashboardPage() {
                       },
                       {
                         key: 'owner',
-                        header: 'Owner',
+                        header: t('table.owner'),
                         render: (row) => (
                           <span className="flex items-center gap-2">
                             <Avatar name={row.ownerName} src={row.ownerAvatarUrl} size={24} />
@@ -385,7 +385,9 @@ function KpiCard({ kpi, days }: { kpi: DashboardResponse['kpis'][number]; days: 
 
         <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1">
           {kpi.changePercent === null ? (
-            <span className="text-[12px] text-[var(--uxe-text-tertiary)]">No prior period</span>
+            <span className="text-[12px] text-[var(--uxe-text-tertiary)]">
+              {t('dashboard.noPriorPeriod')}
+            </span>
           ) : (
             <>
               <Badge
@@ -435,7 +437,7 @@ function ComplianceDonut({ outcomes }: { outcomes: DashboardResponse['compliance
   return (
     <DonutChart
       total={outcomes.total}
-      centerLabel="Total"
+      centerLabel={t('dashboard.total')}
       ariaLabel={t('dashboard.complianceOutcomes')}
       segments={[
         {
@@ -637,6 +639,7 @@ function KnowledgeHealthCard({ health }: { health: DashboardResponse['knowledgeH
 }
 
 export function StatusBadge({ status }: { status: string }) {
+  const { t } = useI18n();
   const map: Record<
     string,
     {
@@ -645,14 +648,24 @@ export function StatusBadge({ status }: { status: string }) {
       icon: typeof CheckCircle2;
     }
   > = {
-    report_ready: { tone: 'success', label: 'Ready', icon: CheckCircle2 },
-    action_required: { tone: 'danger', label: 'Action required', icon: AlertTriangle },
-    processing: { tone: 'info', label: 'Processing', icon: Circle },
-    active: { tone: 'brand', label: 'Active', icon: MessageSquare },
-    awaiting_input: { tone: 'warning', label: 'Awaiting input', icon: Info },
-    draft: { tone: 'neutral', label: 'Draft', icon: FileText },
-    archived: { tone: 'neutral', label: 'Archived', icon: Database },
+    report_ready: {
+      tone: 'success',
+      label: t('consultationStatus.report_ready'),
+      icon: CheckCircle2,
+    },
+    action_required: {
+      tone: 'danger',
+      label: t('consultationStatus.action_required'),
+      icon: AlertTriangle,
+    },
+    processing: { tone: 'info', label: t('consultationStatus.processing'), icon: Circle },
+    active: { tone: 'brand', label: t('consultationStatus.active'), icon: MessageSquare },
+    awaiting_input: { tone: 'warning', label: t('consultationStatus.awaiting_input'), icon: Info },
+    draft: { tone: 'neutral', label: t('consultationStatus.draft'), icon: FileText },
+    archived: { tone: 'neutral', label: t('consultationStatus.archived'), icon: Database },
   };
+  // A status this build has never heard of is shown as the server named it rather than
+  // hidden: an untranslated word beats a blank badge.
   const entry = map[status] ?? { tone: 'neutral' as const, label: status, icon: Info };
   const Icon = entry.icon;
 

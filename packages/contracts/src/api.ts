@@ -118,6 +118,14 @@ export const WorkspaceSummary = z.object({
   slug: Slug,
   role: Role,
   isDefault: z.boolean(),
+  /**
+   * The language this workspace is read in.
+   *
+   * It is a workspace setting rather than a personal one because that is the only place it
+   * can be changed, and a setting that does not change what the person who changed it sees
+   * is not a setting.
+   */
+  locale: Locale,
 });
 export type WorkspaceSummary = z.infer<typeof WorkspaceSummary>;
 
@@ -1011,6 +1019,8 @@ export const ModelConfiguration = z.object({
   isFallback: z.boolean(),
   enabled: z.boolean(),
   hasCredential: z.boolean(),
+  /** The key's last four characters, so it can be recognised. Null when none is stored. */
+  credentialLast4: z.string().nullable(),
   health: z.enum(['healthy', 'degraded', 'unconfigured', 'circuit_open', 'unknown']),
   healthDetail: z.string().nullable(),
   lastCheckedAt: Timestamp.nullable(),

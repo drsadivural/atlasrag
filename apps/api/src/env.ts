@@ -185,6 +185,25 @@ export function loadEnv(raw: Record<string, string | undefined>): AppEnv {
       issues.push('LOG_DOCUMENT_CONTENT must be false in production.');
     }
   }
+  /*
+   * The two public URLs have to describe the same deployment.
+   *
+   * PUBLIC_APP_URL is where every OAuth callback sends the browser back to. Left at its
+   * local-development default on a deployment that is actually reachable at a public
+   * address, nothing complains and nothing looks wrong — until somebody finishes a Google
+   * consent screen and lands on "localhost refused to connect", holding an authorization
+   * code that went nowhere.
+   */
+  const localApp = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/.test(env.PUBLIC_APP_URL);
+  const localApi = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/.test(env.PUBLIC_API_URL);
+  if (localApp && !localApi) {
+    issues.push(
+      `PUBLIC_APP_URL is ${env.PUBLIC_APP_URL} while PUBLIC_API_URL is ${env.PUBLIC_API_URL}. ` +
+        'Every OAuth callback returns the browser to PUBLIC_APP_URL, so a local value here ' +
+        'sends anyone completing a connector sign-in to a machine that is not theirs.',
+    );
+  }
+
   if (env.STORAGE_DRIVER === 's3' && (!env.S3_ENDPOINT || !env.S3_ACCESS_KEY_ID)) {
     issues.push('STORAGE_DRIVER=s3 requires S3_ENDPOINT and S3_ACCESS_KEY_ID.');
   }

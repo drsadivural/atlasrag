@@ -361,7 +361,7 @@ function BrandPanel() {
       />
       <div
         aria-hidden
-        className="pointer-events-none absolute top-0 right-0 h-[360px] w-[360px] rounded-full bg-[var(--uxe-violet)]/[0.07] blur-3xl"
+        className="pointer-events-none absolute end-0 top-0 h-[360px] w-[360px] rounded-full bg-[var(--uxe-violet)]/[0.07] blur-3xl"
       />
 
       <div className="relative flex h-full flex-col">

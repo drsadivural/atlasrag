@@ -430,11 +430,33 @@ export function sourceRoutes(deps: AppDeps) {
     if (existing) {
       await deps.repos.sources.discardEmptySource(tenant, sourceId);
       await deps.services.storage.delete('originals', stored.key);
+
+      /*
+       * Already indexed is not the same as already attached.
+       *
+       * Sending a document into a conversation says "review this", and answering "we
+       * already have those bytes" leaves the conversation with nothing to review — the
+       * upload appears to succeed and the answer comes back about the regulations alone.
+       * The existing source is attached instead, which is the same outcome without the
+       * second copy.
+       */
+      if (ticket.consultationId) {
+        await deps.repos.consultations.addSource(
+          tenant,
+          ticket.consultationId,
+          existing.source.id,
+          existing.version.id,
+          'project',
+        );
+      }
+
       return c.json({
         sourceId: existing.source.id,
         versionId: existing.version.id,
         duplicate: true,
-        message: `These exact bytes are already in your knowledge base as "${existing.source.title}" (${existing.version.version}). No duplicate was created.`,
+        message: ticket.consultationId
+          ? `These exact bytes are already indexed as "${existing.source.title}" (${existing.version.version}), so that copy has been attached to this consultation.`
+          : `These exact bytes are already in your knowledge base as "${existing.source.title}" (${existing.version.version}). No duplicate was created.`,
         job: null,
       });
     }
@@ -450,6 +472,15 @@ export function sourceRoutes(deps: AppDeps) {
     if (duplicate) {
       // Same bytes re-uploaded as a new version of the same source: nothing changed.
       await deps.repos.sources.setSourceStatus(sourceId, { status: 'ready' });
+      if (ticket.consultationId) {
+        await deps.repos.consultations.addSource(
+          tenant,
+          ticket.consultationId,
+          sourceId,
+          version.id,
+          'project',
+        );
+      }
       return c.json({
         sourceId,
         versionId: version.id,
@@ -468,6 +499,10 @@ export function sourceRoutes(deps: AppDeps) {
         storageKey: stored.key,
         fileName: ticket.fileName,
         contentType: ticket.contentType,
+        // Carried so the finished document can be attached to the conversation that asked
+        // for it. It cannot be attached now: a source with no promoted version has nothing
+        // to pin, and pinning the version is what makes an answer reproducible.
+        consultationId: ticket.consultationId,
       },
       targetType: 'source',
       targetId: sourceId,

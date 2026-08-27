@@ -97,7 +97,7 @@ export function DataTable<T>({
     <div className={className}>
       {/* Desktop */}
       <div className="hidden overflow-x-auto md:block">
-        <table className={cn('w-full border-collapse text-left', fixedLayout && 'table-fixed')}>
+        <table className={cn('w-full border-collapse text-start', fixedLayout && 'table-fixed')}>
           <caption className="sr-only">{caption}</caption>
           <thead>
             <tr className="border-b border-[var(--uxe-border)]">
@@ -113,9 +113,9 @@ export function DataTable<T>({
                   style={column.width ? { width: column.width } : undefined}
                   className={cn(
                     'px-3 py-2.5 text-[12px] font-semibold tracking-wide text-[var(--uxe-text-secondary)] uppercase',
-                    column.align === 'right' && 'text-right',
+                    column.align === 'right' && 'text-end',
                     column.align === 'center' && 'text-center',
-                    column.sticky && 'sticky left-0 z-10 bg-[var(--uxe-surface)]',
+                    column.sticky && 'sticky start-0 z-10 bg-[var(--uxe-surface)]',
                   )}
                 >
                   {column.header}
@@ -155,9 +155,9 @@ export function DataTable<T>({
                       className={cn(
                         'px-3 py-3 text-[14px] text-[var(--uxe-text)]',
                         fixedLayout && 'overflow-hidden text-ellipsis',
-                        column.align === 'right' && 'text-right',
+                        column.align === 'right' && 'text-end',
                         column.align === 'center' && 'text-center',
-                        column.sticky && 'sticky left-0 z-10 bg-inherit',
+                        column.sticky && 'sticky start-0 z-10 bg-inherit',
                       )}
                     >
                       {onRowClick && column === primary && !column.selfActivating ? (
@@ -171,7 +171,7 @@ export function DataTable<T>({
                             onRowClick(row);
                           }}
                           className={cn(
-                            'w-full min-w-0 text-left',
+                            'w-full min-w-0 text-start',
                             'focus-visible:outline-2 focus-visible:outline-offset-2',
                             'rounded-[var(--uxe-radius-control)] focus-visible:outline-[var(--uxe-cobalt)]',
                           )}
@@ -217,7 +217,7 @@ export function DataTable<T>({
                           event.stopPropagation();
                           onRowClick(row);
                         }}
-                        className="w-full min-w-0 text-left"
+                        className="w-full min-w-0 text-start"
                       >
                         {primary.render(row)}
                       </button>
@@ -243,7 +243,7 @@ export function DataTable<T>({
                         <dt className="text-[11px] font-semibold tracking-wide text-[var(--uxe-text-secondary)] uppercase">
                           {column.header}
                         </dt>
-                        <dd className="text-right text-[13px] text-[var(--uxe-text)]">
+                        <dd className="text-end text-[13px] text-[var(--uxe-text)]">
                           {column.render(row)}
                         </dd>
                       </Fragment>
@@ -351,7 +351,7 @@ export function Pagination({
             value={pageSize}
             onChange={(e) => onPageSizeChange(Number(e.target.value))}
             aria-label="Rows per page"
-            className="ml-2 h-8 rounded-[var(--uxe-radius-control)] border border-[var(--uxe-border)] bg-[var(--uxe-surface)] px-2 text-[13px]"
+            className="ms-2 h-8 rounded-[var(--uxe-radius-control)] border border-[var(--uxe-border)] bg-[var(--uxe-surface)] px-2 text-[13px]"
           >
             {[10, 25, 50, 100].map((size) => (
               <option key={size} value={size}>
@@ -501,19 +501,19 @@ export function AreaChart({
       </svg>
 
       <figcaption className={showTable ? 'mt-4' : 'sr-only'}>
-        <table className="w-full border-collapse text-left text-[13px]">
+        <table className="w-full border-collapse text-start text-[13px]">
           <caption className="sr-only">{ariaLabel} — data table</caption>
           <thead>
             <tr className="border-b border-[var(--uxe-border)]">
               <th
                 scope="col"
-                className="py-1.5 pr-3 font-semibold text-[var(--uxe-text-secondary)]"
+                className="py-1.5 pe-3 font-semibold text-[var(--uxe-text-secondary)]"
               >
                 Date
               </th>
               <th
                 scope="col"
-                className="py-1.5 text-right font-semibold text-[var(--uxe-text-secondary)]"
+                className="py-1.5 text-end font-semibold text-[var(--uxe-text-secondary)]"
               >
                 {valueLabel}
               </th>
@@ -522,8 +522,8 @@ export function AreaChart({
           <tbody>
             {points.map((point) => (
               <tr key={point.label} className="border-b border-[var(--uxe-border)] last:border-0">
-                <td className="py-1.5 pr-3">{point.label}</td>
-                <td className="py-1.5 text-right tabular-nums">{point.value}</td>
+                <td className="py-1.5 pe-3">{point.label}</td>
+                <td className="py-1.5 text-end tabular-nums">{point.value}</td>
               </tr>
             ))}
           </tbody>

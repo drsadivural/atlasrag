@@ -213,7 +213,7 @@ export function SlideOver({
         <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-[rgba(16,22,47,0.45)] backdrop-blur-[2px] data-[state=open]:animate-[uxe-fade-in_var(--uxe-duration)_var(--uxe-ease)]" />
         <DialogPrimitive.Content
           className={cn(
-            'fixed inset-y-0 right-0 z-50 flex w-full flex-col border-l border-[var(--uxe-border)]',
+            'fixed inset-y-0 end-0 z-50 flex w-full flex-col border-s border-[var(--uxe-border)]',
             'bg-[var(--uxe-surface)] shadow-[var(--uxe-shadow-xl)] focus:outline-none',
             'data-[state=open]:animate-[uxe-slide-in-right_var(--uxe-duration-slow)_var(--uxe-ease)]',
             widths[width],

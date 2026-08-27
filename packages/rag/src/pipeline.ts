@@ -307,9 +307,38 @@ export async function answerQuestion(
   scope: SourceScope[],
   options: AnswerOptions,
 ): Promise<AnswerResult> {
-  const retrieval = await retrieve(ctx, deps.repo, deps.embedder, question, scope, {
-    finalLimit: options.answerStyle === 'details' ? 16 : 10,
-  });
+  const finalLimit = options.answerStyle === 'details' ? 16 : 10;
+
+  /*
+   * Both sides of the comparison, retrieved separately.
+   *
+   * A consultation that has a document under review is asking a comparative question:
+   * what do the regulations require, and what does this document say about it. Ranking
+   * both corpora together answers only the first half — a thousand-page code has hundreds
+   * of passages about any given topic and a three-page submittal has one, so the code
+   * takes every slot and the answer comes back quoting the regulation with nothing at all
+   * to say about the file the reader just uploaded.
+   *
+   * Each role therefore gets its own retrieval and its own guaranteed share. The project
+   * side is given a third of the slots rather than half: it is the smaller corpus, and the
+   * obligation still has to be quoted in full for the finding to mean anything.
+   */
+  const hasProject = scope.some((s) => s.role === 'project');
+  const hasGoverning = scope.some((s) => s.role === 'governing');
+
+  const retrieval =
+    hasProject && hasGoverning
+      ? mergeRetrievals(
+          await retrieve(ctx, deps.repo, deps.embedder, question, scope, {
+            roles: ['governing'],
+            finalLimit: finalLimit - Math.max(2, Math.round(finalLimit / 3)),
+          }),
+          await retrieve(ctx, deps.repo, deps.embedder, question, scope, {
+            roles: ['project'],
+            finalLimit: Math.max(2, Math.round(finalLimit / 3)),
+          }),
+        )
+      : await retrieve(ctx, deps.repo, deps.embedder, question, scope, { finalLimit });
 
   // Classify every passage against the question itself, so `entailment` reflects whether
   // the passage supports or contradicts what was asked rather than defaulting to context.
@@ -439,13 +468,19 @@ export async function answerQuestion(
     documentsReviewed: toDocumentsReviewed(scope),
     decision: abstain.abstain
       ? 'unable_to_determine'
-      : deriveAskDecision(question, finalClaims, citations, scope),
+      : deriveAskDecision(
+          question,
+          finalClaims,
+          citations,
+          scope,
+          options.answerStyle === 'yes_no',
+        ),
     riskLevel: 'none',
     missingEvidence: abstain.abstain ? [] : failures.map((f) => f.reason),
     uncertainties: failures.map((f) => f.reason),
     followUpQuestion: abstain.abstain ? buildFollowUp(scope) : null,
     abstainReason: abstain.reason,
-    headlineOverride: !abstain.abstain && composed.headline ? composed.headline : null,
+    headlineOverride: !abstain.abstain ? usableHeadline(composed.headline, verified) : null,
     summaryOverride: !abstain.abstain && composed.summary ? composed.summary : null,
     modelDescriptor: `${deps.chat.id}:${deps.chat.model} + ${deps.embedder.id}:${deps.embedder.model}`,
     scope: `Question answered against ${scope.length} selected source version(s).`,
@@ -463,6 +498,44 @@ export async function answerQuestion(
 }
 
 /**
+ * The provider's headline, unless it is just a piece of the evidence.
+ *
+ * A headline is supposed to say what the answer is. Asked for one, a model will sometimes
+ * return the most relevant sentence it was given instead — and a reader who opened a
+ * consultation to find out whether their submittal complies gets a clause of the fire code
+ * back, mid-sentence, hyphenation and all. That is not an answer to anything.
+ *
+ * Detected by containment rather than by length or punctuation: if the words are already
+ * sitting inside a verified excerpt, the model quoted rather than concluded, and the
+ * computed headline — which states the finding — is used instead.
+ */
+function usableHeadline(headline: string, verified: Citation[]): string | null {
+  const candidate = normalizeForMatch(headline);
+  if (candidate.length === 0) return null;
+  const quoted = verified.some((citation) =>
+    normalizeForMatch(citation.supportingExcerpt).includes(candidate.slice(0, 80)),
+  );
+  return quoted ? null : headline;
+}
+
+/**
+ * Two retrievals into one, keeping every candidate and the first telemetry.
+ *
+ * Candidates from different roles never collide — a chunk belongs to one source — so this
+ * is a concatenation rather than a merge. The order is governing first because that is the
+ * order the obligation and the evidence for it are read in.
+ */
+function mergeRetrievals(
+  governing: Awaited<ReturnType<typeof retrieve>>,
+  project: Awaited<ReturnType<typeof retrieve>>,
+): Awaited<ReturnType<typeof retrieve>> {
+  return {
+    ...governing,
+    candidates: [...governing.candidates, ...project.candidates],
+  };
+}
+
+/**
  * A yes/no question deserves a yes/no answer; an open question does not.
  * Detecting the question form here keeps `decision` null for "what does X say?" rather
  * than forcing a binary onto something that was never binary.
@@ -472,12 +545,22 @@ function deriveAskDecision(
   claims: Claim[],
   citations: Citation[],
   scope: SourceScope[],
+  /**
+   * The reader asked for a verdict, whatever shape the question took.
+   *
+   * The polar-form test below is a guess at intent from the wording, and it is the right
+   * guess when nobody has said otherwise — forcing YES or NO onto "what does the code say
+   * about X" would be answering a question that was not asked. Choosing the Yes / No
+   * answer style says otherwise explicitly, and a screen that then shows no verdict at all
+   * has ignored the only instruction it was given.
+   */
+  requireVerdict = false,
 ): 'yes' | 'no' | 'unable_to_determine' | null {
   const isPolar =
     /^\s*(does|do|is|are|can|may|must|shall|should|will|has|have|did|was|were)\b/i.test(
       question.trim(),
     );
-  if (!isPolar) return null;
+  if (!isPolar && !requireVerdict) return null;
 
   const supported = claims.filter((c) => c.supported);
   if (supported.length === 0) return 'unable_to_determine';

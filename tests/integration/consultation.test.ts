@@ -7,7 +7,7 @@ import {
   type Harness,
   type RegisteredAccount,
 } from './harness.js';
-import { ask, uploadFixture } from './helpers.js';
+import { ask, fixtureBytes, uploadFixture } from './helpers.js';
 
 let harness: Harness;
 let owner: RegisteredAccount;
@@ -102,6 +102,120 @@ describe('asking a question', () => {
       ).toBe(opened.body.citation.supportingExcerpt);
       expect(opened.body.documentTitle).toBeTruthy();
     }
+  }, 120_000);
+
+  it('reviews a document uploaded into the conversation against the knowledge base', async () => {
+    /*
+     * The two kinds of document, and the difference between them.
+     *
+     * The knowledge base holds the regulations and does not change. What somebody drops
+     * into a conversation is the thing being examined, and it never becomes a knowledge
+     * source — so it has to be attached to that conversation as its project document, or
+     * the answer comes back quoting the code with nothing to say about the file that was
+     * just sent. That attachment was never wired: the upload indexed perfectly and then
+     * sat outside the conversation's scope.
+     */
+    const consultationId = await newConsultation([regulationId]);
+
+    // A document this corpus has not seen: identical bytes take the duplicate path, which
+    // is exercised separately below.
+    const bytes = await fixtureBytes('policy.docx');
+    const ticket = await owner.client.post<{
+      tickets: Array<{ uploadId: string; sourceId: string; uploadUrl: string }>;
+    }>(`/consultations/${consultationId}/uploads`, {
+      files: [
+        {
+          fileName: 'submittal.docx',
+          sizeBytes: bytes.byteLength,
+          contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        },
+      ],
+      tags: [],
+      accessScope: 'workspace',
+      promoteToKnowledge: false,
+    });
+    expect(ticket.status).toBeLessThan(300);
+
+    const uploaded = ticket.body.tickets[0]!;
+    const put = await owner.client.request<{ job?: { id: string } }>(
+      'PUT',
+      new URL(uploaded.uploadUrl, 'http://localhost:8788').pathname.replace('/api/v1', ''),
+      {
+        rawBody: bytes,
+        headers: {
+          'content-type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        },
+      },
+    );
+    expect(put.status).toBeLessThan(300);
+    if (put.body?.job?.id) await waitForJob(owner.client, put.body.job.id);
+
+    const detail = await owner.client.get<{
+      documentCount: number;
+      sources: Array<{ sourceId: string; role: string }>;
+    }>(`/consultations/${consultationId}`);
+
+    const attached = detail.body.sources.find((s) => s.sourceId === uploaded.sourceId);
+    expect(attached?.role).toBe('project');
+    expect(detail.body.documentCount).toBeGreaterThan(0);
+
+    // And it stays out of the knowledge base: consultation inputs are not approved sources.
+    const knowledge = await owner.client.get<{ items: Array<{ id: string }> }>(
+      '/sources?status=ready&pageSize=100&promoted=true',
+    );
+    expect(knowledge.body.items.some((item) => item.id === uploaded.sourceId)).toBe(false);
+  }, 180_000);
+
+  it('attaches the copy it already has when the same bytes arrive again', async () => {
+    /*
+     * Already indexed is not already attached. Answering "we have those bytes" and doing
+     * nothing else leaves the conversation with nothing to review, and the upload looks
+     * like it worked.
+     */
+    const consultationId = await newConsultation([regulationId]);
+    const bytes = await fixtureBytes('project-plan.pdf');
+
+    const ticket = await owner.client.post<{
+      tickets: Array<{ uploadId: string; sourceId: string; uploadUrl: string }>;
+    }>(`/consultations/${consultationId}/uploads`, {
+      files: [
+        { fileName: 'again.pdf', sizeBytes: bytes.byteLength, contentType: 'application/pdf' },
+      ],
+      tags: [],
+      accessScope: 'workspace',
+      promoteToKnowledge: false,
+    });
+    const uploaded = ticket.body.tickets[0]!;
+
+    const put = await owner.client.request<{ duplicate?: boolean; sourceId: string }>(
+      'PUT',
+      new URL(uploaded.uploadUrl, 'http://localhost:8788').pathname.replace('/api/v1', ''),
+      { rawBody: bytes, headers: { 'content-type': 'application/pdf' } },
+    );
+    expect(put.body.duplicate).toBe(true);
+
+    const detail = await owner.client.get<{ sources: Array<{ sourceId: string; role: string }> }>(
+      `/consultations/${consultationId}`,
+    );
+    expect(detail.body.sources.find((s) => s.sourceId === projectId)?.role).toBe('project');
+  }, 120_000);
+
+  it('gives a verdict in Yes / No style even when the question is not phrased as one', async () => {
+    /*
+     * Choosing that style is the instruction. Reading the question's grammar is the right
+     * guess when nobody has said what they want — but a screen that shows no verdict at
+     * all, to somebody who asked for exactly one, has ignored the only thing it was told.
+     */
+    const consultationId = await newConsultation([regulationId]);
+    const result = await ask(
+      owner.client,
+      consultationId,
+      'Emergency lighting illuminance on the escape route.',
+      { answerStyle: 'yes_no' },
+    );
+
+    expect(result.answer).not.toBeNull();
+    expect(['yes', 'no', 'unable_to_determine']).toContain(result.answer!.decision);
   }, 120_000);
 
   it('abstains rather than inventing an answer the sources do not contain', async () => {

@@ -122,7 +122,17 @@ function buildHeadline(
   decision: AnswerDecision | null,
   findings: Finding[],
 ): string {
-  if (input.task === 'check_compliance') {
+  /*
+   * A compliance verdict is only a verdict when requirements were actually tested.
+   *
+   * Asking a compliance question in a conversation runs the answering path, not the full
+   * review, so it can arrive here with no findings at all — and the last line of this
+   * branch used to say "All reviewed requirements are met" to a reader who had just
+   * uploaded a document that nothing had been checked against. Zero of zero is not a pass.
+   * With nothing tested this falls through to the ordinary headline, which describes the
+   * evidence rather than pronouncing on it.
+   */
+  if (input.task === 'check_compliance' && findings.length > 0) {
     const critical = findings.filter((f) => f.result === 'non_compliant').length;
     const gaps = findings.filter((f) => f.result === 'needs_evidence').length;
     if (decision === 'unable_to_determine') {
@@ -133,7 +143,7 @@ function buildHeadline(
     }
     if (gaps > 0)
       return `${gaps} ${gaps === 1 ? 'requirement needs' : 'requirements need'} evidence`;
-    return 'All reviewed requirements are met';
+    return `All ${findings.length} reviewed requirements are met`;
   }
 
   if (input.task === 'summarize') {
@@ -144,6 +154,17 @@ function buildHeadline(
   if (decision === 'unable_to_determine' || input.abstainReason) {
     return 'The selected sources do not answer this question';
   }
+
+  /*
+   * A decided question is headed by the question.
+   *
+   * The verdict is rendered above this line, so the heading's job is to say what was
+   * decided — and the alternative below, the first supported claim, is whatever sentence
+   * the evidence happened to lead with. For a yes/no that is a clause of a regulation
+   * printed where the answer should be, which is what somebody who asked "does this
+   * comply?" was looking at instead of an answer. The question invents nothing.
+   */
+  if (decision === 'yes' || decision === 'no') return truncate(input.question, 140);
 
   const first = input.claims.find((c) => c.supported);
   return first ? truncate(first.text, 110) : 'Answer grounded in the selected sources';
@@ -157,22 +178,31 @@ function buildDecisiveReason(
 ): string | null {
   if (input.abstainReason) return input.abstainReason;
 
-  if (input.task === 'check_compliance') {
+  if (input.task === 'check_compliance' && findings.length > 0) {
     const blocking = findings.find((f) => f.result === 'non_compliant');
     if (blocking) return blocking.finding;
     const gap = findings.find((f) => f.result === 'needs_evidence');
     if (gap) return gap.finding;
-    if (findings.length > 0) {
-      return `Every one of the ${findings.length} reviewed requirements is supported by evidence in the project documents.`;
-    }
-    return null;
+    return `Every one of the ${findings.length} reviewed requirements is supported by evidence in the project documents.`;
   }
 
   if (decision === 'unable_to_determine') return null;
 
   const primary = verified[0];
   if (!primary) return null;
-  return `${primary.documentTitle} states: "${truncate(primary.supportingExcerpt, 200)}" (${formatLocator(primary)}).`;
+
+  /*
+   * Both sides, when there are two.
+   *
+   * The reason under a Yes / No verdict is what the reader checks the verdict against, and
+   * quoting only the regulation answers half the question they asked: they wanted to know
+   * what their own document says about it. Where the evidence spans more than one document
+   * the second one is named too.
+   */
+  const other = verified.find((c) => c.documentTitle !== primary.documentTitle);
+  const lead = `${primary.documentTitle} states: "${truncate(primary.supportingExcerpt, 180)}" (${formatLocator(primary)}).`;
+  if (!other) return lead;
+  return `${lead} ${other.documentTitle} states: "${truncate(other.supportingExcerpt, 180)}" (${formatLocator(other)}).`;
 }
 
 function buildKeyFindings(input: AssembleInput, findings: Finding[]): string[] {

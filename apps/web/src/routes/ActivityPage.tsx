@@ -142,7 +142,7 @@ export function ActivityPage() {
               columns={[
                 {
                   key: 'summary',
-                  header: 'Event',
+                  header: t('table.event'),
                   primary: true,
                   render: (row) => (
                     <span className="flex min-w-0 items-start gap-2.5">
@@ -178,7 +178,7 @@ export function ActivityPage() {
                 },
                 {
                   key: 'category',
-                  header: 'Category',
+                  header: t('table.category'),
                   render: (row) => (
                     <Badge tone="neutral" size="sm">
                       {row.category}

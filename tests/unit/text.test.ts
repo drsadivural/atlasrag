@@ -8,6 +8,7 @@ import {
   lightStem,
   normalizeForMatch,
   normalizeWhitespace,
+  rejoinHyphenatedLines,
   splitSentences,
   truncateExcerpt,
 } from '@uxe/rag';
@@ -79,6 +80,32 @@ describe('findExcerpt', () => {
   });
 });
 
+describe('finding a quotation that the page wrapped', () => {
+  /*
+   * The needle is rejoined by normalisation, so the haystack has to be too. When only one
+   * side was, every citation quoting a hyphen-wrapped word stopped verifying — and an
+   * answer with no verified citations abstains, which is how a working consultation turns
+   * into "the selected sources do not answer this question".
+   */
+  const page =
+    'Where a fire pump set only serves \ninternal building systems, the capaci-\nty of the pump sets shall suffice.';
+
+  it('locates it when the quote reads as one word', () => {
+    const span = findExcerpt(page, 'the capacity of the pump sets');
+    expect(span).not.toBeNull();
+    // The offsets still land on the real characters, hyphen and newline included.
+    expect(page.slice(span!.start, span!.end)).toContain('capaci-');
+  });
+
+  it('locates it when the quote carries the break as a space', () => {
+    expect(findExcerpt(page, 'the capaci- ty of the pump sets')).not.toBeNull();
+  });
+
+  it('still refuses text that is genuinely not there', () => {
+    expect(findExcerpt(page, 'the capacity of the sprinkler risers')).toBeNull();
+  });
+});
+
 describe('normalisation', () => {
   it('collapses whitespace without changing case', () => {
     expect(normalizeWhitespace('  A   B \n C ')).toBe('A B C');
@@ -90,6 +117,36 @@ describe('normalisation', () => {
 
   it('folds unicode look-alikes', () => {
     expect(normalizeForMatch('“quoted” – dash')).toBe('"quoted" - dash');
+  });
+
+  /*
+   * A hyphen a typesetter put at the end of a line comes out of a PDF as a real character.
+   * Collapsing the newline after it leaves "capaci- ty" inside a sentence — in the stored
+   * page text, in every chunk built from it, and so in the quotation printed under an
+   * answer as what the regulation says. It does not say that.
+   */
+  it('rejoins a word the page broke across a line', () => {
+    expect(rejoinHyphenatedLines('the capaci-\nty of the pump')).toBe('the capacity of the pump');
+    expect(normalizeWhitespace('the capaci-\n  ty of the pump')).toBe('the capacity of the pump');
+  });
+
+  it('rejoins it after the line break has already been collapsed to a space', () => {
+    // Text that has been through anything that flattens newlines keeps the break only as
+    // "capaci- ty", and that is the form a model hands back in a headline.
+    expect(rejoinHyphenatedLines('the capaci- ty of the pump')).toBe('the capacity of the pump');
+  });
+
+  it('leaves a hyphen that was not a line break alone', () => {
+    // A space before it was never a wrap, and a capital after it says the break was not one.
+    expect(rejoinHyphenatedLines('two -\nthree')).toBe('two -\nthree');
+    expect(rejoinHyphenatedLines('well-\nKnown')).toBe('well-\nKnown');
+    // No whitespace after the hyphen: written as one word, and it stays that way.
+    expect(rejoinHyphenatedLines('fire-rated door')).toBe('fire-rated door');
+    expect(rejoinHyphenatedLines('a range of 5 - 10 metres')).toBe('a range of 5 - 10 metres');
+  });
+
+  it('does not touch a line break with no hyphen', () => {
+    expect(normalizeWhitespace('first line\nsecond line')).toBe('first line second line');
   });
 });
 

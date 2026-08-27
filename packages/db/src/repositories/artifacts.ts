@@ -484,6 +484,26 @@ export class AuditRepository {
 export class SettingsRepository {
   constructor(private readonly db: Database) {}
 
+  /**
+   * Removes a configuration outright.
+   *
+   * There is no soft delete here: the row holds an encrypted provider credential, and
+   * "removed" has to mean the key is gone, not hidden. A primary that is deleted leaves the
+   * capability without one, and the resolver falls back to the deterministic engine — which
+   * is the correct outcome, and a visible one, rather than a silent switch to another key.
+   */
+  async deleteModelConfiguration(ctx: TenantContext, id: string) {
+    requirePermission(ctx, 'settings:models');
+    const [row] = await this.db
+      .delete(modelConfigurations)
+      .where(
+        and(eq(modelConfigurations.id, id), eq(modelConfigurations.workspaceId, ctx.workspaceId)),
+      )
+      .returning();
+    if (!row) throw new NotFoundError('Model configuration');
+    return row;
+  }
+
   async listModelConfigurations(ctx: TenantContext) {
     requirePermission(ctx, 'settings:read');
     return this.db
@@ -539,6 +559,7 @@ export class SettingsRepository {
       isFallback: boolean;
       enabled: boolean;
       credentialEncrypted: string | null;
+      credentialLast4: string | null;
     },
   ) {
     requirePermission(ctx, 'settings:models');
@@ -569,6 +590,7 @@ export class SettingsRepository {
           isFallback: input.isFallback,
           enabled: input.enabled,
           credentialEncrypted: input.credentialEncrypted,
+          credentialLast4: input.credentialLast4,
           health:
             input.provider === 'deterministic'
               ? 'healthy'
@@ -588,9 +610,13 @@ export class SettingsRepository {
             isPrimary: input.isPrimary,
             isFallback: input.isFallback,
             enabled: input.enabled,
-            // A null credential on update means "leave the stored key alone".
+            // A null credential on update means "leave the stored key alone" — and the
+            // hint has to move with it, or the list would name a key that is no longer there.
             ...(input.credentialEncrypted
-              ? { credentialEncrypted: input.credentialEncrypted }
+              ? {
+                  credentialEncrypted: input.credentialEncrypted,
+                  credentialLast4: input.credentialLast4,
+                }
               : {}),
             updatedAt: new Date(),
           },

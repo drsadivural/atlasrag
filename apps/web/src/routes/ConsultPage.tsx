@@ -204,7 +204,7 @@ export function ConsultPage() {
             <ChevronLeft className="h-4 w-4" aria-hidden />
             {t('consult.consultations')}
           </Button>
-          <span className="ml-auto" />
+          <span className="ms-auto" />
           {consultation && (
             <Button variant="secondary" size="sm" onClick={() => setRailOpen(true)}>
               <Settings2 className="h-4 w-4" aria-hidden />
@@ -394,7 +394,7 @@ function HistoryPanel({
   return (
     <>
       <aside
-        className="hidden w-[300px] shrink-0 border-r border-[var(--uxe-border)] bg-[var(--uxe-surface)] xl:block"
+        className="hidden w-[300px] shrink-0 border-e border-[var(--uxe-border)] bg-[var(--uxe-surface)] xl:block"
         aria-label={t('consult.consultations')}
       >
         {content}
@@ -461,7 +461,7 @@ function ConsultationListItem({
           navigate(`/consult/${consultation.id}`);
           onSelected?.();
         }}
-        className="flex min-w-0 flex-1 items-start gap-2.5 text-left"
+        className="flex min-w-0 flex-1 items-start gap-2.5 text-start"
         aria-current={active ? 'page' : undefined}
       >
         <span
@@ -1120,7 +1120,7 @@ function Composer({
               <span className="max-sm:sr-only">{t('consult.url')}</span>
             </Button>
 
-            <span className="ml-auto flex items-center gap-2">
+            <span className="ms-auto flex items-center gap-2">
               <span className="hidden text-[12px] text-[var(--uxe-text-tertiary)] sm:inline">
                 {t('consult.sendHint')}
               </span>
@@ -1636,7 +1636,7 @@ function EvidencePanel({
   return (
     <>
       <aside
-        className="hidden w-[var(--uxe-rail-width)] shrink-0 overflow-y-auto border-l border-[var(--uxe-border)] bg-[var(--uxe-surface)] p-4 xl:block"
+        className="hidden w-[var(--uxe-rail-width)] shrink-0 overflow-y-auto border-s border-[var(--uxe-border)] bg-[var(--uxe-surface)] p-4 xl:block"
         aria-label={t('consult.evidenceOutput')}
       >
         <h2 className="mb-4 text-[16px] font-semibold text-[var(--uxe-text)]">

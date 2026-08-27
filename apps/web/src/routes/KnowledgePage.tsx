@@ -743,7 +743,7 @@ export function UploadZone({
           {t('knowledge.websiteUrl')}
         </Button>
 
-        <div className="ml-auto">
+        <div className="ms-auto">
           <AutoSyncToggle />
         </div>
       </div>

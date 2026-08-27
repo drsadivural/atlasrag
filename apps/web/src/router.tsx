@@ -76,8 +76,18 @@ function RequireAuth() {
     return <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />;
   }
 
+  /*
+   * The workspace's language, not the account's.
+   *
+   * Settings → General is the only place the language can be changed, and it changes the
+   * workspace. Rendering from a per-account field that no screen can edit meant picking
+   * Arabic there did nothing at all — the setting saved, and the application carried on in
+   * English. The account's own locale stands in only while a workspace is not loaded.
+   */
+  const locale = session.workspace?.locale ?? session.user.locale;
+
   return (
-    <I18nProvider locale={session.user.locale}>
+    <I18nProvider locale={locale}>
       <AppShell>
         <Boundary>
           <Outlet />

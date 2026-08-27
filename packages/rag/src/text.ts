@@ -29,9 +29,31 @@ export function foldUnicode(input: string): string {
   return out;
 }
 
+/**
+ * Rejoins a word a PDF broke across a line.
+ *
+ * Extractors emit the hyphen a typesetter put at a line end as a real character, so
+ * collapsing the newline that followed it leaves "capaci- ty" in the middle of a sentence
+ * — in stored page text, in every chunk built from it, and therefore in the quotation
+ * printed under an answer as what the regulation says. It does not say that.
+ *
+ * The join is deliberately narrow: a letter, a hyphen, then whitespace — a line break or
+ * at least one space — then a lower-case letter. The whitespace is what makes it a wrap,
+ * which is why "fire-rated" is left exactly as written, and the space form is included
+ * because by the time text has passed through anything that collapses newlines the break
+ * survives only as "capaci- ty". A hyphen with a space *before* it is a dash and does not
+ * match; "well-\nKnown" keeps its hyphen because the capital says the break was not one.
+ *
+ * Compounds that legitimately end a line lose their hyphen under this rule. That is the
+ * price of the common case being right, and the common case is overwhelmingly more common.
+ */
+export function rejoinHyphenatedLines(input: string): string {
+  return input.replace(/(\p{L})-(?:[ \t]*\r?\n[ \t]*|[ \t]+)(\p{Ll})/gu, '$1$2');
+}
+
 /** Collapses whitespace and folds look-alike characters, preserving case. */
 export function normalizeWhitespace(input: string): string {
-  return foldUnicode(input).replace(/\s+/g, ' ').trim();
+  return rejoinHyphenatedLines(foldUnicode(input)).replace(/\s+/g, ' ').trim();
 }
 
 /** Aggressive form used only for comparison, never for display or storage. */
@@ -251,6 +273,25 @@ export function findExcerpt(haystack: string, needle: string): MatchSpan | null 
     const raw = haystack[i] as string;
     const folded = foldUnicode(raw);
     if (folded === '') continue;
+
+    /*
+     * The same wrap-joining the needle gets, applied to the haystack.
+     *
+     * `normalizeForMatch` rejoins a word the page broke across a line, so a needle reads
+     * "capacity". If this loop left the haystack reading "capaci- ty" the two could never
+     * meet, and every citation quoting a wrapped word — which in a typeset code is a great
+     * many of them — would be marked unverified and drag the answer into abstaining. These
+     * two rules have to stay identical; see rejoinHyphenatedLines.
+     */
+    if (folded === '-' && /\p{L}/u.test(normalized.at(-1) ?? '')) {
+      const wrap = /^(?:[ \t]*\r?\n[ \t]*|[ \t]+)(\p{Ll})/u.exec(haystack.slice(i + 1));
+      if (wrap) {
+        // Skip the hyphen and the whitespace; the loop's own increment lands on the letter.
+        i += wrap[0].length - (wrap[1]?.length ?? 1);
+        pendingSpace = false;
+        continue;
+      }
+    }
 
     for (const ch of folded) {
       if (/\s/.test(ch)) {

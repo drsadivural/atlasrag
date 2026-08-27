@@ -196,7 +196,7 @@ function DecisionHeader({ answer, style }: { answer: StructuredAnswer; style: An
             {headline}
             {/* Partial compliance is shown alongside NO, never instead of it. */}
             {answer.decisionQualifier && (
-              <span className="ml-2 rounded-[var(--uxe-radius-pill)] bg-[var(--uxe-warning)] px-2 py-0.5 text-[11px] font-semibold text-white uppercase">
+              <span className="ms-2 rounded-[var(--uxe-radius-pill)] bg-[var(--uxe-warning)] px-2 py-0.5 text-[11px] font-semibold text-white uppercase">
                 {answer.decisionQualifier}
               </span>
             )}
@@ -326,7 +326,7 @@ function OptimalBody({
 
       {answer.findings.length > 0 && (
         <div className="overflow-hidden rounded-[var(--uxe-radius-card)] border border-[var(--uxe-border)]">
-          <table className="w-full border-collapse text-left">
+          <table className="w-full border-collapse text-start">
             <caption className="sr-only">Compact evidence table</caption>
             <tbody>
               {answer.findings.slice(0, 8).map((finding) => {
@@ -343,7 +343,7 @@ function OptimalBody({
                     key={finding.findingId}
                     className="border-b border-[var(--uxe-border)] last:border-0"
                   >
-                    <td className="w-8 py-2.5 pl-3">
+                    <td className="w-8 py-2.5 ps-3">
                       <ResultIcon
                         className={cn(
                           'h-4 w-4',
@@ -358,15 +358,15 @@ function OptimalBody({
                         aria-hidden
                       />
                     </td>
-                    <td className="py-2.5 pr-3 text-[14px] font-medium text-[var(--uxe-text)]">
+                    <td className="py-2.5 pe-3 text-[14px] font-medium text-[var(--uxe-text)]">
                       {finding.requirementTitle || finding.requirementReference}
                     </td>
-                    <td className="py-2.5 pr-3">
+                    <td className="py-2.5 pe-3">
                       <Badge tone={meta.tone} size="sm">
                         {t(meta.labelKey as 'compliance.compliant')}
                       </Badge>
                     </td>
-                    <td className="py-2.5 pr-3 text-right">
+                    <td className="py-2.5 pe-3 text-end">
                       {citation ? (
                         <button
                           type="button"
@@ -498,7 +498,7 @@ function DetailsBody({
       {answer.findings.length > 0 && (
         <Section title="Requirement-by-requirement findings">
           <div className="overflow-x-auto rounded-[var(--uxe-radius-card)] border border-[var(--uxe-border)]">
-            <table className="w-full min-w-[880px] border-collapse text-left text-[13px]">
+            <table className="w-full min-w-[880px] border-collapse text-start text-[13px]">
               <caption className="sr-only">Evidence matrix</caption>
               <thead>
                 <tr className="border-b border-[var(--uxe-border)] bg-[var(--uxe-surface-sunken)]">
@@ -537,7 +537,7 @@ function DetailsBody({
                     >
                       <th
                         scope="row"
-                        className="px-3 py-3 text-left font-semibold text-[var(--uxe-text)]"
+                        className="px-3 py-3 text-start font-semibold text-[var(--uxe-text)]"
                       >
                         <span className="block">{finding.requirementReference}</span>
                         <span className="block font-normal text-[var(--uxe-text-secondary)]">
@@ -560,7 +560,7 @@ function DetailsBody({
                           <button
                             type="button"
                             onClick={() => onOpenCitation(citation.citationId)}
-                            className="text-left text-[var(--uxe-cobalt)] hover:underline"
+                            className="text-start text-[var(--uxe-cobalt)] hover:underline"
                           >
                             {formatLocator(citation)}
                           </button>
@@ -577,10 +577,10 @@ function DetailsBody({
                           <span className="text-[var(--uxe-text-tertiary)]">—</span>
                         )}
                       </td>
-                      <td className="px-3 py-3 text-right text-[var(--uxe-text-secondary)] tabular-nums">
+                      <td className="px-3 py-3 text-end text-[var(--uxe-text-secondary)] tabular-nums">
                         {Math.round(finding.confidence * 100)}%
                         {citation && !citation.verified && (
-                          <Badge tone="warning" size="sm" className="ml-1">
+                          <Badge tone="warning" size="sm" className="ms-1">
                             {t('evidence.unverified')}
                           </Badge>
                         )}
@@ -743,7 +743,7 @@ export function CitationChip({
               type="button"
               onClick={() => setExpanded((v) => !v)}
               aria-expanded={expanded}
-              className="block w-full text-left"
+              className="block w-full text-start"
             >
               <span
                 className={cn(

@@ -153,7 +153,7 @@ export function ReportDetailPage() {
                     <span className="font-medium text-[var(--uxe-text)]">
                       {check.name.replace(/_/g, ' ')}
                     </span>
-                    <span className="ml-2 text-[var(--uxe-text-secondary)]">{check.detail}</span>
+                    <span className="ms-2 text-[var(--uxe-text-secondary)]">{check.detail}</span>
                   </span>
                 </li>
               ))}

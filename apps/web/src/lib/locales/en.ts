@@ -326,7 +326,8 @@ export const en = {
   'settings.security': 'Security',
   'settings.retention': 'Retention',
   'settings.connectors': 'Connectors',
-  'gov.brand': 'UXE Consulting AI',
+  // The mark beside it already reads UXE; repeating it made the wordmark say it twice.
+  'gov.brand': 'Consulting AI',
   'gov.edition': 'Government Edition',
   'gov.language': 'Language',
   'gov.english': 'English',
@@ -467,6 +468,33 @@ export const en = {
   'settings.themeLight': 'Light',
   'settings.themeDark': 'Dark',
   'settings.themeSystem': 'Match system',
+
+  // --- Consultation status -----------------------------------------------
+  'consultationStatus.report_ready': 'Ready',
+  'consultationStatus.action_required': 'Action required',
+  'consultationStatus.processing': 'Processing',
+  'consultationStatus.active': 'Active',
+  'consultationStatus.awaiting_input': 'Awaiting input',
+  'consultationStatus.draft': 'Draft',
+  'consultationStatus.archived': 'Archived',
+
+  // --- Tables ------------------------------------------------------------
+  'table.event': 'Event',
+  'table.category': 'Category',
+  'table.consultation': 'Consultation',
+  'table.status': 'Status',
+  'table.compliance': 'Compliance',
+  'table.sources': 'Sources',
+  'table.updated': 'Updated',
+  'table.owner': 'Owner',
+  'table.artifact': 'Artifact',
+  'table.kind': 'Kind',
+  'table.format': 'Format',
+  'table.size': 'Size',
+  'table.notes': 'Notes',
+  'table.generated': 'Generated',
+  'dashboard.noPriorPeriod': 'No prior period',
+  'dashboard.total': 'Total',
 
   // --- Common ------------------------------------------------------------
   'common.search': 'Search',

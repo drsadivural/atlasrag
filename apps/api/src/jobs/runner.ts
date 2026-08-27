@@ -169,9 +169,37 @@ async function runIngestJob(
     storageKey: string;
     fileName: string;
     contentType: string;
+    consultationId?: string | null;
   };
 
   const outcome = await runIngestion(deps, tenant, { ...payload, jobId: job.id });
+
+  /*
+   * A document uploaded into a conversation becomes that conversation's subject.
+   *
+   * This is the whole difference between the two kinds of document here. The knowledge
+   * base holds the regulations and does not change; what somebody drops into Consult Now
+   * is the thing being examined, and it is attached with role 'project' so the review
+   * tests each requirement in the knowledge base against it. Without this the upload
+   * indexed perfectly and then sat outside the conversation's scope, and every answer came
+   * back quoting the code with nothing to say about the file the person had just sent.
+   *
+   * It happens here rather than at upload time because the version has to exist and be
+   * promoted first — the pinned version is what makes the answer reproducible — and it is
+   * added rather than set, so a second document does not evict the first.
+   */
+  if (payload.consultationId && outcome.status === 'ready') {
+    const source = await deps.repos.sources.getById(tenant, payload.sourceId);
+    if (source.currentVersionId) {
+      await deps.repos.consultations.addSource(
+        tenant,
+        payload.consultationId,
+        payload.sourceId,
+        source.currentVersionId,
+        'project',
+      );
+    }
+  }
 
   return {
     ok: true,

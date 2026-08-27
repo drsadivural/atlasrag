@@ -149,7 +149,7 @@ export function ReportsPage() {
               columns={[
                 {
                   key: 'title',
-                  header: 'Artifact',
+                  header: t('table.artifact'),
                   primary: true,
                   render: (row) => (
                     <span className="flex min-w-0 items-center gap-2.5">
@@ -177,7 +177,7 @@ export function ReportsPage() {
                 },
                 {
                   key: 'kind',
-                  header: 'Kind',
+                  header: t('table.kind'),
                   render: (row) => (
                     <Badge tone={row.kind === 'corrected_document' ? 'brand' : 'neutral'} size="sm">
                       {KIND_LABELS[row.kind] ?? row.kind}
@@ -186,7 +186,7 @@ export function ReportsPage() {
                 },
                 {
                   key: 'format',
-                  header: 'Format',
+                  header: t('table.format'),
                   render: (row) => (
                     <span className="text-[var(--uxe-text-secondary)] uppercase">
                       {row.documentType}
@@ -195,7 +195,7 @@ export function ReportsPage() {
                 },
                 {
                   key: 'size',
-                  header: 'Size',
+                  header: t('table.size'),
                   align: 'right',
                   render: (row) => (
                     <span className="text-[var(--uxe-text-secondary)] tabular-nums">
@@ -205,7 +205,7 @@ export function ReportsPage() {
                 },
                 {
                   key: 'disclosures',
-                  header: 'Notes',
+                  header: t('table.notes'),
                   render: (row) =>
                     row.disclosures.length > 0 ? (
                       <Tooltip
@@ -233,7 +233,7 @@ export function ReportsPage() {
                 },
                 {
                   key: 'created',
-                  header: 'Generated',
+                  header: t('table.generated'),
                   render: (row) => (
                     <span className="whitespace-nowrap text-[var(--uxe-text-secondary)]">
                       {formatRelative(row.createdAt)}
