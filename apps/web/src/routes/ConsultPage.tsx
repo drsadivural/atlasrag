@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  AlertTriangle,
   ArrowRight,
   CheckCircle2,
   ChevronLeft,
+  ClipboardCheck,
   FileEdit,
   FileText,
   HelpCircle,
@@ -17,7 +19,6 @@ import {
   Search,
   Send,
   Settings2,
-  ClipboardCheck,
   Sparkles,
   Square,
   X,
@@ -97,6 +98,23 @@ export function ConsultPage() {
     queryKey: ['consultation', consultationId],
     queryFn: () => api.get<ConsultationDetail>(`/consultations/${consultationId}`),
     enabled: Boolean(consultationId),
+    /*
+     * A backstop while an answer is being produced.
+     *
+     * The stream is the fast path and does the work; this is what makes it safe for the
+     * stream to miss something. Sending a question and receiving the answer can both
+     * happen before the EventSource for a freshly created consultation has finished
+     * connecting, and with the stream as the only update path that window left the screen
+     * saying "Ayumi is reviewing your sources" over an answer that had already arrived.
+     *
+     * It stops as soon as nothing is outstanding, so a settled conversation is not polled.
+     */
+    refetchInterval: (result) =>
+      result.state.data?.messages.some(
+        (message) => message.jobStatus === 'queued' || message.jobStatus === 'running',
+      )
+        ? 2000
+        : false,
   });
 
   // Seeded from the consultation's stored preference, so the panel opens in the mode the
@@ -1010,6 +1028,26 @@ function Composer({
         {uploading.length > 0 && (
           <p role="status" className="mb-2 text-[12px] text-[var(--uxe-text-secondary)]">
             Uploading {uploading.join(', ')}…
+          </p>
+        )}
+
+        {/*
+          Said before the question rather than after it.
+          
+          With nothing in scope the answer can only come back "unable to determine, no
+          sources are selected" — correct, and a poor way to learn it. The check belongs
+          where it can still be acted on.
+        */}
+        {consultation.sources.length === 0 && (
+          <p className="mb-2 flex flex-wrap items-center gap-x-1.5 gap-y-1 rounded-[var(--uxe-radius-control)] border border-[var(--uxe-warning-border)] bg-[var(--uxe-warning-bg)] px-2.5 py-2 text-[12px] text-[var(--uxe-warning-text)]">
+            <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden />
+            {t('consult.noSourcesSelected')}
+            <Link
+              to="/knowledge"
+              className="font-semibold underline underline-offset-2 hover:no-underline"
+            >
+              {t('consult.noSourcesAction')}
+            </Link>
           </p>
         )}
 

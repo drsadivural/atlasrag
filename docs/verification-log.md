@@ -453,6 +453,33 @@ Verified on the live deployment with a 120MB upload, sampled as it ran:
 
 The readings either side of 48MB are the part boundary: it crosses without resetting.
 
+## An answer that never appeared
+
+Reported as a consultation stopping at "Ayumi is reviewing your sources…". The backend
+turned out to be blameless in every variant tried: no sources in scope, sources in scope,
+check-compliance mode, and the 1348-page code as the governing document all answered in
+about a second, and every `consultation_answer` job on the deployment had succeeded.
+
+Two findings, one of them uncomfortable.
+
+**The screen could only be updated by a socket.** The consultation view drove itself
+entirely from the SSE stream, and the stream module's own comment says it is "a live view
+over durable state, never the only delivery path" — but in practice it was. If the stream
+missed the window, nothing else refetched, and the spinner stayed over an answer that had
+already been written. The detail query now polls every two seconds while any message is
+outstanding and stops the moment nothing is, so the stream is the fast path rather than
+the only one. Proved by blocking the stream outright: the answer still arrives in 3.8s.
+
+**The stall itself was not reproduced.** After a dozen attempts across every task mode,
+document size and connection state, the screen never hung. The fix above closes a real
+gap and is verified against a blocked stream; it is not confirmed to be the gap that was
+hit. That distinction belongs in the record rather than in a claim.
+
+What was reproduced, and is worth its own fix: a consultation with **no sources selected**
+can only ever answer "unable to determine — none are currently selected". Correct, and a
+poor way to learn it after waiting. The composer now says so before the question is sent,
+with a way to fix it.
+
 ## Reproducing
 
 ```bash

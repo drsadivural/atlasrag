@@ -237,6 +237,9 @@ export const en = {
   'consult.helpful': 'Helpful',
   'consult.notHelpful': 'Not helpful',
   'consult.thinking': 'Ayumi is reviewing your sources…',
+  'consult.noSourcesSelected':
+    'No sources are selected, so Ayumi has nothing to answer from. Use “Manage sources” above, or',
+  'consult.noSourcesAction': 'open the knowledge base',
 
   // --- Evidence ----------------------------------------------------------
   'evidence.title': 'Evidence',
