@@ -20,10 +20,12 @@
     "@uxe/rag": "workspace:*",
     "dotenv": "17.4.2",
     "hono": "4.13.4",
+    "nodemailer": "9.0.5",
     "zod": "4.4.3"
   },
   "devDependencies": {
     "@types/node": "22.19.2",
+    "@types/nodemailer": "8.0.1",
     "@uxe/config": "workspace:*",
     "tsx": "4.23.12",
     "typescript": "5.9.3",

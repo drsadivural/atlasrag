@@ -1,3 +1,4 @@
+import { createTransport as nodemailerCreateTransport, type Transporter } from 'nodemailer';
 import type { Logger } from '@uxe/observability';
 
 export interface EmailMessage {
@@ -96,6 +97,80 @@ export class ResendEmailDriver implements EmailDriver {
       return { ok: response.ok, detail: response.ok ? null : `status ${response.status}` };
     } catch (error) {
       return { ok: false, detail: error instanceof Error ? error.message : 'unknown' };
+    }
+  }
+}
+
+/**
+ * Ordinary SMTP.
+ *
+ * `smtp` has been in the driver enum since the beginning with nothing behind it, so a
+ * deployment that selected it got the console driver and no warning — mail silently went
+ * nowhere while the configuration said otherwise. This is the implementation that was
+ * missing, and it is the option most operators can actually use: a mailbox and a password,
+ * rather than an account with a particular sending service.
+ *
+ * The connection is verified once, lazily, rather than at construction: a mail server that
+ * is briefly unreachable must not stop the API from starting, and every other outbound
+ * dependency here behaves the same way.
+ */
+export class SmtpEmailDriver implements EmailDriver {
+  readonly id = 'smtp' as const;
+  private transport: Transporter | null = null;
+
+  constructor(
+    private readonly config: {
+      host: string;
+      port: number;
+      user: string;
+      password: string;
+      /**
+       * Implicit TLS, as on port 465. Port 587 is left false and upgrades with STARTTLS,
+       * which nodemailer requires by default — an unencrypted fallback would put the
+       * password on the wire.
+       */
+      secure: boolean;
+    },
+    private readonly from: string,
+    private readonly createTransport: typeof nodemailerCreateTransport = nodemailerCreateTransport,
+  ) {}
+
+  private connection(): Transporter {
+    this.transport ??= this.createTransport({
+      host: this.config.host,
+      port: this.config.port,
+      secure: this.config.secure,
+      requireTLS: !this.config.secure,
+      auth: this.config.user ? { user: this.config.user, pass: this.config.password } : undefined,
+    });
+    return this.transport;
+  }
+
+  async send(message: EmailMessage) {
+    const sent = await this.connection().sendMail({
+      from: this.from,
+      to: message.to,
+      subject: message.subject,
+      text: message.text,
+      html: message.html,
+      headers: { 'X-Entity-Tag': message.tag },
+    });
+    return { id: sent.messageId ?? 'unknown' };
+  }
+
+  async health() {
+    if (!this.config.host) return { ok: false, detail: 'SMTP_HOST is not configured.' };
+    try {
+      await this.connection().verify();
+      return { ok: true, detail: null };
+    } catch (error) {
+      // The message names the host and the failure, never the password.
+      return {
+        ok: false,
+        detail: `${this.config.host}:${this.config.port} — ${
+          error instanceof Error ? error.message : 'unknown error'
+        }`,
+      };
     }
   }
 }

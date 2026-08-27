@@ -333,7 +333,10 @@ export async function addMember(
   const email = `member${accountCounter}@example.test`;
   const password = 'An0ther-Str0ng-Passphrase!';
 
-  const invite = await owner.client.post<{ id: string; inviteToken?: string }>('/users/invite', {
+  const invite = await owner.client.post<{
+    user: { id: string };
+    delivery: { status: string; acceptUrl: string | null };
+  }>('/users/invite', {
     email,
     fullName: `Member ${accountCounter}`,
     role,
@@ -342,11 +345,20 @@ export async function addMember(
     throw new Error(`Invite failed: ${invite.status} ${JSON.stringify(invite.body)}`);
   }
 
-  const message = harness.email.messagesFor(email).at(-1);
-  const token = message
-    ? /token=([A-Za-z0-9_-]+)/.exec(`${message.text} ${message.html}`)?.[1]
-    : null;
-  if (!token) throw new Error(`No invitation token in the email to ${email}`);
+  /*
+   * The link the response hands back, exactly as an administrator on a deployment with no
+   * mail transport would copy it. The email is checked separately, where a transport is
+   * configured; taking the token from here keeps every other test that needs a second
+   * member from depending on the mail driver at all.
+   */
+  const token = invite.body.delivery.acceptUrl
+    ? /token=([A-Za-z0-9_-]+)/.exec(invite.body.delivery.acceptUrl)?.[1]
+    : /token=([A-Za-z0-9_-]+)/.exec(
+        `${harness.email.messagesFor(email).at(-1)?.text ?? ''} ${
+          harness.email.messagesFor(email).at(-1)?.html ?? ''
+        }`,
+      )?.[1];
+  if (!token) throw new Error(`No invitation token for ${email}`);
 
   // Accepted through the real endpoint, exactly as the invitation email's link does.
   const client = new Client(harness);

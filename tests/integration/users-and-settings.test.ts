@@ -271,6 +271,48 @@ describe('workspace settings', () => {
     expect(response.body.reasoningEffort).toBeNull();
   });
 
+  it('does not claim to have sent an email it could not send', async () => {
+    /*
+     * An invitation is a membership and a message. The membership always succeeds; the
+     * message needs a transport this deployment may not have, and reporting the first as
+     * though it were both is how somebody waits a week for an email that was written to a
+     * log file. The test harness runs the console driver, which is exactly that case.
+     */
+    const response = await owner.client.post<{
+      user: { email: string; status: string };
+      delivery: { status: string; driver: string; detail: string | null; acceptUrl: string | null };
+    }>('/users/invite', { email: 'undeliverable@example.test', role: 'member' });
+
+    expect(response.status).toBe(201);
+    expect(response.body.user.status).toBe('invited');
+    expect(response.body.delivery.status).toBe('not_configured');
+    expect(response.body.delivery.driver).toBe('console');
+    expect(response.body.delivery.detail).toMatch(/no mail transport/i);
+
+    // And the invitation still works: the link is handed back so it can be delivered.
+    const url = response.body.delivery.acceptUrl;
+    expect(url).toBeTruthy();
+    const token = /token=([A-Za-z0-9_-]+)/.exec(url ?? '')?.[1];
+    expect(token).toBeTruthy();
+
+    const guest = new Client(harness);
+    const accepted = await guest.post('/auth/invitations/accept', {
+      token,
+      fullName: 'Undeliverable Person',
+      password: 'An0ther-Str0ng-Passphrase!',
+    });
+    expect(accepted.status).toBeLessThan(300);
+  });
+
+  it('refuses an invitation from someone without the permission', async () => {
+    const member = await addMember(harness, owner, 'member');
+    const attempt = await member.client.post('/users/invite', {
+      email: 'not-allowed@example.test',
+      role: 'admin',
+    });
+    expect(attempt.status).toBe(403);
+  }, 120_000);
+
   it('names a saved key by its last four characters and nothing more', async () => {
     const saved = await owner.client.post<{ id: string; credentialLast4: string | null }>(
       '/settings/models',

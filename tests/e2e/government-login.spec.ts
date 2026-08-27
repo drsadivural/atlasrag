@@ -24,17 +24,40 @@ test.beforeEach(async ({ page }) => {
   await page.evaluate(() => localStorage.removeItem('uxe-theme'));
 });
 
-test('leads with UAE PASS and offers no route to an account', async ({ page }) => {
+test('leads with UAE PASS, whichever way accounts are made', async ({ page }) => {
   await page.goto('/login');
   await waitForSettled(page);
 
   await expect(page.getByRole('heading', { name: 'Sign in to your workspace' })).toBeVisible();
   await expect(page.getByRole('button', { name: /sign in with uae pass/i })).toBeVisible();
   await expect(page.getByRole('button', { name: /government sso/i })).toBeVisible();
+});
 
-  // Access is provisioned by an entity administrator.
-  await expect(page.getByRole('link', { name: /create account/i })).toHaveCount(0);
-  await expect(page.getByText(/provisioned by your entity administrator/i)).toBeVisible();
+/*
+ * Whether there is a route to an account is the deployment's decision, and the two states
+ * are mutually exclusive: offering registration while still saying access is provisioned
+ * by an administrator would contradict itself on one screen. Testing exactly one of them
+ * holds against a deployment configured either way, which is what this suite runs against.
+ */
+test('offers a route to an account, or says who provisions one — never both', async ({ page }) => {
+  await page.goto('/login');
+  await waitForSettled(page);
+
+  const register = page.getByRole('link', { name: /create one/i });
+  const provisioned = page.getByText(/provisioned by your entity administrator/i);
+
+  const offersRegistration = (await register.count()) > 0;
+  if (offersRegistration) {
+    await expect(register).toBeVisible();
+    await expect(provisioned).toHaveCount(0);
+
+    // The link has to reach a page that can actually take a registration.
+    await register.click();
+    await expect(page).toHaveURL(/\/register/);
+    await expect(page.getByLabel(/work email/i)).toBeVisible();
+  } else {
+    await expect(provisioned).toBeVisible();
+  }
 });
 
 test('says plainly when a provider is not configured, rather than failing on click', async ({

@@ -366,6 +366,8 @@ export const en = {
   'gov.forgotPassword': 'Forgot password?',
   'gov.signIn': 'Sign in securely',
   'gov.signingIn': 'Signing in',
+  'gov.noAccount': 'Do not have an account yet?',
+  'gov.createAccount': 'Create one',
   'gov.provisioned': 'Access is provisioned by your entity administrator.',
   'gov.privacy': 'Privacy notice',
   'gov.security': 'Security',

@@ -22,9 +22,14 @@ type Stage = 'credentials' | 'mfa';
  *
  * Ordered by the strength of the identity behind it: UAE PASS first and most prominent,
  * then the entity's own directory, and only then an address and a password behind a
- * disclosure. There is no route to an account from here — access is provisioned by an
- * entity administrator, so this screen has no registration link and the federated
- * callbacks refuse an identity that has not already been provisioned.
+ * disclosure.
+ *
+ * Whether there is a route to a new account from here is the deployment's decision, and
+ * the screen asks rather than assumes. Where registration is off — the Government Edition
+ * as specified — access is provisioned by an entity administrator, the card says so, and
+ * the federated callbacks refuse an identity that has not already been provisioned. Where
+ * it is on, offering the link is the honest thing to do: the API would accept the account
+ * either way, and hiding the route only means somebody cannot find it.
  */
 export function AuthCard({
   config,
@@ -360,9 +365,21 @@ export function AuthCard({
         </>
       )}
 
-      <p className="mt-4 text-center text-[0.8125rem] text-[var(--gov-text-secondary)]">
-        {t('gov.provisioned')}
-      </p>
+      {config?.publicRegistration ? (
+        <p className="mt-4 text-center text-[0.8125rem] text-[var(--gov-text-secondary)]">
+          {t('gov.noAccount')}{' '}
+          <Link
+            to="/register"
+            className="rounded-[0.25rem] font-semibold text-[var(--gov-primary)] underline underline-offset-2 hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--gov-focus)]"
+          >
+            {t('gov.createAccount')}
+          </Link>
+        </p>
+      ) : (
+        <p className="mt-4 text-center text-[0.8125rem] text-[var(--gov-text-secondary)]">
+          {t('gov.provisioned')}
+        </p>
+      )}
 
       <nav
         aria-label={t('gov.helpTitle')}

@@ -66,6 +66,9 @@ export function governmentRoutes(deps: AppDeps) {
       // Only stated when the deployment says it is true. An unverified instance claims
       // less rather than printing a compliance line it cannot stand behind.
       dataResidency: deps.env.GOV_DATA_RESIDENCY_STATEMENT === 'true',
+      // The screen must not offer a route the API would refuse, and must not withhold one
+      // it would allow: both are the same question, answered here.
+      publicRegistration: deps.env.ALLOW_PUBLIC_REGISTRATION === 'true',
       allowedDomains: allowedGovernmentDomains(deps.env),
       links: {
         privacy: deps.env.GOV_URL_PRIVACY,

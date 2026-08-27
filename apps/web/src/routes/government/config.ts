@@ -11,6 +11,8 @@ export interface GovernmentConfig {
   uaePass: { available: boolean; environment: string; requiredEnv: string[] };
   sso: { available: boolean; requiredEnv: string[] };
   dataResidency: boolean;
+  /** Whether this deployment offers a route to a new account from the sign-in screen. */
+  publicRegistration: boolean;
   allowedDomains: string[];
   postLoginRoute?: string;
   links: {

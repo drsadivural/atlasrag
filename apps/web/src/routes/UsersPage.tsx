@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { InviteUserResponse } from '@uxe/contracts';
 import { KeyRound, Mail, ShieldCheck, UserPlus, Users, UserX } from 'lucide-react';
 import {
   Avatar,
@@ -267,20 +268,48 @@ function InviteDialog({
   const [message, setMessage] = useState('');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
 
+  /*
+   * The link, kept on screen when nothing was emailed.
+   *
+   * An invitation is a membership and a message. The membership always succeeds; the
+   * message needs a mail transport this deployment may not have, and saying "invitation
+   * sent" regardless is how somebody waits a week for an email that was written to a log
+   * file. When it was not sent the dialog stays open holding the link to pass on.
+   */
+  const [undelivered, setUndelivered] = useState<{ email: string; url: string } | null>(null);
+
   const invite = useMutation({
     mutationFn: () =>
-      api.post('/users/invite', { email, role, groupIds: [], message: message || undefined }),
-    onSuccess: () => {
-      push({
-        tone: 'success',
-        title: 'Invitation sent',
-        description: `${email} has been invited.`,
-      });
+      api.post<InviteUserResponse>('/users/invite', {
+        email,
+        role,
+        groupIds: [],
+        message: message || undefined,
+      }),
+    onSuccess: (result) => {
       void queryClient.invalidateQueries({ queryKey: ['users'] });
-      setEmail('');
-      setMessage('');
       setFieldErrors({});
-      onOpenChange(false);
+
+      if (result.delivery.status === 'sent') {
+        push({
+          tone: 'success',
+          title: 'Invitation sent',
+          description: `${email} has been invited.`,
+        });
+        setEmail('');
+        setMessage('');
+        onOpenChange(false);
+        return;
+      }
+
+      push({
+        tone: 'warning',
+        title: 'Invited, but no email was sent',
+        description: result.delivery.detail ?? 'Send the link below to them yourself.',
+      });
+      if (result.delivery.acceptUrl) {
+        setUndelivered({ email, url: result.delivery.acceptUrl });
+      }
     },
     onError: (error: ApiError) => {
       setFieldErrors(error.fieldErrors);
@@ -293,7 +322,7 @@ function InviteDialog({
       open={open}
       onOpenChange={onOpenChange}
       title={t('users.invite')}
-      description="They receive an email with a single-use link that expires in seven days."
+      description="They receive a single-use link that expires in seven days."
       size="sm"
       footer={
         <>
@@ -312,6 +341,56 @@ function InviteDialog({
       }
     >
       <div className="flex flex-col gap-4">
+        {undelivered && (
+          <div
+            role="status"
+            className="flex flex-col gap-2 rounded-[var(--uxe-radius-control)] border border-[var(--uxe-warning-border)] bg-[var(--uxe-warning-bg)] p-3"
+          >
+            <p className="text-[13px] font-semibold text-[var(--uxe-warning-text)]">
+              {undelivered.email} is invited, but no email was sent
+            </p>
+            <p className="text-[13px] text-[var(--uxe-text)]">
+              This deployment has no mail transport configured. Send them this link — it is
+              single-use and expires in seven days.
+            </p>
+            <code className="overflow-x-auto rounded-[var(--uxe-radius-control)] bg-[var(--uxe-surface)] px-2 py-1.5 font-[family-name:var(--uxe-font-mono)] text-[12px] break-all">
+              {undelivered.url}
+            </code>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  void navigator.clipboard
+                    .writeText(undelivered.url)
+                    .then(() => push({ tone: 'success', title: 'Link copied' }))
+                    .catch(() =>
+                      push({
+                        tone: 'error',
+                        title: 'Could not copy',
+                        description: 'Select the link above and copy it by hand.',
+                      }),
+                    );
+                }}
+              >
+                Copy link
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setUndelivered(null);
+                  setEmail('');
+                  setMessage('');
+                  onOpenChange(false);
+                }}
+              >
+                Done
+              </Button>
+            </div>
+          </div>
+        )}
+
         <Field
           label={t('auth.workEmail')}
           htmlFor="invite-email"

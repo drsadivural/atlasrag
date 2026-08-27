@@ -651,6 +651,41 @@ working consultation started answering "the selected sources do not answer this 
 The live probe caught it one request later. Both sides join now, and there is a test that
 fails if they ever disagree again.
 
+## An invitation nobody received
+
+The invitation worked. The email did not exist.
+
+`EMAIL_DRIVER=console` writes every message to a log and delivers nothing, which is right
+for development and was what this deployment was running. The invite endpoint called
+`send`, got no error — the console driver cannot fail — and the screen said _Invitation
+sent_. So an administrator invited somebody, was told it had gone, and waited.
+
+Two things were wrong and they are different problems.
+
+**Nothing could send.** `smtp` had been in the driver enum from the beginning with no
+implementation behind it, so selecting it fell through to the console driver silently:
+configuration that said mail was being sent, and mail going into a log file. `.env.example`
+documented an `SMTP_URL` that no schema had ever read. There is a real driver now, and
+STARTTLS is required rather than preferred — the alternative is a password on the wire
+against any server that does not advertise it.
+
+**Saying it was sent was the worse half.** An invitation is a membership and a message. The
+membership always succeeds; the message needs a transport this deployment may not have.
+Reporting the first as though it were both is the fake success state the brief rules out,
+and it costs a week of somebody's time before anyone thinks to check. The response now says
+which of the two happened, and when nothing was sent it returns the accept link so an
+administrator can pass it on — a working invitation today, with no credentials at all,
+rather than an apology.
+
+## A route to an account, or a sentence saying there is none
+
+The Government Edition was specified with no public registration: access is provisioned by
+an entity administrator, and the card said so. Adding a registration link while keeping
+that sentence would have contradicted itself on one screen, so it is one or the other,
+chosen by `ALLOW_PUBLIC_REGISTRATION` and answered by the config endpoint the screen
+already asks. The screen never offers a route the API would refuse, or withholds one it
+would allow.
+
 ## Confidence that moved on its own
 
 Found by the suite while the above was being verified: `computeConfidence` failed its own

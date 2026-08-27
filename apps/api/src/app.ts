@@ -57,7 +57,12 @@ import {
   userRoutes,
 } from './routes/misc.js';
 import { storageRoutes } from './routes/storage.js';
-import { ConsoleEmailDriver, ResendEmailDriver, type EmailDriver } from './services/email.js';
+import {
+  ConsoleEmailDriver,
+  ResendEmailDriver,
+  SmtpEmailDriver,
+  type EmailDriver,
+} from './services/email.js';
 import { FilesystemStorage, S3Storage, type StorageDriver } from './services/storage.js';
 import { DocumentWorkerClient } from './services/document-worker.js';
 import { MemoryRateLimiter, type RateLimiter } from './services/rate-limit.js';
@@ -156,7 +161,18 @@ export function buildApp(options: BuildOptions = {}): BuiltApp {
     options.email ??
     (env.EMAIL_DRIVER === 'resend'
       ? new ResendEmailDriver(env.RESEND_API_KEY, env.EMAIL_FROM)
-      : new ConsoleEmailDriver(logger));
+      : env.EMAIL_DRIVER === 'smtp'
+        ? new SmtpEmailDriver(
+            {
+              host: env.SMTP_HOST,
+              port: env.SMTP_PORT,
+              user: env.SMTP_USER,
+              password: env.SMTP_PASSWORD,
+              secure: env.SMTP_SECURE,
+            },
+            env.EMAIL_FROM,
+          )
+        : new ConsoleEmailDriver(logger));
 
   const providers = buildProviders(env);
 

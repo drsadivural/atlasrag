@@ -977,6 +977,33 @@ export const WorkspaceUser = z.object({
 });
 export type WorkspaceUser = z.infer<typeof WorkspaceUser>;
 
+/**
+ * What happened to the invitation, told plainly.
+ *
+ * An invitation is two things: a membership, which always succeeds, and a message, which
+ * depends on a mail transport this deployment may not have. Reporting the first as though
+ * it were both is how somebody waits a week for an email that was written to a log file.
+ * When nothing was sent the link comes back so it can be delivered by hand.
+ */
+export const InviteUserResponse = z.object({
+  user: WorkspaceUser,
+  delivery: z.object({
+    /** 'sent' — a transport accepted it. 'not_configured' — this deployment has none. */
+    status: z.enum(['sent', 'not_configured', 'failed']),
+    /** The mail driver in use, for an operator reading a support question. */
+    driver: z.enum(['console', 'resend', 'smtp']),
+    /** Why it was not sent. Null when it was. */
+    detail: z.string().nullable(),
+    /**
+     * The accept link, returned only when the invitation was not emailed, so an
+     * administrator can pass it on. It is a bearer credential: whoever holds it can join
+     * the workspace as the invited role, and it expires with the invitation.
+     */
+    acceptUrl: z.string().nullable(),
+  }),
+});
+export type InviteUserResponse = z.infer<typeof InviteUserResponse>;
+
 export const InviteUserRequest = z.object({
   email: Email,
   role: Role,

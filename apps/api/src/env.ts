@@ -58,6 +58,12 @@ export const EnvSchema = z.object({
   REQUIRE_EMAIL_VERIFICATION: z.enum(['true', 'false']).optional(),
   EMAIL_FROM: z.string().default('UXE Consulting AI <no-reply@example.com>'),
   RESEND_API_KEY: z.string().default(''),
+  SMTP_HOST: z.string().default(''),
+  SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(587),
+  SMTP_USER: z.string().default(''),
+  SMTP_PASSWORD: z.string().default(''),
+  /** Implicit TLS, as on port 465. Port 587 upgrades with STARTTLS instead. */
+  SMTP_SECURE: boolish.default(false),
 
   /* --- Government Edition ------------------------------------------------ */
   /**
@@ -91,6 +97,16 @@ export const EnvSchema = z.object({
    * because the honest default for an unverified deployment is to say less.
    */
   GOV_DATA_RESIDENCY_STATEMENT: z.enum(['true', 'false']).default('false'),
+  /*
+   * Whether the sign-in screen offers a route to a new account.
+   *
+   * The Government Edition was specified with none: access is provisioned by an entity
+   * administrator, and a public registration link on a screen headed "Authorized UAE
+   * government personnel only" contradicts the sentence above it. It is a setting rather
+   * than a constant because this build is also run outside that context, where somebody
+   * has to be able to make the first account without one already existing.
+   */
+  ALLOW_PUBLIC_REGISTRATION: z.enum(['true', 'false']).default('false'),
 
   GOV_URL_PRIVACY: z.string().default('/legal/privacy'),
   GOV_URL_SECURITY: z.string().default('/legal/security'),
@@ -215,6 +231,9 @@ export function loadEnv(raw: Record<string, string | undefined>): AppEnv {
   }
   if (env.EMBEDDING_PROVIDER === 'openai' && !env.OPENAI_API_KEY) {
     issues.push('EMBEDDING_PROVIDER=openai requires OPENAI_API_KEY.');
+  }
+  if (env.EMAIL_DRIVER === 'smtp' && !env.SMTP_HOST) {
+    issues.push('EMAIL_DRIVER=smtp requires SMTP_HOST.');
   }
   if (env.EMAIL_DRIVER === 'resend' && !env.RESEND_API_KEY) {
     issues.push('EMAIL_DRIVER=resend requires RESEND_API_KEY.');

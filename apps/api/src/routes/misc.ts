@@ -635,16 +635,60 @@ export function userRoutes(deps: AppDeps) {
         status: 'invited',
       });
 
-      await deps.services.email.send({
-        to: input.email,
-        ...EmailTemplates.invitation({
-          inviterName: session.user.fullName,
-          workspaceName: workspace?.name ?? 'the workspace',
-          role: input.role.replace(/_/g, ' '),
-          url: `${deps.env.PUBLIC_APP_URL}/accept-invite?token=${encodeURIComponent(token)}`,
-          message: input.message ?? null,
-        }),
-      });
+      const acceptUrl = `${deps.env.PUBLIC_APP_URL}/accept-invite?token=${encodeURIComponent(token)}`;
+
+      /*
+       * Whether the message actually went anywhere.
+       *
+       * The membership is created either way — that part cannot fail for want of a mail
+       * server — but saying "invitation sent" when the console driver wrote it to a log is
+       * how somebody waits a week for an email that never existed. A deployment with no
+       * transport gets the link back instead, which is a working invitation today rather
+       * than an apology.
+       */
+      const driver = deps.services.email.id;
+      let delivery: {
+        status: 'sent' | 'not_configured' | 'failed';
+        detail: string | null;
+        acceptUrl: string | null;
+      };
+
+      if (driver === 'console') {
+        delivery = {
+          status: 'not_configured',
+          detail:
+            'This deployment has no mail transport, so no email was sent. Send the invitation link yourself.',
+          acceptUrl,
+        };
+      } else {
+        try {
+          await deps.services.email.send({
+            to: input.email,
+            ...EmailTemplates.invitation({
+              inviterName: session.user.fullName,
+              workspaceName: workspace?.name ?? 'the workspace',
+              role: input.role.replace(/_/g, ' '),
+              url: acceptUrl,
+              message: input.message ?? null,
+            }),
+          });
+          delivery = { status: 'sent', detail: null, acceptUrl: null };
+        } catch (error) {
+          // The invitation stands; only the message failed, and the link still works.
+          deps.logger.warn('invite.email_failed', {
+            driver,
+            reason: error instanceof Error ? error.message : 'unknown',
+          });
+          delivery = {
+            status: 'failed',
+            detail:
+              error instanceof Error
+                ? `The mail server refused the message: ${error.message}`
+                : 'The mail server refused the message.',
+            acceptUrl,
+          };
+        }
+      }
 
       await deps.repos.audit.record({
         organizationId: tenant.organizationId,
@@ -664,19 +708,22 @@ export function userRoutes(deps: AppDeps) {
 
       return c.json(
         {
-          id: user.id,
-          email: user.email,
-          fullName: user.fullName,
-          avatarUrl: null,
-          role: input.role,
-          status: 'invited' as const,
-          groups: [],
-          mfaEnabled: false,
-          activeSessions: 0,
-          lastActiveAt: null,
-          invitedAt: invitation.createdAt.toISOString(),
-          joinedAt: null,
-          accessibleSourceCount: 0,
+          user: {
+            id: user.id,
+            email: user.email,
+            fullName: user.fullName,
+            avatarUrl: null,
+            role: input.role,
+            status: 'invited' as const,
+            groups: [],
+            mfaEnabled: false,
+            activeSessions: 0,
+            lastActiveAt: null,
+            invitedAt: invitation.createdAt.toISOString(),
+            joinedAt: null,
+            accessibleSourceCount: 0,
+          },
+          delivery: { ...delivery, driver },
         },
         201,
       );

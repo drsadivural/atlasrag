@@ -368,6 +368,8 @@ export const ar: Catalogue = {
   'gov.forgotPassword': 'هل نسيت كلمة المرور؟',
   'gov.signIn': 'تسجيل دخول آمن',
   'gov.signingIn': 'جارٍ تسجيل الدخول',
+  'gov.noAccount': 'ليس لديك حساب بعد؟',
+  'gov.createAccount': 'أنشئ حساباً',
   'gov.provisioned': 'يتم منح الوصول من قِبل مسؤول جهتك.',
   'gov.privacy': 'إشعار الخصوصية',
   'gov.security': 'الأمان',
