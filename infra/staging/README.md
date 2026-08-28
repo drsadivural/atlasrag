@@ -149,3 +149,37 @@ same stack, just upstream of the tunnel:
 ```bash
 SMOKE_API=http://127.0.0.1:4173/api/v1 SMOKE_WEB=http://127.0.0.1:4173 pnpm smoke
 ```
+
+## Cloudflare Access
+
+`apply-access.sh` puts an Access application in front of a hostname, or in front of one
+path on it. The token needs two permission groups that are not in a default API token:
+
+    Account -> Access: Apps and Policies                         -> Edit
+    Account -> Access: Organizations, Identity Providers, Groups -> Read
+
+With no identity provider configured, Access falls back to its own one-time PIN: an
+allowed address receives a code by email, and nothing else has to be set up.
+
+### What is protected, and why only that
+
+    CLOUDFLARE_API_TOKEN=... \
+    ACCESS_HOSTNAME='consultnow.ayonix.com/api/v1/metrics' \
+    ACCESS_APP_NAME='UXE Consulting AI — metrics' \
+    bash infra/staging/apply-access.sh
+
+The metrics endpoint answered request volumes, route names and latencies to anybody who
+asked on a public hostname. That is operational intelligence and it is now behind Access.
+
+The application itself is deliberately **not** fronted. It was going to be, back when the
+staging site had no accounts of its own and a shared password was the only door. It has
+accounts now: public registration, invitations emailed to addresses outside the
+organisation, and password-reset links. An Access policy in front of the whole hostname
+would stop every one of those at a login page belonging to a different system — the invited
+person cannot accept, because being invited is exactly the state of not being on the
+allowlist yet.
+
+Fronting the whole hostname is one command when it is the right thing, and the sentence
+above is the reason to think about it first:
+
+    ACCESS_HOSTNAME='consultnow.ayonix.com' bash infra/staging/apply-access.sh
