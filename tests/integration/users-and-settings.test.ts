@@ -375,6 +375,34 @@ describe('workspace settings', () => {
     expect(attempt.status).toBe(403);
   }, 120_000);
 
+  it('acknowledges a finding without pretending it was fixed', async () => {
+    /*
+     * The distinction the whole endpoint exists to keep. A non-compliant finding is a
+     * statement about a real building; nothing pressed on a dashboard makes it untrue, so
+     * the response says "acknowledged" rather than "fixed" and the finding stays where it
+     * is. Only the reminder stops.
+     */
+    const response = await owner.client.post<{ outcome: string; detail: string }>(
+      '/dashboard/attention/01JQ8Z9CT2K5V6W7X8Y9Z0ABCD/resolve',
+      { kind: 'critical_gap' },
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.outcome).toBe('acknowledged');
+    expect(response.body.detail).toMatch(/not be raised here again/i);
+  });
+
+  it('refuses to re-index for somebody whose role cannot', async () => {
+    // Looking at the dashboard is not the same as being allowed to reprocess a document,
+    // so the branch that actually changes something checks for itself.
+    const member = await addMember(harness, owner, 'read_only');
+    const attempt = await member.client.post(
+      '/dashboard/attention/01JQ8Z9CT2K5V6W7X8Y9Z0ABCD/resolve',
+      { kind: 'stale_knowledge' },
+    );
+    expect(attempt.status).toBe(403);
+  }, 120_000);
+
   it('names a saved key by its last four characters and nothing more', async () => {
     const saved = await owner.client.post<{ id: string; credentialLast4: string | null }>(
       '/settings/models',

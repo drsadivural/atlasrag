@@ -48,7 +48,7 @@ import {
   type DocumentReviewed,
 } from './answer.js';
 import { detectInjection, shouldQuarantine } from './injection.js';
-import { normalizeForMatch, normalizeWhitespace } from './text.js';
+import { contentTokens, lightStem, normalizeForMatch, normalizeWhitespace } from './text.js';
 
 export interface SourceScope {
   sourceId: string;
@@ -279,6 +279,8 @@ export interface AnswerOptions {
   generalModelFallback: boolean;
   minimumEvidenceThreshold: number;
   consultantName: string;
+  /** House style from Settings → Consultant. Subordinate to the grounding rules. */
+  behaviourNotes?: string | null;
   locale: string;
   idFactory: () => string;
   nonce: string;
@@ -389,6 +391,7 @@ export async function answerQuestion(
         options.answerStyle === 'yes_no' ? 60 : options.answerStyle === 'optimal' ? 300 : 800,
       locale: options.locale,
       consultantName: options.consultantName,
+      behaviourNotes: options.behaviourNotes,
     });
   }
 
@@ -516,6 +519,65 @@ function usableHeadline(headline: string, verified: Citation[]): string | null {
     normalizeForMatch(citation.supportingExcerpt).includes(candidate.slice(0, 80)),
   );
   return quoted ? null : headline;
+}
+
+/**
+ * The words the submitted documents actually use.
+ *
+ * One pass over the project chunks rather than a retrieval per requirement: with thousands
+ * of obligations to rank, the difference is a second against an hour, and the ranking only
+ * needs to know whether an obligation is about the same subject matter — not where in the
+ * document the answer is, which is what the per-requirement retrieval below is for.
+ */
+async function projectVocabulary(
+  ctx: TenantContext,
+  repo: RetrievalRepository,
+  project: SourceScope[],
+): Promise<Set<string>> {
+  const words = new Set<string>();
+  for (const source of project) {
+    const chunks = await repo.chunksForVersion(ctx, source.sourceVersionId);
+    for (const chunk of chunks) {
+      for (const term of contentTokens(`${chunk.headingText} ${chunk.content}`)) {
+        words.add(lightStem(term));
+      }
+    }
+  }
+  return words;
+}
+
+/**
+ * The obligations most likely to be about this submission, in document order.
+ *
+ * Scored by the share of each obligation's own key terms that appear in the submission. An
+ * obligation whose vocabulary is entirely absent is not evidence that the submission fails
+ * it — it is evidence that the clause is about something else — and spending the budget on
+ * those is what produced a fire-alarm review full of findings about civil definitions.
+ *
+ * When nothing scores at all, the head of the document is used unchanged: that is the
+ * honest fallback, and the review says separately how much it did not look at.
+ */
+function selectRelevantRequirements(
+  drafts: RequirementDraft[],
+  vocabulary: Set<string>,
+  budget: number,
+): RequirementDraft[] {
+  if (drafts.length <= budget) return drafts;
+
+  const scored = drafts.map((draft, index) => {
+    const terms = draft.keyTerms.map((term) => lightStem(term));
+    const hits = terms.filter((term) => vocabulary.has(term)).length;
+    return { draft, index, score: terms.length === 0 ? 0 : hits / terms.length, hits };
+  });
+
+  const anyMatch = scored.some((entry) => entry.hits > 0);
+  if (!anyMatch) return drafts.slice(0, budget);
+
+  return scored
+    .sort((a, b) => (b.score === a.score ? a.index - b.index : b.score - a.score))
+    .slice(0, budget)
+    .sort((a, b) => a.index - b.index)
+    .map((entry) => entry.draft);
 }
 
 /**
@@ -719,10 +781,33 @@ export async function runComplianceReview(
       sourceId: sourceByVersion.get(section.sourceVersionId)?.sourceId ?? '',
       sourceVersionId: section.sourceVersionId,
     })),
-    { idFactory: options.idFactory, maxRequirements: options.maxRequirements ?? 60 },
+    // Every obligation the document contains, not the first N: which ones matter is
+    // decided below, against the submission, and cannot be decided before it is read.
+    { idFactory: options.idFactory, maxRequirements: Number.MAX_SAFE_INTEGER },
   );
 
-  const usable = requirementDrafts.filter((r) => r.obligationText.length > 0);
+  /*
+   * The obligations this submission is actually about.
+   *
+   * A code of any size holds thousands, and testing every one against every document is
+   * not something anybody will wait for — so a limit is unavoidable. Taking the first N in
+   * file order is the wrong limit, and visibly so: on a fire code it spends the entire
+   * budget on Chapter 1, and the review comes back reporting that a fire-alarm submittal
+   * fails to evidence the definitions of "building", "civil" and "floor". Nothing about
+   * that is useful and the shape of it looks like an answer.
+   *
+   * Ranked instead by how much of each obligation's own vocabulary appears in the
+   * submitted document, so a package about detection, emergency lighting and sprinkler
+   * hydraulics is tested against the clauses governing detection, emergency lighting and
+   * sprinkler hydraulics. Ties keep document order, so the result is stable and reads in
+   * the order the code is written.
+   */
+  const budget = options.maxRequirements ?? 60;
+  const vocabulary = await projectVocabulary(ctx, deps.repo, project);
+  const relevant = selectRelevantRequirements(requirementDrafts, vocabulary, budget);
+  const omitted = requirementDrafts.length - relevant.length;
+
+  const usable = relevant.filter((r) => r.obligationText.length > 0);
 
   const allCitations: Citation[] = [];
   const requirements: Requirement[] = [];
@@ -926,7 +1011,7 @@ export async function runComplianceReview(
     scope:
       options.scopeNote ??
       `${usable.length} mandatory requirement(s) from ${governing.length} governing source(s), tested against ${project.length} project document(s).`,
-    assumptions: buildAssumptions(governing, project, usable.length, requirementDrafts.length),
+    assumptions: buildAssumptions(governing, project, usable.length, relevant.length, omitted),
     followUpQuestion:
       project.length === 0
         ? 'No project documents were attached. Upload the documents you want assessed, and I will test each requirement against them.'
@@ -942,11 +1027,24 @@ function buildAssumptions(
   project: SourceScope[],
   used: number,
   total: number,
+  omitted = 0,
 ): string[] {
   const out: string[] = [];
   out.push(
     `Only mandatory and prohibitive provisions were treated as testable requirements; recommendations ("should") were not scored as failures.`,
   );
+  /*
+   * Said first, and said plainly.
+   *
+   * A review of sixty obligations from a document holding six hundred is a sample. Reporting
+   * "9 not met" without this line reads as a verdict on the whole regulation, and somebody
+   * would be entitled to act on it as one.
+   */
+  if (omitted > 0) {
+    out.push(
+      `This review covers the first ${used} testable obligations found in the regulation. A further ${omitted} were detected and NOT examined, so it is not a verdict on the document as a whole.`,
+    );
+  }
   if (used < total) {
     out.push(
       `${total - used} detected provisions were excluded because their obligation text could not be resolved to a stored passage.`,

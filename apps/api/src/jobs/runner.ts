@@ -254,6 +254,9 @@ async function runAnswerJob(
     generalModelFallback: consultation.responseControls.generalModelFallback,
     minimumEvidenceThreshold: settings.answers.minimumEvidenceThreshold,
     consultantName: settings.consultant.name,
+    // Settings → Consultant. It was saved and read by nothing, so the field was a control
+    // that appeared to configure the consultant and did not.
+    behaviourNotes: settings.consultant.behaviorNotes,
     locale: settings.general.locale,
     idFactory: newId,
     nonce: newId(),
@@ -366,6 +369,7 @@ async function runReviewJob(
       generalModelFallback: consultation.responseControls.generalModelFallback,
       minimumEvidenceThreshold: settings.answers.minimumEvidenceThreshold,
       consultantName: settings.consultant.name,
+      behaviourNotes: settings.consultant.behaviorNotes,
       locale: settings.general.locale,
       idFactory: newId,
       nonce: newId(),

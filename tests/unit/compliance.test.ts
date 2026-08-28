@@ -4,6 +4,7 @@ import {
   aggregateRisk,
   buildChangePlan,
   buildRequirementSet,
+  omittedRequirements,
   chunkSections,
   decideOverall,
   decideOutputStrategy,
@@ -614,5 +615,61 @@ describe('validateDerivative', () => {
       acceptedChangeCount: 1,
     });
     expect(report.ok).toBe(false);
+  });
+});
+
+describe('what a capped review is allowed to imply', () => {
+  /*
+   * A review of sixty obligations from a document holding six hundred is a sample.
+   * Reporting "9 not met" without saying so reads as a verdict on the whole regulation,
+   * and somebody would be entitled to act on it as one.
+   */
+  function section(ordinal: number) {
+    return {
+      id: `sec-${ordinal}`,
+      ordinal,
+      level: 2,
+      kind: 'clause' as const,
+      fromHeading: true,
+      chapter: 'Ch. 1',
+      section: `1.${ordinal}`,
+      clause: null,
+      title: `Requirement ${ordinal}`,
+      body: `The system shall provide at least ${ordinal} units of capacity.`,
+      headingPath: ['Ch. 1', `1.${ordinal}`],
+      pageNumber: ordinal,
+      charStart: 0,
+      charEnd: 60,
+      modality: 'mandatory' as const,
+      isRequirement: true,
+      effectiveDate: null,
+      supersededNote: null,
+      crossReferences: [],
+      exceptions: [],
+      sourceId: 'src-1',
+      sourceVersionId: 'ver-1',
+    };
+  }
+
+  it('counts the obligations the cap left untested', () => {
+    let n = 0;
+    const drafts = buildRequirementSet(
+      Array.from({ length: 25 }, (_, i) => section(i + 1)),
+      { idFactory: () => `r-${(n += 1)}`, maxRequirements: 10 },
+    );
+
+    expect(drafts).toHaveLength(10);
+    expect(omittedRequirements(drafts)).toBe(15);
+  });
+
+  it('reports none omitted when everything fitted', () => {
+    let n = 0;
+    const drafts = buildRequirementSet(
+      Array.from({ length: 4 }, (_, i) => section(i + 1)),
+      { idFactory: () => `r-${(n += 1)}`, maxRequirements: 10 },
+    );
+
+    expect(drafts).toHaveLength(4);
+    expect(omittedRequirements(drafts)).toBe(0);
   });
 });

@@ -16,6 +16,15 @@ export interface ComposeInput {
   maxWords: number;
   locale: string;
   consultantName: string;
+  /**
+   * House style from Settings → Consultant, written by the workspace, not by a document.
+   *
+   * Unlike anything inside the UNTRUSTED markers this is a genuine instruction — somebody
+   * with permission typed it into their own settings. It still cannot reach the rules
+   * above it: it says how to write, never what may be asserted or whether a citation is
+   * needed, and the verification gate after composition does not read it at all.
+   */
+  behaviourNotes?: string | null;
 }
 
 export interface ComposeResult {

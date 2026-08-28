@@ -46,9 +46,21 @@ export function buildRequirementSet(
   const max = options.maxRequirements ?? 400;
   const out: RequirementDraft[] = [];
   const seen = new Set<string>();
+  /*
+   * Obligations the cap left out.
+   *
+   * Counted rather than silently dropped: a review of sixty requirements from a document
+   * that contains six hundred is a sample, and reporting "9 not met" without saying so
+   * reads as a verdict on the whole code. The caller needs the number to be able to say
+   * what was and was not looked at.
+   */
+  let omitted = 0;
 
   for (const section of sections) {
-    if (out.length >= max) break;
+    if (out.length >= max) {
+      if (section.isRequirement && !section.supersededNote) omitted += 1;
+      continue;
+    }
     if (!section.isRequirement) continue;
     if (section.modality !== 'mandatory' && section.modality !== 'prohibited') continue;
 
@@ -80,7 +92,15 @@ export function buildRequirementSet(
     });
   }
 
+  // Attached to the array rather than changing the return type: every caller keeps working,
+  // and the one that reports scope can say how much of the document was actually tested.
+  Object.defineProperty(out, 'omittedRequirements', { value: omitted, enumerable: false });
   return out;
+}
+
+/** How many obligations the cap left untested, for a caller that has to disclose it. */
+export function omittedRequirements(drafts: RequirementDraft[]): number {
+  return (drafts as RequirementDraft[] & { omittedRequirements?: number }).omittedRequirements ?? 0;
 }
 
 /** Keeps only the sentences that actually carry the obligation. */

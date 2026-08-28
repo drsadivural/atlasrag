@@ -1,6 +1,7 @@
 import { and, count, eq, gte, isNull, lt, sql } from 'drizzle-orm';
 import type { Database } from '../client.js';
 import {
+  attentionDismissals,
   complianceReviews,
   consultations,
   findings,
@@ -9,6 +10,7 @@ import {
   sourceVersions,
   sources,
 } from '../schema/index.js';
+import { newId } from '../ids.js';
 import { requirePermission, type TenantContext } from '../tenant.js';
 import { visibleSourcePredicate } from './sources.js';
 
@@ -169,6 +171,24 @@ export class MetricsRepository {
    * Items for the "Needs attention" rail: critical gaps, unresolved evidence, stale
    * knowledge and consultations awaiting review.
    */
+  /** Records that somebody has dealt with a dashboard item, so it stops being raised. */
+  async dismissAttentionItem(
+    ctx: TenantContext,
+    input: { kind: string; itemId: string; note?: string | null },
+  ) {
+    await this.db
+      .insert(attentionDismissals)
+      .values({
+        id: newId(),
+        workspaceId: ctx.workspaceId,
+        kind: input.kind,
+        itemId: input.itemId,
+        dismissedBy: ctx.userId,
+        note: input.note ?? null,
+      })
+      .onConflictDoNothing();
+  }
+
   async attentionItems(ctx: TenantContext, limit: number) {
     requirePermission(ctx, 'workspace:read');
     const items: Array<{
@@ -268,7 +288,20 @@ export class MetricsRepository {
       });
     }
 
-    return items.slice(0, limit);
+    /*
+     * Anything somebody has already said they are dealing with drops out.
+     *
+     * Filtered at the end rather than in each query: the items come from four different
+     * tables and the dismissal is about the item as the dashboard names it, so one lookup
+     * keyed the same way the dashboard keys it is both cheaper and harder to get wrong.
+     */
+    const dismissed = await this.db
+      .select({ kind: attentionDismissals.kind, itemId: attentionDismissals.itemId })
+      .from(attentionDismissals)
+      .where(eq(attentionDismissals.workspaceId, ctx.workspaceId));
+    const hidden = new Set(dismissed.map((row) => `${row.kind}:${row.itemId}`));
+
+    return items.filter((item) => !hidden.has(`${item.kind}:${item.id}`)).slice(0, limit);
   }
 
   /** How many sources a given member can actually see, for the Users page. */

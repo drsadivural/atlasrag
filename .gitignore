@@ -36,6 +36,10 @@ artifacts/playwright-report/
 artifacts/a11y-report/
 artifacts/coverage/
 
+# Customer documents dropped in for a specific investigation. They are somebody's
+# confidential filings, and one of them is 142 MB — neither belongs in version control.
+docs/*.pdf
+
 # local runtime data
 .data/
 storage-local/

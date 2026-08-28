@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangle,
   ArrowRight,
@@ -28,6 +28,7 @@ import {
   CardHeader,
   CardTitle,
   DataTable,
+  Dialog,
   DonutChart,
   EmptyState,
   ErrorState,
@@ -38,8 +39,9 @@ import {
   Tooltip,
   cn,
   formatRelative,
+  useToast,
 } from '@uxe/ui';
-import type { DashboardResponse } from '@uxe/contracts';
+import type { DashboardResponse, ResolveAttentionResponse } from '@uxe/contracts';
 import { type ApiError, api } from '../lib/api.js';
 import { useI18n } from '../lib/i18n.js';
 import { Ayumi } from '../components/Brand.js';
@@ -479,8 +481,44 @@ const SEVERITY_STYLES = {
   info: 'bg-[var(--uxe-info-bg)] text-[var(--uxe-info-text)]',
 } as const;
 
+type AttentionItem = DashboardResponse['needsAttention'][number];
+
+/**
+ * What a person can actually do about each thing raised here.
+ *
+ * Three have a fix the product carries out; two do not. A non-compliant finding and a
+ * requirement short of evidence are statements about a real building, and no button on a
+ * dashboard makes either untrue — so the action for those says what it is, records who
+ * said it, and leaves the finding exactly where it is in the review.
+ */
+const ATTENTION_FIX: Record<AttentionItem['kind'], { label: string; explain: string }> = {
+  failed_job: {
+    label: 'Run it again',
+    explain: 'Queues the job again. It leaves this list once it finishes.',
+  },
+  stale_knowledge: {
+    label: 'Re-index this document',
+    explain: 'Extracts and indexes it again from the stored file, refreshing its timestamps.',
+  },
+  pending_review: {
+    label: 'Mark as read',
+    explain: 'The report stays in Reports; it stops being flagged as waiting for somebody.',
+  },
+  critical_gap: {
+    label: 'Mark as handled',
+    explain:
+      'The finding stays in its review with its evidence — nothing here makes it compliant. This only records that somebody has seen it, so it stops being raised.',
+  },
+  unresolved_evidence: {
+    label: 'Mark as handled',
+    explain:
+      'The requirement still needs evidence and stays in its review. This only records that somebody has seen it, so it stops being raised.',
+  },
+};
+
 function NeedsAttentionCard({ items }: { items: DashboardResponse['needsAttention'] }) {
   const { t } = useI18n();
+  const [open, setOpen] = useState<AttentionItem | null>(null);
 
   return (
     <Card flush>
@@ -511,9 +549,10 @@ function NeedsAttentionCard({ items }: { items: DashboardResponse['needsAttentio
                 key={`${item.kind}-${item.id}`}
                 className="border-t border-[var(--uxe-border)] first:border-t-0"
               >
-                <Link
-                  to={item.href}
-                  className="flex items-start gap-3 px-5 py-3.5 transition-colors hover:bg-[var(--uxe-surface-hover)]"
+                <button
+                  type="button"
+                  onClick={() => setOpen(item)}
+                  className="flex w-full items-start gap-3 px-5 py-3.5 text-start transition-colors hover:bg-[var(--uxe-surface-hover)] focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--uxe-cobalt)]"
                 >
                   <span
                     aria-hidden
@@ -545,13 +584,76 @@ function NeedsAttentionCard({ items }: { items: DashboardResponse['needsAttentio
                     className="mt-2 h-4 w-4 shrink-0 text-[var(--uxe-text-tertiary)]"
                     aria-hidden
                   />
-                </Link>
+                </button>
               </li>
             );
           })}
         </ul>
       )}
+
+      <AttentionDialog item={open} onOpenChange={(next) => !next && setOpen(null)} />
     </Card>
+  );
+}
+
+function AttentionDialog({
+  item,
+  onOpenChange,
+}: {
+  item: AttentionItem | null;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const { t } = useI18n();
+  const queryClient = useQueryClient();
+  const { push } = useToast();
+
+  const resolve = useMutation({
+    mutationFn: () =>
+      api.post<ResolveAttentionResponse>(`/dashboard/attention/${item?.id ?? ''}/resolve`, {
+        kind: item?.kind,
+      }),
+    onSuccess: (result) => {
+      push({
+        tone: 'success',
+        title: result.outcome === 'fixed' ? 'Done' : 'Marked as handled',
+        description: result.detail,
+      });
+      // The item goes because the dashboard is re-read, not because the row was hidden
+      // locally — if the condition is somehow still there, it should still be shown.
+      void queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      onOpenChange(false);
+    },
+    onError: (error: ApiError) =>
+      push({ tone: 'error', title: 'Could not do that', description: error.message }),
+  });
+
+  const fix = item ? ATTENTION_FIX[item.kind] : null;
+
+  return (
+    <Dialog
+      open={item !== null}
+      onOpenChange={onOpenChange}
+      title={item?.title ?? ''}
+      description={item?.detail}
+      size="sm"
+      footer={
+        <>
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+            {t('common.cancel')}
+          </Button>
+          {item && (
+            <Button variant="secondary" asChild>
+              <Link to={item.href}>Open it</Link>
+            </Button>
+          )}
+          <Button variant="primary" loading={resolve.isPending} onClick={() => resolve.mutate()}>
+            {fix?.label ?? 'Fix the issue'}
+          </Button>
+        </>
+      }
+    >
+      <p className="text-[14px] leading-relaxed text-[var(--uxe-text)]">{fix?.explain}</p>
+    </Dialog>
   );
 }
 

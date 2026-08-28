@@ -4,6 +4,7 @@ import {
   AvailableModelsRequest,
   DashboardQuery,
   InviteUserRequest,
+  ResolveAttentionRequest,
   ReportsQuery,
   UpdateSettingsRequest,
   UpdateUserRequest,
@@ -16,6 +17,8 @@ import {
   type DashboardResponse,
   type HealthResponse,
   type ModelConfiguration,
+  permissionsForRole,
+  type Permission,
   type Role,
   type WorkspaceUser,
 } from '@uxe/contracts';
@@ -155,7 +158,110 @@ export function dashboardRoutes(deps: AppDeps) {
     return c.json(response);
   });
 
+  /**
+   * Doing something about an item the dashboard raised.
+   *
+   * Three of the five have a fix this can carry out; two do not, and the difference is
+   * kept honest in the response. A failed job is retried, a stale source re-indexed, a
+   * finished report marked as read — those are `fixed`, and the item goes because the
+   * condition behind it is gone. A non-compliant finding is a statement about a real
+   * building, and nothing pressed here makes it untrue: that is `acknowledged`, the
+   * finding stays in its review with its evidence, and only the reminder stops.
+   */
+  app.post(
+    '/attention/:id/resolve',
+    requirePermission('workspace:read'),
+    validateJson(ResolveAttentionRequest),
+    async (c) => {
+      const tenant = c.get('tenant');
+      const session = c.get('session');
+      if (!tenant || !session) throw ApiError.unauthenticated();
+      const itemId = requireId(c, 'id');
+      const input = body<typeof ResolveAttentionRequest._output>(c);
+
+      let outcome: 'fixed' | 'acknowledged' = 'acknowledged';
+      let detail = 'Marked as handled. It will not be raised here again.';
+
+      if (input.kind === 'failed_job') {
+        requirePermissionOrThrow(tenant, 'source:reprocess');
+        await deps.repos.jobs.retry(tenant, itemId);
+        outcome = 'fixed';
+        detail = 'The job is queued again. It leaves this list once it finishes.';
+      } else if (input.kind === 'stale_knowledge') {
+        requirePermissionOrThrow(tenant, 'source:reprocess');
+        const source = await deps.repos.sources.getById(tenant, itemId);
+        const versions = await deps.repos.sources.listVersions(tenant, itemId);
+        const version = versions.find((v) => v.id === source.currentVersionId) ?? versions[0];
+        if (!version) throw ApiError.badRequest('This source has no stored version to re-index.');
+        await deps.repos.jobs.enqueue(tenant, {
+          kind: 'source_reprocess',
+          // A fresh key per attempt: this is an explicit request to run it again.
+          idempotencyKey: `attention-reindex:${source.id}:${Date.now()}`,
+          payload: {
+            sourceId: source.id,
+            sourceVersionId: version.id,
+            storageKey: version.storageKey,
+            fileName: source.title,
+            contentType: version.contentType,
+          },
+          targetType: 'source',
+          targetId: source.id,
+        });
+        outcome = 'fixed';
+        detail = 'Re-indexing has started. The document leaves this list when it completes.';
+      } else if (input.kind === 'pending_review') {
+        const consultation = await deps.repos.consultations.getById(tenant, itemId);
+        await deps.repos.consultations.update(tenant, itemId, consultation.version, {
+          status: 'active',
+        });
+        outcome = 'fixed';
+        detail = 'Marked as read.';
+      } else {
+        // critical_gap and unresolved_evidence: acknowledged, never silently "fixed".
+        await deps.repos.metrics.dismissAttentionItem(tenant, {
+          kind: input.kind,
+          itemId,
+          note: input.note ?? null,
+        });
+      }
+
+      await deps.repos.audit.record({
+        organizationId: tenant.organizationId,
+        workspaceId: tenant.workspaceId,
+        actorUserId: tenant.userId,
+        actorName: session.user.fullName,
+        action: outcome === 'fixed' ? 'attention.fixed' : 'attention.acknowledged',
+        category: 'consultation',
+        targetType: 'attention_item',
+        targetId: itemId,
+        targetLabel: input.kind,
+        ipAddress: clientIp(c),
+        userAgent: userAgent(c),
+        traceId: tenant.traceId,
+        summary:
+          outcome === 'fixed'
+            ? `Acted on a ${input.kind.replace(/_/g, ' ')} raised on the dashboard.`
+            : `Acknowledged a ${input.kind.replace(/_/g, ' ')}${input.note ? `: ${input.note}` : ''}.`,
+      });
+
+      return c.json({ outcome, detail });
+    },
+  );
+
   return app;
+}
+
+/**
+ * Refuses when the caller's role lacks the permission a particular fix needs.
+ *
+ * The route itself only requires `workspace:read`, because looking at the dashboard is not
+ * the same as being allowed to re-index a document. Each branch that actually changes
+ * something checks for itself.
+ */
+function requirePermissionOrThrow(tenant: { role: string }, permission: Permission): void {
+  if (!permissionsForRole(tenant.role as Role).includes(permission)) {
+    throw ApiError.forbidden('Your role cannot do that.');
+  }
 }
 
 /**

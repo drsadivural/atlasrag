@@ -248,8 +248,38 @@ export function consultationRoutes(deps: AppDeps) {
         answerStyle: input.answerStyle,
       });
 
+      /*
+       * Asking whether a document complies runs the review, not the answering path.
+       *
+       * These are different questions and the machinery for the second already existed,
+       * unreachable: `runComplianceReview` builds the requirement set out of the governing
+       * text and tests each obligation against the project document, producing the
+       * requirement-by-requirement matrix that "does this satisfy the code?" is asking for.
+       * Only `POST /reviews` could start it, and nothing called that — so a compliance
+       * question went through `answerQuestion` instead and came back as a paragraph with
+       * citations, which is a fine answer to a different question.
+       *
+       * It needs a document to review. With nothing but the regulations in scope there is
+       * no submission to test, and the answering path — which reads the code and says what
+       * it requires — is the right one.
+       */
+      const sources = await deps.repos.consultations.listSources(tenant, id);
+      const hasProjectDocument = sources.some((source) => source.role === 'project');
+      const asReview = input.taskMode === 'check_compliance' && hasProjectDocument;
+
+      const review = asReview
+        ? await deps.repos.consultations.createReview(tenant, {
+            consultationId: id,
+            projectSourceIds: sources.filter((s) => s.role === 'project').map((s) => s.sourceId),
+            governingSourceIds: sources
+              .filter((s) => s.role === 'governing')
+              .map((s) => s.sourceId),
+            scopeNote: input.text,
+          })
+        : null;
+
       const { job } = await deps.repos.jobs.enqueue(tenant, {
-        kind: 'consultation_answer',
+        kind: asReview ? 'compliance_review' : 'consultation_answer',
         idempotencyKey: input.idempotencyKey,
         payload: {
           consultationId: id,
@@ -258,6 +288,7 @@ export function consultationRoutes(deps: AppDeps) {
           question: input.text,
           taskMode: input.taskMode,
           answerStyle: input.answerStyle,
+          ...(review ? { reviewId: review.id, scopeNote: input.text } : {}),
         },
         targetType: 'consultation',
         targetId: id,

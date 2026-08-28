@@ -1090,6 +1090,33 @@ export const UpdatePlatformUserRequest = z.object({
 });
 export type UpdatePlatformUserRequest = z.infer<typeof UpdatePlatformUserRequest>;
 
+/**
+ * Acting on something the dashboard raised.
+ *
+ * Most of these have a fix the product can carry out. Two do not: a non-compliant finding
+ * and a requirement short of evidence are statements about a real building, and no button
+ * makes either untrue — for those, `acknowledge` records that a person has seen it and is
+ * handling it, and the finding stays exactly where it is.
+ */
+export const ResolveAttentionRequest = z.object({
+  kind: z.enum([
+    'failed_job',
+    'critical_gap',
+    'unresolved_evidence',
+    'stale_knowledge',
+    'pending_review',
+  ]),
+  note: z.string().max(500).optional(),
+});
+export type ResolveAttentionRequest = z.infer<typeof ResolveAttentionRequest>;
+
+export const ResolveAttentionResponse = z.object({
+  /** 'fixed' — something was actually done. 'acknowledged' — a person said they have it. */
+  outcome: z.enum(['fixed', 'acknowledged']),
+  detail: z.string(),
+});
+export type ResolveAttentionResponse = z.infer<typeof ResolveAttentionResponse>;
+
 export const InviteUserRequest = z.object({
   email: Email,
   role: Role,

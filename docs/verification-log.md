@@ -769,6 +769,60 @@ none, which is the only way left to open a consultation with no scope at all. Th
 read through the repository, so it is filtered by what that caller may actually see rather
 than by what the workspace holds.
 
+## Asking whether a document complies, and being answered
+
+Reported as: upload a submittal, ask whether it satisfies the regulations, and get back a
+paragraph rather than a verdict. Three faults, each hiding the next.
+
+**The review engine was unreachable.** `runComplianceReview` builds the requirement set out
+of the governing text and tests each obligation against the project document, producing
+exactly the requirement-by-requirement matrix "does this satisfy the code?" is asking for.
+Only `POST /consultations/:id/reviews` could start it, and nothing called that — so a
+compliance question went through `answerQuestion` instead. That is a fine answer to a
+different question. A message with `taskMode: check_compliance` and a document in scope now
+runs the review; with nothing to review it still answers, because reading the code and
+saying what it requires is the right response to a question with no submission attached.
+
+**Then it tested the wrong sixty clauses.** A code of any size holds thousands of
+obligations and the budget has to stop somewhere, but it stopped at the first sixty in file
+order — which on a 1348-page fire code is Chapter 1. The first review of a fire-alarm
+package came back reporting that it failed to evidence the definitions of "building",
+"civil" and "floor". Nothing about that is useful and the shape of it looks like an answer.
+Obligations are now ranked by how much of their own vocabulary appears in the submitted
+document, so a package about detection, emergency lighting and sprinkler hydraulics is
+tested against the clauses governing those. Same document, same budget: Chapter 1
+definitions became clauses across Chapters 2, 3, 4, 5 and 12, and four concrete numeric
+failures.
+
+**And it did not say it was a sample.** "9 not met" over sixty requirements reads as a
+verdict on the whole regulation. It was 60 of 3217. The obligations the budget leaves out
+are counted and stated in the answer's own assumptions, because somebody would otherwise be
+entitled to act on it as a complete review.
+
+## The consultant's notes, which nothing read
+
+Settings → Consultant has a behaviour-notes field. It saved, and no code path read it: a
+control that appeared to configure the consultant and configured nothing.
+
+They now reach the system prompt, and where they sit is the point. They go _after_ the
+rules that make an answer verifiable and are told, in the prompt, that those rules win.
+Unlike anything inside the UNTRUSTED markers these are genuine instructions — somebody with
+permission typed them into their own settings — but an instruction about house style is not
+licence to relax the evidence rules, and a workspace writing "answer from general knowledge
+where the sources are silent" must not thereby switch grounding off.
+
+## Needs attention, and being able to do something about it
+
+Every item was a link to somewhere else. Clicking one now opens it with the action that
+actually resolves it — retry the job, re-index the document, mark the report read — and the
+item goes because the dashboard is re-read afterwards, not because the row was hidden.
+
+Two of the five have no such action. A non-compliant finding and a requirement short of
+evidence are statements about a real building, and nothing pressed on a dashboard makes
+either untrue. Those record an acknowledgement instead: the finding stays in its review with
+its evidence, only the reminder stops, and the response says `acknowledged` rather than
+`fixed` so the difference survives into the audit trail.
+
 ## Confidence that moved on its own
 
 Found by the suite while the above was being verified: `computeConfidence` failed its own

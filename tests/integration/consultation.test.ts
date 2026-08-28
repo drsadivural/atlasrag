@@ -52,6 +52,31 @@ async function newConsultation(sourceIds: string[]): Promise<string> {
   return response.body.id;
 }
 
+/** Uploads a fixture into a consultation and waits for it to be attached as the project document. */
+async function attachProjectDocument(
+  consultationId: string,
+  fileName: string,
+  fixture: string,
+): Promise<string> {
+  const bytes = await fixtureBytes(fixture);
+  const ticket = await owner.client.post<{
+    tickets: Array<{ sourceId: string; uploadUrl: string }>;
+  }>(`/consultations/${consultationId}/uploads`, {
+    files: [{ fileName, sizeBytes: bytes.byteLength, contentType: 'application/pdf' }],
+    tags: [],
+    accessScope: 'workspace',
+    promoteToKnowledge: false,
+  });
+  const uploaded = ticket.body.tickets[0]!;
+  const put = await owner.client.request<{ job?: { id: string } }>(
+    'PUT',
+    new URL(uploaded.uploadUrl, 'http://localhost:8788').pathname.replace('/api/v1', ''),
+    { rawBody: bytes, headers: { 'content-type': 'application/pdf' } },
+  );
+  if (put.body?.job?.id) await waitForJob(owner.client, put.body.job.id);
+  return uploaded.sourceId;
+}
+
 describe('asking a question', () => {
   it('answers from the approved sources with verified citations', async () => {
     const consultationId = await newConsultation([regulationId]);
@@ -364,6 +389,58 @@ describe('a compliance review', () => {
     expect(answer.coverage.unverifiedCitations).toBe(0);
     expect(answer.citations.every((c) => c.verified)).toBe(true);
   }, 300_000);
+
+  it('runs the review, not the answering path, when asked whether a document complies', async () => {
+    /*
+     * These are different questions and the machinery for the second already existed,
+     * unreachable. runComplianceReview builds the requirement set out of the governing text
+     * and tests each obligation against the project document; only POST /reviews could
+     * start it, and nothing called that. So "does this satisfy the code?" went through the
+     * answering path and came back as a paragraph with citations — a fine answer to a
+     * question nobody asked.
+     */
+    const consultationId = await newConsultation([regulationId]);
+    await owner.client.patch(`/consultations/${consultationId}`, {
+      sourceIds: [regulationId],
+      version: 1,
+    });
+    await attachProjectDocument(consultationId, 'submittal.pdf', 'project-plan.pdf');
+
+    const result = await ask(
+      owner.client,
+      consultationId,
+      'Tell me if this satisfies the regulations.',
+      { taskMode: 'check_compliance', answerStyle: 'optimal' },
+    );
+
+    expect(result.answer).not.toBeNull();
+    const answer = result.answer!;
+
+    // The shape that distinguishes a review from an answer: obligations, each tested.
+    expect(answer.findings.length).toBeGreaterThan(0);
+    for (const finding of answer.findings) {
+      expect(['compliant', 'non_compliant', 'needs_evidence', 'not_assessed']).toContain(
+        finding.result,
+      );
+      expect(finding.requirementReference.length).toBeGreaterThan(0);
+    }
+
+    // And the headline reports the outcome rather than quoting a clause.
+    expect(answer.headline).toMatch(/requirement|gap|met|determine/i);
+  }, 300_000);
+
+  it('answers rather than reviews when there is no document to review', async () => {
+    // With nothing but the regulations in scope there is no submission to test, and the
+    // answering path — which reads the code and says what it requires — is the right one.
+    const consultationId = await newConsultation([regulationId]);
+    const result = await ask(owner.client, consultationId, 'Does the code cap travel distance?', {
+      taskMode: 'check_compliance',
+    });
+
+    expect(result.answer).not.toBeNull();
+    expect(result.answer!.findings).toEqual([]);
+    expect(result.answer!.citations.length).toBeGreaterThan(0);
+  }, 180_000);
 
   it('states what is missing instead of assuming a silent document complies', async () => {
     const consultationId = await newConsultation([regulationId, projectId]);

@@ -289,3 +289,26 @@ export const uploadTickets = pgTable(
     index('upload_tickets_source_idx').on(t.sourceId),
   ],
 );
+
+/**
+ * Dashboard items somebody has said they have dealt with.
+ *
+ * An acknowledgement, not a resolution: a non-compliant finding stays in its review with
+ * its evidence, and this only stops it being raised again on a screen meant to show what
+ * nobody has looked at yet.
+ */
+export const attentionDismissals = pgTable(
+  'attention_dismissals',
+  {
+    id: id(),
+    workspaceId: text('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    kind: text('kind').notNull(),
+    itemId: text('item_id').notNull(),
+    dismissedBy: text('dismissed_by').notNull(),
+    note: text('note'),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex('attention_dismissals_key').on(t.workspaceId, t.kind, t.itemId)],
+);
