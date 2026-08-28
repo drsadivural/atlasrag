@@ -48,7 +48,7 @@ export function VerifyEmailPage() {
             <div role="status" aria-live="polite">
               <Skeleton className="mx-auto h-14 w-14 rounded-full" />
               <Skeleton className="mx-auto mt-4 h-6 w-48" />
-              <span className="sr-only">Confirming your email address</span>
+              <span className="sr-only">{t('verify.confirming')}</span>
             </div>
           ) : state === 'ok' ? (
             <>
@@ -58,9 +58,11 @@ export function VerifyEmailPage() {
               >
                 <CheckCircle2 className="h-7 w-7" />
               </span>
-              <h1 className="mt-4 text-[22px] font-bold text-[var(--uxe-text)]">Email confirmed</h1>
+              <h1 className="mt-4 text-[22px] font-bold text-[var(--uxe-text)]">
+                {t('verify.confirmed')}
+              </h1>
               <p className="mt-2 text-[14px] text-[var(--uxe-text-secondary)]">
-                Your workspace is ready. Sign in to get started.
+                {t('verify.confirmedHint')}
               </p>
               <Button asChild variant="primary" className="mt-6">
                 <Link to="/login?verified=1">{t('auth.signIn')}</Link>
@@ -75,7 +77,7 @@ export function VerifyEmailPage() {
                 <XCircle className="h-7 w-7" />
               </span>
               <h1 className="mt-4 text-[22px] font-bold text-[var(--uxe-text)]">
-                That link did not work
+                {t('verify.failed')}
               </h1>
               <p className="mt-2 text-[14px] text-[var(--uxe-text-secondary)]">{message}</p>
               <Button asChild variant="secondary" className="mt-6">

@@ -48,6 +48,7 @@ import { PageHeader } from '../components/PageHeader.js';
  * membership like anybody else.
  */
 function PlatformUsers() {
+  const { t } = useI18n();
   const { push } = useToast();
   const queryClient = useQueryClient();
   const { session } = useSession();
@@ -104,9 +105,9 @@ function PlatformUsers() {
         <Input
           value={search}
           onChange={(event) => setSearch(event.target.value)}
-          placeholder="Search by name or address…"
+          placeholder={t('users.searchPlaceholder')}
           className="max-w-xs"
-          aria-label="Search accounts"
+          aria-label={t('users.searchAccounts')}
         />
         <span className="text-[13px] text-[var(--uxe-text-secondary)]">
           {query.data ? `${query.data.total} account(s)` : ''}
@@ -135,7 +136,7 @@ function PlatformUsers() {
                   .catch(() => push({ tone: 'error', title: 'Could not copy' }));
               }}
             >
-              Copy link
+              {t('users.copyLink')}
             </Button>
             <Button variant="ghost" size="sm" onClick={() => setIssued(null)}>
               Done
@@ -145,7 +146,7 @@ function PlatformUsers() {
       )}
 
       {query.isLoading ? (
-        <LoadingRegion label="Loading accounts">
+        <LoadingRegion label={t('users.loadingAccounts')}>
           <div className="flex flex-col gap-2">
             {[0, 1, 2].map((i) => (
               <Skeleton key={i} className="h-14 w-full" />
@@ -154,16 +155,19 @@ function PlatformUsers() {
         </LoadingRegion>
       ) : query.error && !query.data ? (
         <ErrorState
+          labels={{ retry: t('common.retry'), reference: t('common.reference') }}
           message={query.error.message}
           traceId={query.error.traceId}
           onRetry={() => void query.refetch()}
         />
       ) : (
         <DataTable
-          caption="Every account on this deployment"
+          caption={t('users.everyAccount')}
           rows={query.data?.items ?? []}
           rowKey={(row) => row.id}
-          empty={<EmptyState title="No accounts match" description="Try a different search." />}
+          empty={
+            <EmptyState title={t('users.noAccounts')} description={t('users.noAccountsHint')} />
+          }
           columns={[
             {
               key: 'name',
@@ -210,12 +214,12 @@ function PlatformUsers() {
                   </Badge>
                   {row.isPlatformAdmin && (
                     <Badge tone="brand" size="sm" icon={<ShieldCheck className="h-3 w-3" />}>
-                      Platform admin
+                      {t('users.platformAdmin')}
                     </Badge>
                   )}
                   {!row.hasPassword && (
                     <Badge tone="warning" size="sm">
-                      No password set
+                      {t('users.noPassword')}
                     </Badge>
                   )}
                 </div>
@@ -368,8 +372,8 @@ function AddUserDialog({
     <Dialog
       open={open}
       onOpenChange={(next) => (next ? onOpenChange(true) : close())}
-      title="Add a user"
-      description="Creates the account immediately and puts it in this workspace."
+      title={t('users.addTitle')}
+      description={t('users.addHint')}
       size="sm"
       footer={
         <>
@@ -382,7 +386,7 @@ function AddUserDialog({
             disabled={!email.trim() || !fullName.trim()}
             onClick={() => create.mutate()}
           >
-            Create account
+            {t('users.createAccount')}
           </Button>
         </>
       }
@@ -410,7 +414,7 @@ function AddUserDialog({
                     .catch(() => push({ tone: 'error', title: 'Could not copy' }));
                 }}
               >
-                Copy link
+                {t('users.copyLink')}
               </Button>
               <Button variant="ghost" size="sm" onClick={close}>
                 Done
@@ -461,7 +465,7 @@ function AddUserDialog({
         </Field>
 
         <Field
-          label="Password (optional)"
+          label={t('users.passwordOptional')}
           htmlFor="add-password"
           hint="Leave blank and they are sent a link to choose their own, which nobody else ever sees. Type one and they can sign in at once — but you will know it, so ask them to change it."
           error={fieldErrors.password?.[0]}
@@ -472,7 +476,7 @@ function AddUserDialog({
             autoComplete="new-password"
             value={password}
             onChange={(event) => setPassword(event.target.value)}
-            placeholder="Send a link instead"
+            placeholder={t('users.sendLinkInstead')}
             invalid={Boolean(fieldErrors.password)}
           />
         </Field>
@@ -543,7 +547,7 @@ export function UsersPage() {
             {isPlatformAdmin && (
               <Button variant="secondary" onClick={() => setAddOpen(true)}>
                 <UserPlus className="h-4 w-4" aria-hidden />
-                Add user
+                {t('users.addUser')}
               </Button>
             )}
             {can('member:invite') && (
@@ -561,10 +565,10 @@ export function UsersPage() {
           <SegmentedControl
             value={view}
             onValueChange={(value) => setView(value as 'workspace' | 'platform')}
-            ariaLabel="Which accounts to show"
+            ariaLabel={t('users.whichAccounts')}
             options={[
-              { value: 'workspace', label: 'This workspace' },
-              { value: 'platform', label: 'Everyone' },
+              { value: 'workspace', label: t('users.thisWorkspace') },
+              { value: 'platform', label: t('users.everyone') },
             ]}
           />
         </div>
@@ -576,7 +580,7 @@ export function UsersPage() {
         <>
           <Card flush className="mt-5 p-3 sm:p-4">
             {query.isLoading ? (
-              <LoadingRegion label="Loading members">
+              <LoadingRegion label={t('users.loadingMembers')}>
                 <div className="flex flex-col gap-2">
                   {[0, 1, 2].map((i) => (
                     <Skeleton key={i} className="h-14 w-full" />
@@ -585,17 +589,18 @@ export function UsersPage() {
               </LoadingRegion>
             ) : query.error && !query.data ? (
               <ErrorState
+                labels={{ retry: t('common.retry'), reference: t('common.reference') }}
                 message={query.error.message}
                 traceId={query.error.traceId}
                 onRetry={() => void query.refetch()}
               />
             ) : (
               <DataTable
-                caption="Workspace members"
+                caption={t('users.workspaceMembers')}
                 rows={query.data ?? []}
                 rowKey={(row) => row.id}
                 empty={
-                  <EmptyState title="No members" description="Invite a colleague to collaborate." />
+                  <EmptyState title={t('users.noMembers')} description={t('users.noMembersHint')} />
                 }
                 columns={[
                   {
@@ -874,11 +879,7 @@ function EditMemberDialog({
       }
     >
       <div className="flex flex-col gap-4">
-        <Field
-          label={t('users.role')}
-          htmlFor="edit-role"
-          hint="Changing this revokes their sessions, so the new role applies at once."
-        >
+        <Field label={t('users.role')} htmlFor="edit-role" hint={t('users.roleChangeHint')}>
           <Select
             value={role}
             onValueChange={(value) => setRole(value as Role)}
@@ -913,7 +914,7 @@ function EditMemberDialog({
 
         {member?.status === 'invited' && (
           <p className="text-[13px] text-[var(--uxe-text-secondary)]">
-            This invitation has not been accepted yet. The role applies when they join.
+            {t('users.notAcceptedYet')}
           </p>
         )}
       </div>
@@ -990,7 +991,7 @@ function InviteDialog({
       open={open}
       onOpenChange={onOpenChange}
       title={t('users.invite')}
-      description="They receive a single-use link that expires in seven days."
+      description={t('users.inviteHint')}
       size="sm"
       footer={
         <>
@@ -1003,7 +1004,7 @@ function InviteDialog({
             loading={invite.isPending}
             disabled={!email.trim()}
           >
-            Send invitation
+            {t('users.sendInvitation')}
           </Button>
         </>
       }
@@ -1041,7 +1042,7 @@ function InviteDialog({
                     );
                 }}
               >
-                Copy link
+                {t('users.copyLink')}
               </Button>
               <Button
                 variant="ghost"
@@ -1113,12 +1114,12 @@ function InviteDialog({
           />
         </Field>
 
-        <Field label="Message (optional)" htmlFor="invite-message">
+        <Field label={t('users.messageOptional')} htmlFor="invite-message">
           <Input
             id="invite-message"
             value={message}
             onChange={(event) => setMessage(event.target.value)}
-            placeholder="Joining us on the Tower A review"
+            placeholder={t('users.messagePlaceholder')}
           />
         </Field>
       </div>

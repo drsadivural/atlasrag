@@ -823,6 +823,49 @@ either untrue. Those record an acknowledgement instead: the finding stays in its
 its evidence, only the reminder stops, and the response says `acknowledged` rather than
 `fixed` so the difference survives into the audit trail.
 
+## Two capabilities with no way to reach them
+
+Found by asking which catalogue keys nothing uses. Sixty-two were unused, and two of them
+were not dead labels — they were the names of features the API had supported all along.
+
+**Pasted text.** `POST /sources/connectors` has accepted `kind: 'text'` since the
+beginning: it stores the text, versions it, and runs it through the same indexing,
+citation-mapping and verification as an uploaded PDF. Nothing in the product could send it.
+An extract out of a circular or an email is a real source, and it now goes in beside the
+file upload, the connectors and the website fetch.
+
+**The evidence matrix.** The report job has always produced `evidence_matrix` in CSV and
+XLSX from the same code path as the PDF report, and only the PDF had a button. A matrix is
+what somebody takes into a review meeting — one row per requirement, its result, its
+locator and its quotation, in something they can sort.
+
+A sweep for endpoints with no caller found only one more, `/auth/magic-link`, and that one
+stays unbuilt on purpose: a passwordless link on a screen headed "Authorized UAE government
+personnel only" is a posture decision, not an omission to quietly fix.
+
+## Arabic that was Arabic in the catalogue and English on the screen
+
+The catalogue was complete and the application was not. 235 user-visible strings had never
+gone through it — they were written directly into the components — so choosing Arabic
+translated the navigation and left the settings labels, the citation viewer, the correction
+dialog and every table caption in English.
+
+208 of them now come from the catalogue, in both languages. What is left is deliberate and
+each has a reason:
+
+- **Brand and product names** — "Consulting AI", "Google Drive", "OneDrive", "SharePoint".
+  These are the same word everywhere.
+- **Two surfaces that render above the provider** — the router's loading fallback and its
+  error element. A boundary that crashes looking up a catalogue that is not mounted is no
+  boundary at all, so those two stay literal and say so in the code.
+- **The component library's defaults.** `@uxe/ui` has no locale of its own by design. The
+  visible text in `ErrorState` and `StaleNotice` is now an optional prop with an English
+  default, and every one of the seventeen call sites passes the translated version.
+
+The test that keeps this honest already existed and earned itself twice during the sweep:
+it caught a batch where the Arabic text had been written into both files, so English would
+have rendered as Arabic for every citation label.
+
 ## Confidence that moved on its own
 
 Found by the suite while the above was being verified: `computeConfidence` failed its own

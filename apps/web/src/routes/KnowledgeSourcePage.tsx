@@ -93,7 +93,7 @@ export function KnowledgeSourcePage() {
 
   if (query.isLoading) {
     return (
-      <LoadingRegion label="Loading source">
+      <LoadingRegion label={t('source.loading')}>
         <div className="mx-auto w-full max-w-[1200px] p-6">
           <Skeleton className="h-9 w-80" />
           <Skeleton className="mt-4 h-64 w-full" />
@@ -108,6 +108,7 @@ export function KnowledgeSourcePage() {
     return (
       <div className="p-6">
         <ErrorState
+          labels={{ retry: t('common.retry'), reference: t('common.reference') }}
           message={query.error.message}
           traceId={query.error.traceId}
           onRetry={() => void query.refetch()}
@@ -123,6 +124,7 @@ export function KnowledgeSourcePage() {
     <div className="mx-auto w-full max-w-[1200px] p-4 sm:p-6">
       {hasStalled(query) && (
         <StaleNotice
+          labels={{ paused: t('common.updatesPaused'), retry: t('common.retryNow') }}
           className="mb-3"
           message={query.error?.message ?? 'This document has stopped refreshing.'}
           onRetry={() => void query.refetch()}
@@ -149,7 +151,7 @@ export function KnowledgeSourcePage() {
                 loading={reprocess.isPending}
               >
                 <RefreshCw className="h-4 w-4" aria-hidden />
-                Reprocess
+                {t('source.reprocess')}
               </Button>
             )}
             {can('source:update') && (
@@ -173,7 +175,9 @@ export function KnowledgeSourcePage() {
           <div className="flex items-start gap-3">
             <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-[var(--uxe-danger)]" aria-hidden />
             <div className="min-w-0">
-              <p className="text-[14px] font-semibold text-[var(--uxe-danger)]">Quarantined</p>
+              <p className="text-[14px] font-semibold text-[var(--uxe-danger)]">
+                {t('source.quarantined')}
+              </p>
               <p className="mt-1 text-[13px] text-[var(--uxe-text)]">{source.quarantine.reason}</p>
               {source.quarantine.excerpt && (
                 <p className="mt-2 rounded-[var(--uxe-radius-control)] bg-[var(--uxe-surface)] p-2 font-[family-name:var(--uxe-font-mono)] text-[11px] text-[var(--uxe-text-secondary)]">
@@ -198,16 +202,16 @@ export function KnowledgeSourcePage() {
       )}
 
       <Tabs value={tab} onValueChange={setTab} className="mt-5">
-        <TabList ariaLabel="Source details">
-          <Tab value="overview">Overview</Tab>
+        <TabList ariaLabel={t('source.details')}>
+          <Tab value="overview">{t('source.overview')}</Tab>
           <Tab value="versions" count={source.versions.length}>
-            Versions
+            {t('source.versions')}
           </Tab>
           <Tab value="permissions" count={source.permissions.length}>
-            Permissions
+            {t('source.permissions')}
           </Tab>
           <Tab value="log" count={source.processingLog.length}>
-            Processing log
+            {t('source.processingLog')}
           </Tab>
         </TabList>
 
@@ -215,32 +219,32 @@ export function KnowledgeSourcePage() {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Card>
               <CardHeader>
-                <CardTitle>Structure</CardTitle>
+                <CardTitle>{t('source.structure')}</CardTitle>
               </CardHeader>
               <dl className="grid grid-cols-2 gap-y-2 text-[13px]">
-                <Row label="Headings">{source.structure.headings}</Row>
-                <Row label="Clauses">{source.structure.clauses}</Row>
-                <Row label="Tables">{source.structure.tables}</Row>
-                <Row label="Definitions">{source.structure.definitions}</Row>
-                <Row label="Indexed chunks">{source.structure.chunks}</Row>
+                <Row label={t('source.headings')}>{source.structure.headings}</Row>
+                <Row label={t('source.clauses')}>{source.structure.clauses}</Row>
+                <Row label={t('source.tables')}>{source.structure.tables}</Row>
+                <Row label={t('source.definitions')}>{source.structure.definitions}</Row>
+                <Row label={t('source.chunks')}>{source.structure.chunks}</Row>
               </dl>
             </Card>
 
             <Card>
               <CardHeader>
-                <CardTitle>Metadata</CardTitle>
+                <CardTitle>{t('source.metadata')}</CardTitle>
               </CardHeader>
               <dl className="grid grid-cols-2 gap-y-2 text-[13px]">
-                <Row label="Owner">{source.ownerName}</Row>
-                <Row label="Size">{formatBytes(source.sizeBytes)}</Row>
-                <Row label="Created">{formatDateTime(source.createdAt)}</Row>
-                <Row label="Last synced">
+                <Row label={t('source.owner')}>{source.ownerName}</Row>
+                <Row label={t('source.size')}>{formatBytes(source.sizeBytes)}</Row>
+                <Row label={t('source.created')}>{formatDateTime(source.createdAt)}</Row>
+                <Row label={t('source.lastSynced')}>
                   {source.lastSyncedAt ? formatRelative(source.lastSyncedAt) : '—'}
                 </Row>
-                <Row label="Effective date">
+                <Row label={t('source.effectiveDate')}>
                   {source.effectiveDate ? formatDateTime(source.effectiveDate) : '—'}
                 </Row>
-                <Row label="In knowledge base">
+                <Row label={t('source.inKnowledgeBase')}>
                   {source.isPromotedUpload ? 'Yes' : 'No — consultation input'}
                 </Row>
               </dl>
@@ -281,7 +285,7 @@ export function KnowledgeSourcePage() {
                           size="sm"
                           icon={<CheckCircle2 className="h-3 w-3" aria-hidden />}
                         >
-                          Current
+                          {t('source.current')}
                         </Badge>
                       )}
                       {version.ocrApplied && (
@@ -336,7 +340,7 @@ export function KnowledgeSourcePage() {
           <Card flush>
             {source.processingLog.length === 0 ? (
               <p className="p-6 text-center text-[14px] text-[var(--uxe-text-secondary)]">
-                No processing attempts recorded.
+                {t('source.noAttempts')}
               </p>
             ) : (
               <ol className="divide-y divide-[var(--uxe-border)]">
@@ -472,8 +476,8 @@ function EditSourceDialog({
     <Dialog
       open={open}
       onOpenChange={onOpenChange}
-      title="Edit source"
-      description="Metadata only. The stored document and its citations are never altered here."
+      title={t('source.edit')}
+      description={t('source.editHint')}
       footer={
         <>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
@@ -486,7 +490,12 @@ function EditSourceDialog({
       }
     >
       <div className="flex flex-col gap-4">
-        <Field label="Title" htmlFor="source-title" error={fieldErrors.title?.[0]} required>
+        <Field
+          label={t('source.titleLabel')}
+          htmlFor="source-title"
+          error={fieldErrors.title?.[0]}
+          required
+        >
           <Input
             id="source-title"
             value={title}
@@ -496,23 +505,23 @@ function EditSourceDialog({
         </Field>
 
         <Field
-          label="Tags"
+          label={t('source.tags')}
           htmlFor="source-tags"
-          hint="Comma separated. Used to filter the knowledge base."
+          hint={t('source.tagsHint')}
           error={fieldErrors.tags?.[0]}
         >
           <Input
             id="source-tags"
             value={tags}
             onChange={(event) => setTags(event.target.value)}
-            placeholder="fire, egress"
+            placeholder={t('source.tagsPlaceholder')}
           />
         </Field>
 
         <Field
-          label="Effective date"
+          label={t('source.effectiveDate')}
           htmlFor="source-effective"
-          hint="Used to rank a newer edition above an older one."
+          hint={t('source.effectiveDateHint')}
           error={fieldErrors.effectiveDate?.[0]}
         >
           <Input
@@ -523,9 +532,9 @@ function EditSourceDialog({
           />
         </Field>
 
-        <Field label="Who can read this" htmlFor="source-access">
+        <Field label={t('source.access')} htmlFor="source-access">
           <Select
-            ariaLabel="Who can read this"
+            ariaLabel={t('source.access')}
             value={accessScope}
             onValueChange={(value) => setAccessScope(value as SourceAccessScope)}
             options={[

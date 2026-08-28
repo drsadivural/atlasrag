@@ -134,7 +134,7 @@ export function RegisterPage() {
                   {t('auth.createAccount')}
                 </h1>
                 <p className="mt-1.5 text-[14px] text-[var(--uxe-text-secondary)]">
-                  Create your workspace. You will be its Owner.
+                  {t('auth.registerHint')}
                 </p>
 
                 {formError && (

@@ -45,6 +45,8 @@ describe('Arabic', () => {
       'gov.arabic',
       'gov.emailPlaceholder',
       'consult.sendHint',
+      // A domain example is the same string in any language.
+      'settings.domainsPlaceholder',
     ]);
     const untranslated = keys.filter(
       (key) => !shared.has(key) && ar[key] !== undefined && ar[key] === en[key],

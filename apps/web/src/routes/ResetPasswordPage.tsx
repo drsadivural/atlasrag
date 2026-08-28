@@ -49,12 +49,12 @@ export function ResetPasswordPage() {
     return (
       <div className="flex min-h-dvh items-center justify-center bg-[var(--uxe-bg)] p-4">
         <Card className="w-full max-w-[440px] p-8 text-center">
-          <h1 className="text-[20px] font-bold text-[var(--uxe-text)]">That link is incomplete</h1>
+          <h1 className="text-[20px] font-bold text-[var(--uxe-text)]">{t('reset.incomplete')}</h1>
           <p className="mt-2 text-[14px] text-[var(--uxe-text-secondary)]">
-            Open the reset link from your email again, or request a new one.
+            {t('reset.incompleteHint')}
           </p>
           <Button asChild variant="primary" className="mt-6">
-            <Link to="/forgot-password">Request a new link</Link>
+            <Link to="/forgot-password">{t('reset.requestNew')}</Link>
           </Button>
         </Card>
       </div>
@@ -144,7 +144,7 @@ export function ResetPasswordPage() {
           </form>
 
           <p className="mt-5 text-center text-[13px] text-[var(--uxe-text-secondary)]">
-            Resetting your password signs out every other device.
+            {t('reset.signsOutOthers')}
           </p>
         </Card>
       </main>

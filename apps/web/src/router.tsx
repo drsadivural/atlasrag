@@ -4,7 +4,7 @@ import { EmptyState, Button, LoadingRegion, Skeleton } from '@uxe/ui';
 import { useSession } from './lib/session.js';
 import { AppShell } from './components/AppShell.js';
 import { RouteErrorBoundary } from './components/ErrorBoundary.js';
-import { I18nProvider } from './lib/i18n.js';
+import { I18nProvider, useI18n } from './lib/i18n.js';
 import { PreferencesProvider, usePreferences } from './lib/preferences.js';
 import { GovernmentLoginPage } from './routes/government/GovernmentLoginPage.js';
 import { PolicyPage } from './routes/PolicyPage.js';
@@ -45,6 +45,9 @@ const ResetPasswordPage = lazy(() =>
 );
 
 function RouteFallback() {
+  // Rendered while the route chunk is still loading, which can be before any I18nProvider
+  // exists — so this one label stays literal rather than reaching for a catalogue that is
+  // not mounted yet.
   return (
     <LoadingRegion label="Loading page">
       <div className="flex flex-col gap-4 p-6">
@@ -123,20 +126,29 @@ function SignedOutLocale({ children }: { children: ReactNode }) {
   return <I18nProvider locale={locale}>{children}</I18nProvider>;
 }
 
+function NotFoundBody() {
+  const { t } = useI18n();
+  return (
+    <div className="flex min-h-dvh items-center justify-center bg-[var(--uxe-bg)] p-6">
+      <EmptyState
+        title={t('common.notFound')}
+        description={t('common.notFoundBody')}
+        action={
+          <Button variant="primary" asChild>
+            <a href="/dashboard">{t('common.goToDashboard')}</a>
+          </Button>
+        }
+      />
+    </div>
+  );
+}
+
 function NotFoundPage() {
+  // The provider has to be mounted before anything can read from it, so the body is its
+  // own component rather than JSX that calls t() from outside the tree it creates.
   return (
     <I18nProvider locale="en">
-      <div className="flex min-h-dvh items-center justify-center bg-[var(--uxe-bg)] p-6">
-        <EmptyState
-          title="Page not found"
-          description="That page does not exist, or you do not have access to it."
-          action={
-            <Button variant="primary" asChild>
-              <a href="/dashboard">Go to dashboard</a>
-            </Button>
-          }
-        />
-      </div>
+      <NotFoundBody />
     </I18nProvider>
   );
 }

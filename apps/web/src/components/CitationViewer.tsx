@@ -96,7 +96,7 @@ export function CitationViewer({ citationId, onClose, onNavigate }: CitationView
               <Button variant="secondary" size="sm" asChild>
                 <a href={query.data.downloadUrl} rel="noreferrer">
                   <Download className="h-4 w-4" aria-hidden />
-                  Original
+                  {t('citation.original')}
                 </a>
               </Button>
             )}
@@ -105,7 +105,7 @@ export function CitationViewer({ citationId, onClose, onNavigate }: CitationView
       }
     >
       {query.isLoading && (
-        <LoadingRegion label="Loading citation">
+        <LoadingRegion label={t('citation.loading')}>
           <div className="flex flex-col gap-3">
             <Skeleton className="h-6 w-48" />
             <Skeleton className="h-64 w-full" />
@@ -115,7 +115,8 @@ export function CitationViewer({ citationId, onClose, onNavigate }: CitationView
 
       {query.error && (
         <ErrorState
-          title="This citation could not be opened"
+          labels={{ retry: t('common.retry'), reference: t('common.reference') }}
+          title={t('citation.couldNotOpen')}
           message={query.error.message}
           traceId={query.error.traceId}
           onRetry={() => void query.refetch()}
@@ -141,7 +142,7 @@ export function CitationViewer({ citationId, onClose, onNavigate }: CitationView
               </Badge>
             )}
             {citation.entailment === 'contradicts' && (
-              <Badge tone="danger">Contradicts the claim</Badge>
+              <Badge tone="danger">{t('citation.contradicts')}</Badge>
             )}
           </div>
 
@@ -151,7 +152,7 @@ export function CitationViewer({ citationId, onClose, onNavigate }: CitationView
             </p>
           )}
 
-          <section aria-label="Source text with the cited passage highlighted">
+          <section aria-label={t('citation.highlighted')}>
             <div
               className={cn(
                 'max-h-[60vh] overflow-y-auto rounded-[var(--uxe-radius-card)] border border-[var(--uxe-border)]',
@@ -186,18 +187,28 @@ export function CitationViewer({ citationId, onClose, onNavigate }: CitationView
           )}
 
           <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-[13px]">
-            <Detail label="Document">{citation.documentTitle}</Detail>
-            <Detail label="Version">{query.data.version}</Detail>
-            {citation.chapter && <Detail label="Chapter">{citation.chapter}</Detail>}
-            {citation.section && <Detail label="Section">{citation.section}</Detail>}
-            {citation.clause && <Detail label="Clause">{citation.clause}</Detail>}
-            {citation.pageNumber !== null && <Detail label="Page">{citation.pageNumber}</Detail>}
-            {citation.sheetName && <Detail label="Sheet">{citation.sheetName}</Detail>}
-            {citation.cellRange && <Detail label="Cells">{citation.cellRange}</Detail>}
-            {citation.slideNumber !== null && <Detail label="Slide">{citation.slideNumber}</Detail>}
-            <Detail label="Retrieval score">{citation.retrievalScore.toFixed(3)}</Detail>
-            <Detail label="Rerank score">{citation.rerankScore.toFixed(3)}</Detail>
-            <Detail label="Checksum">
+            <Detail label={t('citation.document')}>{citation.documentTitle}</Detail>
+            <Detail label={t('citation.version')}>{query.data.version}</Detail>
+            {citation.chapter && <Detail label={t('citation.chapter')}>{citation.chapter}</Detail>}
+            {citation.section && <Detail label={t('citation.section')}>{citation.section}</Detail>}
+            {citation.clause && <Detail label={t('citation.clause')}>{citation.clause}</Detail>}
+            {citation.pageNumber !== null && (
+              <Detail label={t('citation.page')}>{citation.pageNumber}</Detail>
+            )}
+            {citation.sheetName && (
+              <Detail label={t('citation.sheet')}>{citation.sheetName}</Detail>
+            )}
+            {citation.cellRange && (
+              <Detail label={t('citation.cells')}>{citation.cellRange}</Detail>
+            )}
+            {citation.slideNumber !== null && (
+              <Detail label={t('citation.slide')}>{citation.slideNumber}</Detail>
+            )}
+            <Detail label={t('citation.retrievalScore')}>
+              {citation.retrievalScore.toFixed(3)}
+            </Detail>
+            <Detail label={t('citation.rerankScore')}>{citation.rerankScore.toFixed(3)}</Detail>
+            <Detail label={t('citation.checksum')}>
               <span className="font-[family-name:var(--uxe-font-mono)] text-[11px]">
                 {citation.sourceSha256.slice(0, 16)}…
               </span>

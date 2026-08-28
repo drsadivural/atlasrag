@@ -14,6 +14,7 @@ import {
   Globe,
   Image as ImageIcon,
   Info,
+  ClipboardType,
   Link2,
   Loader2,
   Plus,
@@ -47,6 +48,7 @@ import {
   ProgressBar,
   Select,
   Skeleton,
+  Textarea,
   SwitchField,
   Tooltip,
   cn,
@@ -109,6 +111,7 @@ export function KnowledgePage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [uploads, setUploads] = useState<UploadState[]>([]);
   const [urlDialogOpen, setUrlDialogOpen] = useState(false);
+  const [textDialogOpen, setTextDialogOpen] = useState(false);
 
   const status = searchParams.get('status') ?? 'all';
   const documentType = searchParams.get('type') ?? 'all';
@@ -330,7 +333,11 @@ export function KnowledgePage() {
           />
 
           {can('source:create') && (
-            <UploadZone onFiles={startUpload} onUrlClick={() => setUrlDialogOpen(true)} />
+            <UploadZone
+              onFiles={startUpload}
+              onUrlClick={() => setUrlDialogOpen(true)}
+              onTextClick={() => setTextDialogOpen(true)}
+            />
           )}
 
           {uploads.length > 0 && (
@@ -343,7 +350,7 @@ export function KnowledgePage() {
           <div className="flex flex-wrap items-center gap-2">
             <div
               role="group"
-              aria-label="Filter by status"
+              aria-label={t('knowledge.filterStatus')}
               className="flex min-w-0 flex-1 flex-wrap items-center gap-2"
             >
               {filters.map((filter) => (
@@ -361,7 +368,7 @@ export function KnowledgePage() {
             <Select
               value={documentType}
               onValueChange={(value) => setParam('type', value)}
-              ariaLabel="Filter by file type"
+              ariaLabel={t('knowledge.filterType')}
               size="sm"
               options={[
                 { value: 'all', label: t('knowledge.allTypes') },
@@ -439,6 +446,7 @@ export function KnowledgePage() {
             <div className="p-3 sm:p-4">
               {query.data && hasStalled(query) && (
                 <StaleNotice
+                  labels={{ paused: t('common.updatesPaused'), retry: t('common.retryNow') }}
                   className="mb-3"
                   message={query.error?.message ?? 'This list has stopped refreshing.'}
                   onRetry={() => void query.refetch()}
@@ -446,7 +454,7 @@ export function KnowledgePage() {
                 />
               )}
               {query.isLoading ? (
-                <LoadingRegion label="Loading sources">
+                <LoadingRegion label={t('consult.loadingSources')}>
                   <div className="flex flex-col gap-2">
                     {[0, 1, 2, 3, 4].map((i) => (
                       <Skeleton key={i} className="h-14 w-full" />
@@ -455,6 +463,7 @@ export function KnowledgePage() {
                 </LoadingRegion>
               ) : query.error && !query.data ? (
                 <ErrorState
+                  labels={{ retry: t('common.retry'), reference: t('common.reference') }}
                   message={query.error.message}
                   traceId={query.error.traceId}
                   onRetry={() => void query.refetch()}
@@ -463,7 +472,7 @@ export function KnowledgePage() {
               ) : (
                 <>
                   <DataTable
-                    caption="Knowledge base sources"
+                    caption={t('knowledge.tableCaption')}
                     rows={data?.items ?? []}
                     rowKey={(row) => row.id}
                     onRowClick={(row) => navigate(`/knowledge/${row.id}`)}
@@ -624,7 +633,10 @@ export function KnowledgePage() {
           </Card>
         </div>
 
-        <aside className="flex min-w-0 flex-col gap-5" aria-label="Pipeline and health">
+        <aside
+          className="flex min-w-0 flex-col gap-5"
+          aria-label={t('knowledge.pipelineAndHealth')}
+        >
           {data && <PipelineCard pipeline={data.pipeline} />}
           {data && <HealthCard health={data.knowledgeHealth} counts={data.counts} />}
           <AskAyumiCard />
@@ -632,6 +644,7 @@ export function KnowledgePage() {
       </div>
 
       <AddUrlDialog open={urlDialogOpen} onOpenChange={setUrlDialogOpen} />
+      <AddTextDialog open={textDialogOpen} onOpenChange={setTextDialogOpen} />
     </div>
   );
 }
@@ -655,9 +668,11 @@ export interface UploadState {
 export function UploadZone({
   onFiles,
   onUrlClick,
+  onTextClick,
 }: {
   onFiles: (files: File[]) => void;
   onUrlClick: () => void;
+  onTextClick: () => void;
 }) {
   const { t } = useI18n();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -713,7 +728,7 @@ export function UploadZone({
           type="file"
           multiple
           className="sr-only"
-          aria-label="Choose files to upload"
+          aria-label={t('knowledge.chooseFiles')}
           accept=".pdf,.docx,.xlsx,.csv,.pptx,.txt,.md,.html,.png,.jpg,.jpeg,.tif,.tiff,.zip"
           onChange={(event) => {
             onFiles([...(event.target.files ?? [])]);
@@ -741,6 +756,10 @@ export function UploadZone({
         <Button variant="secondary" size="md" onClick={onUrlClick}>
           <Link2 className="h-4 w-4" aria-hidden />
           {t('knowledge.websiteUrl')}
+        </Button>
+        <Button variant="secondary" size="md" onClick={onTextClick}>
+          <ClipboardType className="h-4 w-4" aria-hidden />
+          {t('knowledge.pasteText')}
         </Button>
 
         <div className="ms-auto">
@@ -1310,7 +1329,7 @@ function HealthCard({
         >
           <button
             type="button"
-            aria-label="How knowledge health is calculated"
+            aria-label={t('dashboard.healthFormula')}
             className="rounded p-1 text-[var(--uxe-text-tertiary)]"
           >
             <Info className="h-4 w-4" aria-hidden />
@@ -1450,6 +1469,115 @@ function AddUrlDialog({
           iconLeft={<Globe className="h-4 w-4" aria-hidden />}
         />
       </Field>
+    </Dialog>
+  );
+}
+
+/**
+ * A regulation somebody has as text rather than as a file.
+ *
+ * The API has accepted `kind: 'text'` from the beginning and nothing in the product could
+ * send it: a supported way into the knowledge base with no way to reach it, and a
+ * translated label sitting unused beside the ones that did work. An extract pasted out of
+ * a circular or an email is a real source, and it goes through the same indexing,
+ * citation-mapping and verification as an uploaded PDF — so a quotation from it can be
+ * re-located in the stored text exactly like any other.
+ */
+function AddTextDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const { t } = useI18n();
+  const queryClient = useQueryClient();
+  const { push } = useToast();
+  const [title, setTitle] = useState('');
+  const [content, setContent] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
+
+  const mutation = useMutation({
+    mutationFn: () =>
+      api.post(
+        '/sources/connectors',
+        { kind: 'text', title: title.trim(), content, tags: [] },
+        newIdempotencyKey(),
+      ),
+    onSuccess: () => {
+      push({
+        tone: 'success',
+        title: 'Text queued',
+        description: 'It is being indexed now and becomes citable when it finishes.',
+      });
+      void queryClient.invalidateQueries({ queryKey: ['sources'] });
+      setTitle('');
+      setContent('');
+      setFieldErrors({});
+      onOpenChange(false);
+    },
+    onError: (caught: ApiError) => {
+      setFieldErrors(caught.fieldErrors);
+      push({ tone: 'error', title: 'Could not add it', description: caught.message });
+    },
+  });
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title={t('knowledge.pasteText')}
+      description="Indexed and cited exactly like an uploaded document. Give it a title somebody will recognise in a citation."
+      size="md"
+      footer={
+        <>
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+            {t('common.cancel')}
+          </Button>
+          <Button
+            variant="primary"
+            onClick={() => mutation.mutate()}
+            loading={mutation.isPending}
+            disabled={!title.trim() || content.trim().length < 20}
+          >
+            {t('knowledge.addSources')}
+          </Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-4">
+        <Field
+          label={t('source.titleLabel')}
+          htmlFor="text-title"
+          error={fieldErrors.title?.[0]}
+          required
+        >
+          <Input
+            id="text-title"
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+            placeholder={t('knowledge.textTitlePlaceholder')}
+            invalid={Boolean(fieldErrors.title)}
+          />
+        </Field>
+
+        <Field
+          label={t('knowledge.textLabel')}
+          htmlFor="text-content"
+          hint={`${content.trim().length} characters. At least 20 are needed for anything to be citable.`}
+          error={fieldErrors.content?.[0]}
+          required
+        >
+          <Textarea
+            id="text-content"
+            rows={12}
+            value={content}
+            onChange={(event) => setContent(event.target.value)}
+            placeholder={t('knowledge.textPlaceholder')}
+            invalid={Boolean(fieldErrors.content)}
+          />
+        </Field>
+      </div>
     </Dialog>
   );
 }

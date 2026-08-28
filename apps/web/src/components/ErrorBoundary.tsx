@@ -26,6 +26,11 @@ export function RouteErrorBoundary() {
         <p className="mt-2 text-[14px] text-[var(--uxe-text-secondary)]">{detail}</p>
 
         <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
+          {/*
+            Literal, deliberately. This is the router's own error element: it renders when
+            something above the I18nProvider threw, so there is no catalogue to read from —
+            and a boundary that crashes looking one up is no boundary at all.
+          */}
           <Button variant="primary" onClick={() => window.location.reload()}>
             Reload this page
           </Button>

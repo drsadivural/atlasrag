@@ -93,7 +93,7 @@ export function ReportsPage() {
 
       <div
         role="group"
-        aria-label="Filter by kind"
+        aria-label={t('report.filterKind')}
         className="mt-5 flex flex-wrap items-center gap-2"
       >
         {[
@@ -115,7 +115,7 @@ export function ReportsPage() {
 
       <Card flush className="mt-4 p-3 sm:p-4">
         {query.isLoading ? (
-          <LoadingRegion label="Loading reports">
+          <LoadingRegion label={t('report.loadingList')}>
             <div className="flex flex-col gap-2">
               {[0, 1, 2, 3].map((i) => (
                 <Skeleton key={i} className="h-14 w-full" />
@@ -124,6 +124,7 @@ export function ReportsPage() {
           </LoadingRegion>
         ) : query.error && !query.data ? (
           <ErrorState
+            labels={{ retry: t('common.retry'), reference: t('common.reference') }}
             message={query.error.message}
             traceId={query.error.traceId}
             onRetry={() => void query.refetch()}
@@ -131,7 +132,7 @@ export function ReportsPage() {
         ) : (
           <>
             <DataTable
-              caption="Generated reports and documents"
+              caption={t('report.tableCaption')}
               rows={query.data?.items ?? []}
               rowKey={(row) => row.id}
               empty={

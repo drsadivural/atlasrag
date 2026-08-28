@@ -225,6 +225,7 @@ function DecisionHeader({ answer, style }: { answer: StructuredAnswer; style: An
 }
 
 function ConfidenceBadge({ answer }: { answer: StructuredAnswer }) {
+  const { t } = useI18n();
   const percent = Math.round(answer.confidence.overall * 100);
   const c = answer.confidence;
 
@@ -232,7 +233,7 @@ function ConfidenceBadge({ answer }: { answer: StructuredAnswer }) {
     <Tooltip
       content={
         <span className="block space-y-1">
-          <span className="block font-semibold">How this is calculated</span>
+          <span className="block font-semibold">{t('answer.howCalculated')}</span>
           <span className="block">Evidence coverage {Math.round(c.evidenceCoverage * 100)}%</span>
           <span className="block">Retrieval quality {Math.round(c.retrievalQuality * 100)}%</span>
           <span className="block">
@@ -327,7 +328,7 @@ function OptimalBody({
       {answer.findings.length > 0 && (
         <div className="overflow-hidden rounded-[var(--uxe-radius-card)] border border-[var(--uxe-border)]">
           <table className="w-full border-collapse text-start">
-            <caption className="sr-only">Compact evidence table</caption>
+            <caption className="sr-only">{t('answer.compactTable')}</caption>
             <tbody>
               {answer.findings.slice(0, 8).map((finding) => {
                 const meta = RESULT_META[finding.result];
@@ -377,7 +378,7 @@ function OptimalBody({
                         </button>
                       ) : (
                         <span className="text-[12px] text-[var(--uxe-text-tertiary)]">
-                          No located evidence
+                          {t('answer.noLocatedEvidence')}
                         </span>
                       )}
                     </td>
@@ -496,10 +497,10 @@ function DetailsBody({
       )}
 
       {answer.findings.length > 0 && (
-        <Section title="Requirement-by-requirement findings">
+        <Section title={t('answer.findingsCaption')}>
           <div className="overflow-x-auto rounded-[var(--uxe-radius-card)] border border-[var(--uxe-border)]">
             <table className="w-full min-w-[880px] border-collapse text-start text-[13px]">
-              <caption className="sr-only">Evidence matrix</caption>
+              <caption className="sr-only">{t('answer.evidenceMatrix')}</caption>
               <thead>
                 <tr className="border-b border-[var(--uxe-border)] bg-[var(--uxe-surface-sunken)]">
                   {[
@@ -776,7 +777,7 @@ export function CitationChip({
             )}
             {citation.entailment === 'contradicts' && (
               <Badge tone="danger" size="sm" icon={<XCircle className="h-3 w-3" aria-hidden />}>
-                Contradicts
+                {t('answer.contradicts')}
               </Badge>
             )}
           </div>
@@ -794,6 +795,7 @@ export function CitationChip({
 }
 
 function InjectionWarning({ warnings }: { warnings: StructuredAnswer['injectionWarnings'] }) {
+  const { t } = useI18n();
   return (
     <div
       role="alert"
@@ -802,7 +804,7 @@ function InjectionWarning({ warnings }: { warnings: StructuredAnswer['injectionW
       <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-[var(--uxe-danger)]" aria-hidden />
       <div className="min-w-0">
         <p className="text-[13px] font-semibold text-[var(--uxe-danger)]">
-          Suspicious content detected in a source
+          {t('answer.injectionWarning')}
         </p>
         <ul className="mt-1 space-y-1">
           {warnings.map((warning, index) => (

@@ -65,6 +65,7 @@ export function DashboardPage() {
     return (
       <div className="p-4 sm:p-6">
         <ErrorState
+          labels={{ retry: t('common.retry'), reference: t('common.reference') }}
           message={query.error.message}
           traceId={query.error.traceId}
           onRetry={() => void query.refetch()}
@@ -111,7 +112,7 @@ export function DashboardPage() {
           ) : (
             <>
               <section
-                aria-label="Key metrics"
+                aria-label={t('dashboard.keyMetrics')}
                 className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4"
               >
                 {data.kpis.map((kpi) => (
@@ -130,7 +131,7 @@ export function DashboardPage() {
                       <Select
                         value={String(days)}
                         onValueChange={(value) => setDays(Number(value))}
-                        ariaLabel="Date range"
+                        ariaLabel={t('dashboard.dateRange')}
                         size="sm"
                         options={[
                           { value: '7', label: t('dashboard.last7') },
@@ -185,8 +186,8 @@ export function DashboardPage() {
                     empty={
                       <EmptyState
                         icon={<MessageSquare className="h-6 w-6" aria-hidden />}
-                        title="No consultations yet"
-                        description="Start one to see verified answers with exact evidence."
+                        title={t('dashboard.noConsultations')}
+                        description={t('dashboard.noConsultationsHint')}
                         action={
                           <Button variant="primary" size="sm" onClick={() => navigate('/consult')}>
                             {t('dashboard.startConsultation')}
@@ -275,7 +276,10 @@ export function DashboardPage() {
           )}
         </div>
 
-        <aside className="flex min-w-0 flex-col gap-5" aria-label="Attention and health">
+        <aside
+          className="flex min-w-0 flex-col gap-5"
+          aria-label={t('dashboard.attentionAndHealth')}
+        >
           <NeedsAttentionCard items={data.needsAttention} />
           <KnowledgeHealthCard health={data.knowledgeHealth} />
         </aside>
@@ -425,11 +429,11 @@ function ComplianceDonut({ outcomes }: { outcomes: DashboardResponse['compliance
     return (
       <EmptyState
         icon={<PieChart className="h-6 w-6" aria-hidden />}
-        title="No reviews yet"
-        description="Run a compliance review to see outcomes broken down by requirement."
+        title={t('dashboard.noReviews')}
+        description={t('dashboard.noReviewsHint')}
         action={
           <Button variant="secondary" size="sm" onClick={() => navigate('/consult')}>
-            Run a compliance review
+            {t('dashboard.runReview')}
           </Button>
         }
       />
@@ -536,7 +540,7 @@ function NeedsAttentionCard({ items }: { items: DashboardResponse['needsAttentio
           <div className="flex items-center gap-3 rounded-[var(--uxe-radius-card)] bg-[var(--uxe-success-bg)] p-4">
             <CheckCircle2 className="h-5 w-5 shrink-0 text-[var(--uxe-success)]" aria-hidden />
             <p className="text-[13px] font-medium text-[var(--uxe-success)]">
-              Nothing needs attention right now.
+              {t('dashboard.nothingNeedsAttention')}
             </p>
           </div>
         </div>
@@ -643,7 +647,7 @@ function AttentionDialog({
           </Button>
           {item && (
             <Button variant="secondary" asChild>
-              <Link to={item.href}>Open it</Link>
+              <Link to={item.href}>{t('dashboard.openIt')}</Link>
             </Button>
           )}
           <Button variant="primary" loading={resolve.isPending} onClick={() => resolve.mutate()}>
@@ -705,7 +709,7 @@ function KnowledgeHealthCard({ health }: { health: DashboardResponse['knowledgeH
         >
           <button
             type="button"
-            aria-label="How knowledge health is calculated"
+            aria-label={t('dashboard.healthFormula')}
             className="rounded p-1 text-[var(--uxe-text-tertiary)] hover:text-[var(--uxe-text)]"
           >
             <Info className="h-4 w-4" aria-hidden />
@@ -779,8 +783,9 @@ export function StatusBadge({ status }: { status: string }) {
 }
 
 function DashboardSkeleton() {
+  const { t } = useI18n();
   return (
-    <LoadingRegion label="Loading dashboard">
+    <LoadingRegion label={t('dashboard.loading')}>
       <div className="mx-auto w-full max-w-[1600px] p-4 sm:p-6">
         <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
           <div className="flex flex-col gap-5">

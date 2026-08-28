@@ -262,7 +262,7 @@ export function LoginPage() {
                           full
                           className="mt-2"
                           loading={submitting}
-                          loadingLabel="Signing in"
+                          loadingLabel={t('auth.signingIn')}
                           disabled={rateLimited}
                         >
                           {t('auth.signIn')}

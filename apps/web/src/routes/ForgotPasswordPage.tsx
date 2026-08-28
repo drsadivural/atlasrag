@@ -87,7 +87,7 @@ export function ForgotPasswordPage() {
                   />
                 </Field>
                 <Button type="submit" variant="primary" size="xl" full loading={submitting}>
-                  Send reset link
+                  {t('auth.sendResetLink')}
                 </Button>
               </form>
 

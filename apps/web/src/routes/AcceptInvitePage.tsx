@@ -75,7 +75,7 @@ export function AcceptInvitePage() {
       <Shell>
         <Card className="p-8">
           <div role="status" aria-live="polite">
-            <span className="sr-only">Checking your invitation</span>
+            <span className="sr-only">{t('invite.checking')}</span>
             <Skeleton className="h-7 w-56" />
             <Skeleton className="mt-3 h-5 w-72" />
             <Skeleton className="mt-6 h-11 w-full" />
@@ -140,13 +140,17 @@ export function AcceptInvitePage() {
         >
           {needsPassword && (
             <>
-              <Field label="Your name" htmlFor="invite-name" error={fieldErrors.fullName?.[0]}>
+              <Field
+                label={t('invite.yourName')}
+                htmlFor="invite-name"
+                error={fieldErrors.fullName?.[0]}
+              >
                 <Input
                   id="invite-name"
                   value={fullName}
                   onChange={(event) => setFullName(event.target.value)}
                   autoComplete="name"
-                  placeholder="How your name appears to colleagues"
+                  placeholder={t('invite.namePlaceholder')}
                 />
               </Field>
 
@@ -192,7 +196,7 @@ export function AcceptInvitePage() {
         <p className="mt-5 text-center text-[13px] text-[var(--uxe-text-secondary)]">
           Not you?{' '}
           <Link to="/login" className="font-medium text-[var(--uxe-cobalt)] hover:underline">
-            Sign in with a different account
+            {t('invite.differentAccount')}
           </Link>
         </p>
       </Card>
@@ -214,6 +218,7 @@ function Shell({ children }: { children: React.ReactNode }) {
 }
 
 function InvalidLink({ message }: { message: string }) {
+  const { t } = useI18n();
   return (
     <Card className="p-8 text-center">
       <span
@@ -222,12 +227,14 @@ function InvalidLink({ message }: { message: string }) {
       >
         <AlertTriangle className="h-7 w-7" />
       </span>
-      <h1 className="mt-4 text-[20px] font-bold text-[var(--uxe-text)]">Invitation unavailable</h1>
+      <h1 className="mt-4 text-[20px] font-bold text-[var(--uxe-text)]">
+        {t('invite.unavailable')}
+      </h1>
       <p role="alert" className="mt-2 text-[14px] text-[var(--uxe-text-secondary)]">
         {message}
       </p>
       <Button asChild variant="secondary" className="mt-6">
-        <Link to="/login">Go to sign in</Link>
+        <Link to="/login">{t('invite.goToSignIn')}</Link>
       </Button>
     </Card>
   );

@@ -90,7 +90,7 @@ export function ActivityPage() {
       <div className="mt-5 flex flex-wrap items-center gap-2">
         <div
           role="group"
-          aria-label="Filter by category"
+          aria-label={t('activity.filterCategory')}
           className="flex min-w-0 flex-1 flex-wrap gap-2"
         >
           {CATEGORIES.map((value) => (
@@ -106,14 +106,14 @@ export function ActivityPage() {
           value={q}
           onChange={(event) => setParam('q', event.target.value)}
           placeholder={t('common.search')}
-          aria-label="Search activity"
+          aria-label={t('activity.search')}
           className="h-9 w-full text-[13px] sm:w-64"
         />
       </div>
 
       <Card flush className="mt-4 p-3 sm:p-4">
         {query.isLoading ? (
-          <LoadingRegion label="Loading activity">
+          <LoadingRegion label={t('activity.loading')}>
             <div className="flex flex-col gap-2">
               {[0, 1, 2, 3, 4].map((i) => (
                 <Skeleton key={i} className="h-12 w-full" />
@@ -122,6 +122,7 @@ export function ActivityPage() {
           </LoadingRegion>
         ) : query.error && !query.data ? (
           <ErrorState
+            labels={{ retry: t('common.retry'), reference: t('common.reference') }}
             message={query.error.message}
             traceId={query.error.traceId}
             onRetry={() => void query.refetch()}
@@ -129,7 +130,7 @@ export function ActivityPage() {
         ) : (
           <>
             <DataTable
-              caption="Audit events"
+              caption={t('activity.tableCaption')}
               rows={query.data?.items ?? []}
               rowKey={(row) => row.id}
               empty={

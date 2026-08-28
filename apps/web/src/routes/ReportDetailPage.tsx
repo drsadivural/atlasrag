@@ -67,7 +67,7 @@ export function ReportDetailPage() {
 
   if (query.isLoading) {
     return (
-      <LoadingRegion label="Loading artifact">
+      <LoadingRegion label={t('report.loading')}>
         <div className="mx-auto w-full max-w-[1000px] p-6">
           <Skeleton className="h-9 w-72" />
           <Skeleton className="mt-4 h-40 w-full" />
@@ -80,6 +80,7 @@ export function ReportDetailPage() {
     return (
       <div className="p-6">
         <ErrorState
+          labels={{ retry: t('common.retry'), reference: t('common.reference') }}
           message={query.error.message}
           traceId={query.error.traceId}
           onRetry={() => void query.refetch()}
@@ -123,13 +124,13 @@ export function ReportDetailPage() {
             <CardTitle>{t('reports.generatedBy')}</CardTitle>
           </CardHeader>
           <dl className="grid grid-cols-1 gap-x-6 gap-y-2 text-[13px] sm:grid-cols-2">
-            <Row label="Generator">{artifact.generatorDescriptor}</Row>
-            <Row label="Checksum">
+            <Row label={t('report.generator')}>{artifact.generatorDescriptor}</Row>
+            <Row label={t('report.checksum')}>
               <span className="font-[family-name:var(--uxe-font-mono)] text-[11px]">
                 {artifact.sha256.slice(0, 24)}…
               </span>
             </Row>
-            <Row label="Status">
+            <Row label={t('report.status')}>
               <Badge tone={artifact.status === 'ready' ? 'success' : 'neutral'} size="sm">
                 {artifact.status}
               </Badge>
@@ -140,7 +141,7 @@ export function ReportDetailPage() {
         {artifact.validation.checks && artifact.validation.checks.length > 0 && (
           <Card>
             <CardHeader>
-              <CardTitle>Validation</CardTitle>
+              <CardTitle>{t('report.validation')}</CardTitle>
             </CardHeader>
             <ul className="flex flex-col gap-2">
               {artifact.validation.checks.map((check) => (
@@ -199,7 +200,7 @@ export function ReportDetailPage() {
                   <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
                     <div className="rounded-[var(--uxe-radius-control)] border border-[var(--uxe-danger-border)] bg-[var(--uxe-danger-bg)] p-2.5">
                       <p className="text-[11px] font-semibold text-[var(--uxe-danger)] uppercase">
-                        Before
+                        {t('report.before')}
                       </p>
                       <p className="mt-1 text-[13px] text-[var(--uxe-text)]">
                         {entry.before || '(nothing at this location)'}
@@ -207,7 +208,7 @@ export function ReportDetailPage() {
                     </div>
                     <div className="rounded-[var(--uxe-radius-control)] border border-[var(--uxe-success-border)] bg-[var(--uxe-success-bg)] p-2.5">
                       <p className="text-[11px] font-semibold text-[var(--uxe-success)] uppercase">
-                        After
+                        {t('report.after')}
                       </p>
                       <p className="mt-1 text-[13px] text-[var(--uxe-text)]">{entry.after}</p>
                     </div>

@@ -14,6 +14,7 @@ import {
 } from '@uxe/ui';
 import { formatLocator, type CorrectionPlan } from '@uxe/contracts';
 import { type ApiError, api, newIdempotencyKey } from '../lib/api.js';
+import { useI18n } from '../lib/i18n.js';
 
 const STRATEGY_LABELS: Record<CorrectionPlan['outputStrategy'], string> = {
   in_place_text: 'Edited in place',
@@ -49,6 +50,7 @@ export function CorrectionReviewDialog({
   onOpenChange: (open: boolean) => void;
   planId: string;
 }) {
+  const { t } = useI18n();
   const queryClient = useQueryClient();
   const { push } = useToast();
   const [edited, setEdited] = useState<Record<string, string>>({});
@@ -114,7 +116,7 @@ export function CorrectionReviewDialog({
     <Dialog
       open={open}
       onOpenChange={onOpenChange}
-      title="Review proposed corrections"
+      title={t('correction.title')}
       description="Nothing is written until you accept a change and generate the edition. The original document is never modified."
       size="xl"
       footer={
@@ -123,7 +125,7 @@ export function CorrectionReviewDialog({
             {acceptedCount} accepted · {pendingCount} still to review
           </span>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
-            Close
+            {t('common.close')}
           </Button>
           <Button
             variant="primary"
@@ -132,13 +134,13 @@ export function CorrectionReviewDialog({
             disabled={acceptedCount === 0}
             title={acceptedCount === 0 ? 'Accept at least one change before generating' : undefined}
           >
-            Generate corrected edition
+            {t('correction.generate')}
           </Button>
         </>
       }
     >
       {plan.isLoading ? (
-        <LoadingRegion label="Loading the correction plan">
+        <LoadingRegion label={t('correction.loading')}>
           <div className="flex flex-col gap-3">
             {[0, 1, 2].map((i) => (
               <Skeleton key={i} className="h-28 w-full" />
@@ -147,16 +149,14 @@ export function CorrectionReviewDialog({
         </LoadingRegion>
       ) : plan.error && !plan.data ? (
         <ErrorState
+          labels={{ retry: t('common.retry'), reference: t('common.reference') }}
           message={plan.error.message}
           traceId={plan.error.traceId}
           onRetry={() => void plan.refetch()}
           retrying={plan.isRefetching}
         />
       ) : changes.length === 0 ? (
-        <EmptyState
-          title="No changes were proposed"
-          description="Nothing in this document contradicts a requirement that could be tested against it."
-        />
+        <EmptyState title={t('correction.noChanges')} description={t('correction.noChangesHint')} />
       ) : (
         <div className="flex flex-col gap-4">
           {plan.data?.signatureNotice && (
@@ -173,7 +173,7 @@ export function CorrectionReviewDialog({
             <div className="rounded-[var(--uxe-radius-control)] border border-[var(--uxe-warning-border)] bg-[var(--uxe-warning-bg)] p-3">
               <p className="flex items-center gap-2 text-[13px] font-semibold text-[var(--uxe-warning)]">
                 <FileWarning className="h-4 w-4" aria-hidden />
-                Before you generate
+                {t('correction.beforeGenerate')}
               </p>
               <ul className="mt-1.5 flex flex-col gap-1">
                 {plan.data?.limitations.map((limitation, index) => (
@@ -233,7 +233,7 @@ export function CorrectionReviewDialog({
                 <div className="mt-3 grid gap-2 md:grid-cols-2">
                   <div className="rounded-[var(--uxe-radius-control)] border border-[var(--uxe-danger-border)] bg-[var(--uxe-danger-bg)]/40 p-2.5">
                     <p className="text-[11px] font-semibold tracking-wide text-[var(--uxe-danger)] uppercase">
-                      Current
+                      {t('correction.current')}
                     </p>
                     <p className="mt-1 text-[13px] text-[var(--uxe-text)]">
                       {change.currentContent}
@@ -241,7 +241,7 @@ export function CorrectionReviewDialog({
                   </div>
                   <div className="rounded-[var(--uxe-radius-control)] border border-[var(--uxe-success-border)] bg-[var(--uxe-success-bg)]/40 p-2.5">
                     <p className="text-[11px] font-semibold tracking-wide text-[var(--uxe-success)] uppercase">
-                      Proposed
+                      {t('correction.proposed')}
                     </p>
                     {editing === change.id ? (
                       <Textarea
@@ -282,7 +282,7 @@ export function CorrectionReviewDialog({
                     loading={decide.isPending && decide.variables?.changeId === change.id}
                   >
                     <Check className="h-3.5 w-3.5" aria-hidden />
-                    Accept
+                    {t('correction.accept')}
                   </Button>
                   <Button
                     size="sm"
@@ -296,7 +296,7 @@ export function CorrectionReviewDialog({
                     }
                   >
                     <X className="h-3.5 w-3.5" aria-hidden />
-                    Reject
+                    {t('correction.reject')}
                   </Button>
                   {editing === change.id ? (
                     <Button
@@ -311,12 +311,12 @@ export function CorrectionReviewDialog({
                         setEditing(null);
                       }}
                     >
-                      Save my wording
+                      {t('correction.saveWording')}
                     </Button>
                   ) : (
                     <Button size="sm" variant="ghost" onClick={() => setEditing(change.id)}>
                       <Pencil className="h-3.5 w-3.5" aria-hidden />
-                      Edit wording
+                      {t('correction.editWording')}
                     </Button>
                   )}
                 </div>

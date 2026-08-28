@@ -443,6 +443,12 @@ export interface ErrorStateProps {
   onRetry?: () => void;
   retrying?: boolean;
   className?: string;
+  /**
+   * Wording, so a translated application does not show three English words inside an
+   * otherwise translated page. Defaults are English because this is a component library
+   * with no locale of its own; the application passes its own.
+   */
+  labels?: { retry?: string; reference?: string };
 }
 
 /**
@@ -459,6 +465,7 @@ export function ErrorState({
   onRetry,
   retrying,
   className,
+  labels,
 }: ErrorStateProps) {
   return (
     <div
@@ -475,12 +482,12 @@ export function ErrorState({
       <p className="mt-1.5 max-w-lg text-[14px] text-[var(--uxe-text)]">{message}</p>
       {traceId && (
         <p className="mt-2 font-[family-name:var(--uxe-font-mono)] text-[11px] text-[var(--uxe-text-secondary)]">
-          Reference: {traceId}
+          {labels?.reference ?? 'Reference'}: {traceId}
         </p>
       )}
       {onRetry && (
         <Button className="mt-4" variant="secondary" size="sm" onClick={onRetry} loading={retrying}>
-          Try again
+          {labels?.retry ?? 'Try again'}
         </Button>
       )}
     </div>
@@ -504,11 +511,14 @@ export function StaleNotice({
   onRetry,
   retrying,
   className,
+  labels,
 }: {
   message: string;
   onRetry?: () => void;
   retrying?: boolean;
   className?: string;
+  /** Wording, for the same reason as ErrorState. */
+  labels?: { paused?: string; retry?: string };
 }) {
   return (
     <div
@@ -520,11 +530,13 @@ export function StaleNotice({
         className,
       )}
     >
-      <span className="font-semibold text-[var(--uxe-warning-text)]">Live updates paused</span>
+      <span className="font-semibold text-[var(--uxe-warning-text)]">
+        {labels?.paused ?? 'Live updates paused'}
+      </span>
       <span className="min-w-0 flex-1">{message}</span>
       {onRetry && (
         <Button variant="ghost" size="sm" onClick={onRetry} loading={retrying}>
-          Retry now
+          {labels?.retry ?? 'Retry now'}
         </Button>
       )}
     </div>

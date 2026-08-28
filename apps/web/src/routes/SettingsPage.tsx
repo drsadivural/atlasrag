@@ -115,11 +115,12 @@ export function SettingsPage() {
 
         <div className="min-w-0">
           {query.isLoading ? (
-            <LoadingRegion label="Loading settings">
+            <LoadingRegion label={t('settings.loading')}>
               <Skeleton className="h-64 w-full rounded-[var(--uxe-radius-card)]" />
             </LoadingRegion>
           ) : query.error && !query.data ? (
             <ErrorState
+              labels={{ retry: t('common.retry'), reference: t('common.reference') }}
               message={query.error.message}
               traceId={query.error.traceId}
               onRetry={() => void query.refetch()}
@@ -240,7 +241,7 @@ function GeneralSection({ settings, canEdit }: { settings: WorkspaceSettings; ca
       {!canEdit && <ReadOnlyNotice />}
 
       <div className="flex flex-col gap-4">
-        <Field label="Workspace name" htmlFor="workspace-name">
+        <Field label={t('settings.workspaceName')} htmlFor="workspace-name">
           <Input
             id="workspace-name"
             value={name}
@@ -249,11 +250,11 @@ function GeneralSection({ settings, canEdit }: { settings: WorkspaceSettings; ca
           />
         </Field>
 
-        <Field label="Locale" htmlFor="locale">
+        <Field label={t('settings.locale')} htmlFor="locale">
           <Select
             value={settings.general.locale}
             onValueChange={(value) => save.mutate({ general: { locale: value } })}
-            ariaLabel="Locale"
+            ariaLabel={t('settings.locale')}
             disabled={!canEdit}
             className="w-full"
             options={[
@@ -264,15 +265,11 @@ function GeneralSection({ settings, canEdit }: { settings: WorkspaceSettings; ca
           />
         </Field>
 
-        <Field
-          label="Timezone"
-          htmlFor="timezone"
-          hint="Used for dates in reports and the activity log."
-        >
+        <Field label={t('settings.timezone')} htmlFor="timezone" hint={t('settings.timezoneHint')}>
           <Select
             value={timezone}
             onValueChange={setTimezone}
-            ariaLabel="Timezone"
+            ariaLabel={t('settings.timezone')}
             disabled={!canEdit}
             className="w-full"
             options={(TIMEZONES.includes(timezone as (typeof TIMEZONES)[number])
@@ -338,7 +335,7 @@ function ConsultantSection({
             <Ayumi variant="sm" decorative />
           </div>
           <div className="flex min-w-0 flex-1 flex-col gap-4">
-            <Field label="Name" htmlFor="consultant-name">
+            <Field label={t('settings.consultantNameLabel')} htmlFor="consultant-name">
               <Input
                 id="consultant-name"
                 value={form.name}
@@ -346,7 +343,7 @@ function ConsultantSection({
                 disabled={!canEdit}
               />
             </Field>
-            <Field label="Title" htmlFor="consultant-title">
+            <Field label={t('settings.consultantTitle')} htmlFor="consultant-title">
               <Input
                 id="consultant-title"
                 value={form.title}
@@ -354,7 +351,7 @@ function ConsultantSection({
                 disabled={!canEdit}
               />
             </Field>
-            <Field label="Greeting" htmlFor="consultant-greeting">
+            <Field label={t('settings.greeting')} htmlFor="consultant-greeting">
               <Input
                 id="consultant-greeting"
                 value={form.greeting}
@@ -363,9 +360,9 @@ function ConsultantSection({
               />
             </Field>
             <Field
-              label="Behaviour notes"
+              label={t('settings.behaviourNotes')}
               htmlFor="consultant-behavior"
-              hint="Guidance applied to every answer. It cannot override the grounding or citation rules."
+              hint={t('settings.behaviourNotesHint')}
             >
               <Textarea
                 id="consultant-behavior"
@@ -381,19 +378,19 @@ function ConsultantSection({
 
       <Card>
         <CardHeader>
-          <CardTitle>Answer defaults</CardTitle>
+          <CardTitle>{t('settings.answerDefaults')}</CardTitle>
         </CardHeader>
 
         <SwitchField
           label={t('consult.knowledgeOnly')}
-          description="Answer only from approved sources."
+          description={t('settings.knowledgeOnlyHint')}
           checked={answers.knowledgeOnly}
           onCheckedChange={(checked) => setAnswers({ ...answers, knowledgeOnly: checked })}
           disabled={!canEdit}
         />
         <SwitchField
           label={t('consult.askWhenUncertain')}
-          description="Ask a precise follow-up rather than guessing when evidence is thin."
+          description={t('settings.askWhenUncertainHint')}
           checked={answers.askWhenUncertain}
           onCheckedChange={(checked) => setAnswers({ ...answers, askWhenUncertain: checked })}
           disabled={!canEdit}
@@ -406,8 +403,8 @@ function ConsultantSection({
           disabled={!canEdit}
         />
         <SwitchField
-          label="Require citations"
-          description="Refuse to present a material claim that has no verified citation."
+          label={t('settings.requireCitations')}
+          description={t('settings.requireCitationsHint')}
           checked={answers.requireCitations}
           onCheckedChange={(checked) => setAnswers({ ...answers, requireCitations: checked })}
           disabled={!canEdit}
@@ -416,7 +413,7 @@ function ConsultantSection({
         <Field
           label={`Minimum evidence threshold: ${Math.round(answers.minimumEvidenceThreshold * 100)}%`}
           htmlFor="evidence-threshold"
-          hint="Below this coverage, Ayumi abstains and says so instead of answering."
+          hint={t('settings.thresholdHint')}
           className="mt-3"
         >
           <input
@@ -499,9 +496,7 @@ function ModelsSection({ models, canEdit }: { models: ModelConfiguration[]; canE
         </p>
 
         {models.length === 0 ? (
-          <p className="text-[14px] text-[var(--uxe-text-secondary)]">
-            No provider has been configured. The deterministic engine is in use.
-          </p>
+          <p className="text-[14px] text-[var(--uxe-text-secondary)]">{t('settings.noProvider')}</p>
         ) : (
           <ul className="flex flex-col gap-3">
             {models.map((model) => (
@@ -567,7 +562,7 @@ function ModelsSection({ models, canEdit }: { models: ModelConfiguration[]; canE
       <ConfirmDialog
         open={removing !== null}
         onOpenChange={(open) => !open && setRemoving(null)}
-        title="Remove this provider?"
+        title={t('settings.removeProvider')}
         description={
           removing
             ? `${removing.provider} ${removing.model} will stop being used for ${removing.capability}, and its stored key is deleted. ${
@@ -809,7 +804,7 @@ function AddModelCard({
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field
-          label="Capability"
+          label={t('settings.capability')}
           htmlFor="capability"
           hint={
             capabilityManual
@@ -825,7 +820,7 @@ function AddModelCard({
                   setCapability(value);
                   setAvailable([]);
                 }}
-                ariaLabel="Capability"
+                ariaLabel={t('settings.capability')}
                 className="w-full"
                 options={Object.entries(CAPABILITY_LABELS).map(([value, label]) => ({
                   value,
@@ -851,13 +846,13 @@ function AddModelCard({
                 value={CAPABILITY_LABELS[effectiveCapability] ?? effectiveCapability}
               />
               <Button variant="ghost" size="sm" onClick={() => setCapabilityManual(true)}>
-                Change
+                {t('settings.change')}
               </Button>
             </div>
           )}
         </Field>
 
-        <Field label="Provider" htmlFor="provider">
+        <Field label={t('settings.provider')} htmlFor="provider">
           <Select
             value={provider}
             onValueChange={(value) => {
@@ -872,7 +867,7 @@ function AddModelCard({
                     : 'uxe-extractive-v1',
               );
             }}
-            ariaLabel="Provider"
+            ariaLabel={t('settings.provider')}
             className="w-full"
             options={[
               { value: 'deterministic', label: 'Deterministic (local, extractive)' },
@@ -883,7 +878,7 @@ function AddModelCard({
         </Field>
 
         <Field
-          label="Model"
+          label={t('settings.model')}
           htmlFor="model-name"
           hint={
             available.length > 0
@@ -895,7 +890,7 @@ function AddModelCard({
             <Select
               value={model}
               onValueChange={setModel}
-              ariaLabel="Model"
+              ariaLabel={t('settings.model')}
               className="w-full"
               options={available.map((entry) => ({ value: entry.id, label: entry.label }))}
             />
@@ -905,7 +900,7 @@ function AddModelCard({
         </Field>
 
         <Field
-          label="Reasoning effort"
+          label={t('settings.reasoningEffort')}
           htmlFor="reasoning-effort"
           hint={
             provider === 'openai'
@@ -916,7 +911,7 @@ function AddModelCard({
           <Select
             value={reasoningEffort}
             onValueChange={setReasoningEffort}
-            ariaLabel="Reasoning effort"
+            ariaLabel={t('settings.reasoningEffort')}
             className="w-full"
             disabled={provider !== 'openai'}
             options={[
@@ -973,7 +968,7 @@ function AddModelCard({
             disabled={load.isPending}
           >
             <RefreshCw className="h-4 w-4" aria-hidden />
-            Load available models
+            {t('settings.loadModels')}
           </Button>
         )}
       </div>
@@ -994,13 +989,13 @@ function SecuritySection({ settings, canEdit }: { settings: WorkspaceSettings; c
       {!canEdit && <ReadOnlyNotice />}
 
       <div className="flex flex-col gap-4">
-        <Field label="Two-factor authentication policy" htmlFor="mfa-policy">
+        <Field label={t('settings.mfaPolicy')} htmlFor="mfa-policy">
           <Select
             value={form.mfaPolicy}
             onValueChange={(value) =>
               setForm({ ...form, mfaPolicy: value as typeof form.mfaPolicy })
             }
-            ariaLabel="MFA policy"
+            ariaLabel={t('settings.mfaPolicyAria')}
             disabled={!canEdit}
             className="w-full"
             options={[
@@ -1015,7 +1010,7 @@ function SecuritySection({ settings, canEdit }: { settings: WorkspaceSettings; c
           />
         </Field>
 
-        <Field label="Idle session timeout (minutes)" htmlFor="idle-minutes">
+        <Field label={t('settings.idleTimeout')} htmlFor="idle-minutes">
           <Input
             id="idle-minutes"
             type="number"
@@ -1028,9 +1023,9 @@ function SecuritySection({ settings, canEdit }: { settings: WorkspaceSettings; c
         </Field>
 
         <Field
-          label="Absolute session lifetime (hours)"
+          label={t('settings.absoluteLifetime')}
           htmlFor="absolute-hours"
-          hint="A session dies at this age no matter how active it is."
+          hint={t('settings.absoluteLifetimeHint')}
         >
           <Input
             id="absolute-hours"
@@ -1044,9 +1039,9 @@ function SecuritySection({ settings, canEdit }: { settings: WorkspaceSettings; c
         </Field>
 
         <Field
-          label="Allowed email domains"
+          label={t('settings.allowedDomains')}
           htmlFor="domains"
-          hint="Comma separated. Leave empty to allow any invited address."
+          hint={t('settings.allowedDomainsHint')}
         >
           <Input
             id="domains"
@@ -1061,7 +1056,7 @@ function SecuritySection({ settings, canEdit }: { settings: WorkspaceSettings; c
               })
             }
             disabled={!canEdit}
-            placeholder="example.com, partner.co"
+            placeholder={t('settings.domainsPlaceholder')}
           />
         </Field>
 
@@ -1101,7 +1096,7 @@ function RetentionSection({
         {!canEdit && <ReadOnlyNotice />}
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Field label="Consultations (days)" htmlFor="retain-consultations">
+          <Field label={t('settings.retentionConsultations')} htmlFor="retain-consultations">
             <Input
               id="retain-consultations"
               type="number"
@@ -1111,7 +1106,7 @@ function RetentionSection({
               disabled={!canEdit}
             />
           </Field>
-          <Field label="Artifacts (days)" htmlFor="retain-artifacts">
+          <Field label={t('settings.retentionArtifacts')} htmlFor="retain-artifacts">
             <Input
               id="retain-artifacts"
               type="number"
@@ -1121,7 +1116,7 @@ function RetentionSection({
               disabled={!canEdit}
             />
           </Field>
-          <Field label="Audit events (days)" htmlFor="retain-audit">
+          <Field label={t('settings.retentionAudit')} htmlFor="retain-audit">
             <Input
               id="retain-audit"
               type="number"
@@ -1132,9 +1127,9 @@ function RetentionSection({
             />
           </Field>
           <Field
-            label="Purge grace period (days)"
+            label={t('settings.retentionGrace')}
             htmlFor="grace"
-            hint="Deleted items stay recoverable, and their citations resolvable for audit, for this long."
+            hint={t('settings.retentionGraceHint')}
           >
             <Input
               id="grace"
@@ -1149,8 +1144,8 @@ function RetentionSection({
 
         <SwitchField
           className="mt-2"
-          label="Legal hold"
-          description="While on, nothing in this workspace is purged regardless of age."
+          label={t('settings.legalHold')}
+          description={t('settings.legalHoldHint')}
           checked={form.legalHold}
           onCheckedChange={(checked) => setForm({ ...form, legalHold: checked })}
           disabled={!canEdit}
@@ -1179,8 +1174,8 @@ function RetentionSection({
         </CardHeader>
 
         <SwitchField
-          label="Job completion"
-          description="Email when a review, report or corrected document finishes."
+          label={t('settings.notifyJob')}
+          description={t('settings.notifyJobHint')}
           checked={notifications.jobCompletion}
           onCheckedChange={(checked) =>
             setNotifications({ ...notifications, jobCompletion: checked })
@@ -1188,8 +1183,8 @@ function RetentionSection({
           disabled={!canEdit}
         />
         <SwitchField
-          label="Critical findings"
-          description="Email when a review produces a critical gap."
+          label={t('settings.notifyCritical')}
+          description={t('settings.notifyCriticalHint')}
           checked={notifications.criticalFindings}
           onCheckedChange={(checked) =>
             setNotifications({ ...notifications, criticalFindings: checked })
@@ -1197,7 +1192,7 @@ function RetentionSection({
           disabled={!canEdit}
         />
         <SwitchField
-          label="Weekly digest"
+          label={t('settings.notifyDigest')}
           checked={notifications.weeklyDigest}
           onCheckedChange={(checked) =>
             setNotifications({ ...notifications, weeklyDigest: checked })
@@ -1322,6 +1317,7 @@ function ConnectorsSection({ canEdit }: { canEdit: boolean }) {
   if (query.error) {
     return (
       <ErrorState
+        labels={{ retry: t('common.retry'), reference: t('common.reference') }}
         message={query.error.message}
         traceId={query.error.traceId}
         onRetry={() => void query.refetch()}

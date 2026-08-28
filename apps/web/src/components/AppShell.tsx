@@ -260,10 +260,10 @@ function SourcesVerifiedCard() {
         </span>
       </div>
       <p className="mt-2 text-[12px] leading-snug text-[var(--uxe-text-secondary)]">
-        All answers are grounded in your approved sources.
+        {t('shell.groundedNote')}
       </p>
       <Button asChild variant="secondary" size="sm" full className="mt-3">
-        <NavLink to="/knowledge">View sources</NavLink>
+        <NavLink to="/knowledge">{t('shell.viewSources')}</NavLink>
       </Button>
     </div>
   );
