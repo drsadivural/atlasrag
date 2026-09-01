@@ -37,6 +37,24 @@ export class NotFoundError extends Error {
   }
 }
 
+/**
+ * Raised when something that is not in the knowledge base is asked to govern a review.
+ *
+ * The compliance authority is the knowledge base and nothing else. A document uploaded
+ * inside a consultation is the submission under inspection; letting it define the rules it
+ * is measured against would let a drawing certify itself.
+ */
+export class NotAuthorityError extends Error {
+  readonly code = 'not_authority' as const;
+  readonly status = 422;
+  constructor(public readonly sourceId: string) {
+    super(
+      'Only a document published to the knowledge base can govern a compliance review. Upload it on the Knowledge page first.',
+    );
+    this.name = 'NotAuthorityError';
+  }
+}
+
 export class VersionConflictError extends Error {
   readonly code = 'version_conflict' as const;
   readonly status = 409;

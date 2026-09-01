@@ -22,6 +22,8 @@ export interface DocumentReviewed {
   version: string;
   role: 'governing' | 'project';
   pages: number | null;
+  /** Pages the review actually read — sheet numbers, on a drawing set. */
+  sheetsInspected?: number[];
 }
 
 export interface AssembleInput {
@@ -91,7 +93,10 @@ export function assembleAnswer(input: AssembleInput): StructuredAnswer {
     decisiveReason,
     summary,
     scope: input.scope ?? null,
-    documentsReviewed: input.documentsReviewed,
+    documentsReviewed: input.documentsReviewed.map((d) => ({
+      ...d,
+      sheetsInspected: d.sheetsInspected ?? [],
+    })),
     assumptions: input.assumptions ?? [],
     keyFindings,
     claims: input.claims,

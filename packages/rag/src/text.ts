@@ -219,8 +219,17 @@ export function contentTokens(input: string): string[] {
 export function lightStem(token: string): string {
   if (token.length <= 4) return token;
   if (token.endsWith('ies')) return `${token.slice(0, -3)}y`;
-  if (token.endsWith('sses')) return token.slice(0, -2);
-  if (token.endsWith('es') && !token.endsWith('ses')) return token.slice(0, -2);
+  /*
+   * "-es" is only a two-letter plural after a sibilant: boxes, classes, churches, dishes.
+   * Everywhere else the "e" belongs to the word and only the "s" is the plural.
+   *
+   * Stripping both unconditionally broke the thing stemming exists to do. "lines" became
+   * "lin" while "line" stayed "line" — the singular and the plural of the same word no
+   * longer matched each other, so a clause about separation distances scored nothing
+   * against a drawing that annotates a separation distance. It went unnoticed because the
+   * two forms were mangled consistently on each side; they simply never met.
+   */
+  if (/(?:ss|x|z|ch|sh)es$/.test(token)) return token.slice(0, -2);
   if (token.endsWith('s') && !token.endsWith('ss') && !token.endsWith('us')) {
     return token.slice(0, -1);
   }

@@ -226,6 +226,12 @@ export const StructuredAnswer = z.object({
         version: z.string(),
         role: z.enum(['governing', 'project']),
         pages: z.number().int().min(0).nullable(),
+        /**
+         * The pages actually read, in order. On a drawing set these are sheet numbers, and
+         * they are what lets a reader tell "the drawing does not show it" apart from "the
+         * review never opened that sheet". Empty on answers recorded before it was tracked.
+         */
+        sheetsInspected: z.array(z.number().int().min(1)).default([]),
       }),
     )
     .default([]),

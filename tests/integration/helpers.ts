@@ -110,7 +110,15 @@ export interface AskResult {
       pageNumber: number | null;
       clause: string | null;
     }>;
-    findings: Array<{ result: string; requirementReference: string }>;
+    findings: Array<{ result: string; requirementReference: string; finding: string }>;
+    requirements: Array<{ requirementId: string; reference: string; sourceId: string }>;
+    assumptions: string[];
+    documentsReviewed: Array<{
+      sourceId: string;
+      title: string;
+      role: 'governing' | 'project';
+      sheetsInspected: number[];
+    }>;
     coverage: { verifiedCitations: number; unverifiedCitations: number };
     confidence: { overall: number };
     usedGeneralModel: boolean;

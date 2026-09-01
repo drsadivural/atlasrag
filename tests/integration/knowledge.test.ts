@@ -111,6 +111,53 @@ describe('ingesting a regulation', () => {
     );
     expect(list.body.items).toHaveLength(1);
   });
+
+  it('publishes the existing copy when the same bytes are uploaded to the knowledge base', async () => {
+    /*
+     * Step 1 of the flow this product exists for: put the code in the knowledge base.
+     *
+     * Deduplication used to defeat it. If the workspace already held the same bytes from a
+     * consultation upload — the drawing set somebody sent into a chat last week, or the
+     * code itself uploaded there by mistake — the knowledge upload deduplicated onto that
+     * unpromoted copy, reported "already in your knowledge base", and left the knowledge
+     * base empty. Every review after that had no authority to judge against, and the only
+     * clue was a success message that was not true.
+     */
+    const first = await uploadFixture(harness, owner.client, 'policy.docx', {
+      promoteToKnowledge: false,
+    });
+    expect(first.sourceId).not.toBe('');
+
+    const beforeList = await owner.client.get<{ items: Array<{ id: string }> }>(
+      '/sources?status=ready',
+    );
+    expect(beforeList.body.items.map((i) => i.id)).not.toContain(first.sourceId);
+
+    const second = await uploadFixture(harness, owner.client, 'policy.docx', {
+      promoteToKnowledge: true,
+    });
+    const body = second.body as { duplicate?: boolean; sourceId?: string };
+    expect(body.duplicate).toBe(true);
+    expect(body.sourceId).toBe(first.sourceId);
+
+    // The same one document, and it is now in the knowledge base.
+    const afterList = await owner.client.get<{ items: Array<{ id: string }> }>(
+      '/sources?status=ready',
+    );
+    expect(afterList.body.items.map((i) => i.id)).toContain(first.sourceId);
+    expect(JSON.stringify(second.body)).toMatch(/now published to the knowledge base/i);
+  }, 300_000);
+
+  it('does not claim a file is in the knowledge base when it is only in a consultation', async () => {
+    await uploadFixture(harness, owner.client, 'playbook.pptx', { promoteToKnowledge: false });
+    const second = await uploadFixture(harness, owner.client, 'playbook.pptx', {
+      promoteToKnowledge: false,
+    });
+
+    expect((second.body as { duplicate?: boolean }).duplicate).toBe(true);
+    // Honesty over reassurance: it says where the bytes actually are.
+    expect(JSON.stringify(second.body)).toMatch(/not part of the knowledge base/i);
+  }, 300_000);
 });
 
 describe('documents that must be refused', () => {

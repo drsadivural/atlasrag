@@ -1,6 +1,12 @@
 import type { ComplianceResult, RiskLevel } from '@uxe/contracts';
 import type { FusedCandidate } from './fusion.js';
-import { detectConflict, extractQuantities, selectExcerpt } from './citations.js';
+import {
+  detectConflict,
+  extractMeasurements,
+  extractQuantities,
+  selectExcerpt,
+  type Measurement,
+} from './citations.js';
 import {
   contentTokens,
   lightStem,
@@ -27,6 +33,8 @@ export interface RequirementDraft {
   keyTerms: string[];
   /** Quantities the obligation specifies, e.g. { length_m: 1.2 }. */
   quantities: Map<string, number>;
+  /** The same magnitudes, each keeping the words it was written among. */
+  measurements: Measurement[];
 }
 
 /**
@@ -65,6 +73,21 @@ export function buildRequirementSet(
     if (section.modality !== 'mandatory' && section.modality !== 'prohibited') continue;
 
     const reference = sectionReference(section);
+    /*
+     * A chapter is not a testable obligation.
+     *
+     * `sectionReference` falls back to "Ch. 2" when neither a clause nor a section number
+     * was detected, and the review dutifully tested those, producing findings addressed to
+     * "Ch. 0" and "Ch. 5" — a whole chapter's worth of prose collapsed into one verdict,
+     * with nothing an engineer could look up. A finding has to cite an exact clause to be
+     * worth anything, so an obligation that cannot be cited to one is not tested. Counted
+     * as omitted rather than dropped in silence.
+     */
+    if (!section.clause && !section.section) {
+      omitted += 1;
+      continue;
+    }
+
     const obligation = extractObligationSentences(section.body || section.title);
     if (!obligation) continue;
 
@@ -89,6 +112,7 @@ export function buildRequirementSet(
       ordinal: out.length + 1,
       keyTerms: requirementKeyTerms(`${section.title} ${obligation}`),
       quantities: extractQuantities(obligation),
+      measurements: extractMeasurements(obligation),
     });
   }
 
@@ -186,6 +210,62 @@ const OBLIGATION_NOISE = new Set([
   'within',
   'per',
   'shall_not',
+  /*
+   * Filler that survives the global stopword list.
+   *
+   * These reached the reports verbatim — "2.17.6.4 ... do not evidence: baluster, guard,
+   * one, panel, supported, american" — where "one", "supported" and "american" say nothing
+   * an engineer can act on. Worse, they are eligible to anchor a numeric comparison, so a
+   * figure written near the word "one" could be compared against a clause about something
+   * else entirely. Removing them sharpens both the wording and the verdict.
+   */
+  'one',
+  'two',
+  'three',
+  'four',
+  'five',
+  'see',
+  'top',
+  'bottom',
+  'side',
+  'part',
+  'case',
+  'type',
+  'kind',
+  'use',
+  'used',
+  'using',
+  'given',
+  'made',
+  'taken',
+  'having',
+  'where',
+  'when',
+  'while',
+  'also',
+  'both',
+  'either',
+  'neither',
+  'unless',
+  'except',
+  'considered',
+  'accepted',
+  'american',
+  'british',
+  'european',
+  'international',
+  'national',
+  'general',
+  'various',
+  'certain',
+  'similar',
+  'appropriate',
+  'suitable',
+  'necessary',
+  'adequate',
+  'sufficient',
+  'permitted',
+  'allowed',
 ]);
 
 export function requirementKeyTerms(text: string): string[] {
@@ -209,6 +289,8 @@ export interface RequirementEvidence {
   /** 0..1 — how completely this passage addresses the requirement's key terms. */
   termCoverage: number;
   quantities: Map<string, number>;
+  /** Every magnitude in the passage, with the words around it. */
+  measurements: Measurement[];
   excerpt: string;
 }
 
@@ -250,7 +332,7 @@ export function evaluateRequirement(
     return {
       result: 'needs_evidence',
       risk: requirement.modality === 'prohibited' ? 'high' : 'medium',
-      finding: `No passage in the reviewed project documents addresses ${requirement.reference}. The obligation is therefore unproven, not disproven.`,
+      finding: `Nothing on the reviewed sheets addresses ${requirement.reference}. The obligation is therefore unproven, not disproven — it cannot be verified from the drawing.`,
       confidence: 0.4,
       missingEvidence: requirement.keyTerms.slice(0, 6),
       conflicts: [],
@@ -266,55 +348,70 @@ export function evaluateRequirement(
     .slice(0, 3)
     .map((e) => evidence.indexOf(e));
 
-  // --- Quantity contradiction -------------------------------------------
-  const quantityConflicts: Array<{ description: string; evidenceIndexes: number[] }> = [];
-  for (const [unit, required] of requirement.quantities) {
-    for (const item of best) {
-      const actual = item.quantities.get(unit);
-      if (actual === undefined) continue;
-      if (!quantitySatisfies(requirement.obligationText, required, actual)) {
-        quantityConflicts.push({
-          description: `${requirement.reference} specifies ${formatQuantity(unit, required)} but the project document states ${formatQuantity(unit, actual)}.`,
-          evidenceIndexes: [evidence.indexOf(item)],
-        });
-      }
-    }
-  }
+  // --- Numeric comparison, anchored to its subject ------------------------
+  // Both directions go through the same gate. Only comparing figures that are demonstrably
+  // about the same thing is the whole point: without it a drawing that happens to state
+  // "240 min" anywhere is reported as breaching a 30-minute clause it never mentions.
+  const comparisons = anchoredComparisons(requirement, evidence, best);
+  const disputed = comparisons.filter((c) => c.disputed !== undefined);
+  const breaches = comparisons.filter((c) => !c.satisfied);
+  const meets = comparisons.filter((c) => c.satisfied && c.disputed === undefined);
 
-  if (quantityConflicts.length > 0) {
+  // The submission disagreeing with itself is reported as exactly that. Calling it a pass
+  // would bury a breaching figure; calling it a failure would convict on a possible stray.
+  if (disputed.length > 0) {
+    const hit = disputed[0] as AnchoredComparison;
+    const other = hit.disputed as AnchoredComparison;
+    const description = `${requirement.reference} requires ${formatQuantity(hit.required.unit, hit.required.value)}${describeAnchor(hit.sharedSubject)}, but the submission states both ${hit.observed.raw} and ${other.observed.raw} for it.`;
     return {
-      result: 'non_compliant',
-      risk: requirement.modality === 'prohibited' ? 'critical' : 'high',
-      finding:
-        quantityConflicts[0]?.description ??
-        'A specified value in the project document conflicts with the requirement.',
-      confidence: 0.82,
+      result: 'needs_evidence',
+      risk: 'medium',
+      finding: `${description} Which governs cannot be determined from the drawing.`,
+      confidence: 0.45,
       missingEvidence: [],
-      conflicts: quantityConflicts,
-      recommendedAction: `Amend the project document so the stated value satisfies ${requirement.reference}.`,
-      supportingEvidenceIndexes: supporting,
+      conflicts: [{ description, evidenceIndexes: [hit.evidenceIndex, other.evidenceIndex] }],
+      recommendedAction: `Reconcile the two stated values, then re-run the check for ${requirement.reference}.`,
+      supportingEvidenceIndexes: [
+        ...new Set([hit.evidenceIndex, other.evidenceIndex, ...supporting]),
+      ],
     };
   }
 
-  // --- Quantity satisfied -------------------------------------------------
-  // A numeric obligation met by a stated project value is demonstrable compliance, and is
-  // stronger evidence than term overlap. Without this, a requirement whose wording differs
-  // from the project document would be reported as unevidenced even though the numbers
-  // plainly satisfy it.
-  const satisfied = collectSatisfiedQuantities(requirement, best);
-  if (satisfied.length > 0 && (best[0]?.termCoverage ?? 0) >= 0.25) {
-    const item = satisfied[0] as { description: string; index: number };
+  if (breaches.length > 0) {
+    const conflicts = breaches.map((c) => ({
+      description: `${requirement.reference} specifies ${formatQuantity(c.required.unit, c.required.value)} but the project document states ${c.observed.raw}${describeAnchor(c.sharedSubject)}.`,
+      evidenceIndexes: [c.evidenceIndex],
+    }));
+    return {
+      result: 'non_compliant',
+      risk: requirement.modality === 'prohibited' ? 'critical' : 'high',
+      finding: conflicts[0]?.description ?? 'A stated value conflicts with the requirement.',
+      confidence: 0.82,
+      missingEvidence: [],
+      conflicts,
+      recommendedAction: `Amend the project document so the stated value satisfies ${requirement.reference}.`,
+      supportingEvidenceIndexes: [
+        ...new Set([...breaches.map((c) => c.evidenceIndex), ...supporting]),
+      ],
+    };
+  }
+
+  if (meets.length > 0) {
+    // A numeric obligation met by a stated project value is demonstrable compliance, and
+    // is stronger evidence than term overlap.
+    const hit = meets[0] as AnchoredComparison;
+    const item = evidence[hit.evidenceIndex];
     return {
       result: 'compliant',
       risk: 'none',
-      finding: item.description,
+      finding: `${requirement.reference} requires ${formatQuantity(hit.required.unit, hit.required.value)} and the project document states ${hit.observed.raw}${describeAnchor(hit.sharedSubject)}, which satisfies it.${item ? ` Supporting text: "${truncate(item.excerpt, 150)}"` : ''}`,
       confidence: 0.88,
       missingEvidence: [],
       conflicts: [],
       recommendedAction: null,
-      supportingEvidenceIndexes: [
-        ...new Set([evidence.indexOf(best[item.index] as RequirementEvidence), ...supporting]),
-      ].filter((i) => i >= 0),
+      supportingEvidenceIndexes: [...new Set([hit.evidenceIndex, ...supporting])].filter(
+        (i) => i >= 0,
+      ),
     };
   }
 
@@ -338,12 +435,21 @@ export function evaluateRequirement(
     };
   }
 
-  // --- Internal conflicts between two project passages --------------------
+  /*
+   * Internal conflicts between two project passages.
+   *
+   * Held to the same standard as everything else here: both passages must actually address
+   * the obligation before their disagreement is allowed to decide it. Without the gate a
+   * drawing set produced a steady stream of "evidence relating to 3.10.1 is inconsistent"
+   * — two sheets that mention smoke dampers and quote different duct sizes, which is what
+   * a drawing set looks like, not a contradiction.
+   */
+  const onPoint = best.filter((e) => e.termCoverage >= QUANTITY_ANCHOR_COVERAGE);
   const conflicts: Array<{ description: string; evidenceIndexes: number[] }> = [];
-  for (let i = 0; i < best.length; i += 1) {
-    for (let j = i + 1; j < best.length; j += 1) {
-      const a = best[i];
-      const b = best[j];
+  for (let i = 0; i < onPoint.length; i += 1) {
+    for (let j = i + 1; j < onPoint.length; j += 1) {
+      const a = onPoint[i];
+      const b = onPoint[j];
       if (!a || !b) continue;
       const conflict = detectConflict(a.candidate.content, b.candidate.content);
       if (conflict.conflict && conflict.reason) {
@@ -357,6 +463,35 @@ export function evaluateRequirement(
 
   // --- Coverage-based verdict --------------------------------------------
   const coverage = top.termCoverage;
+
+  /*
+   * A clause that sets a figure can only be satisfied by a figure.
+   *
+   * This sits ahead of the word-overlap pass on purpose. Overlap shows a submission is
+   * *about* the same subject, which is enough to conclude that something required to be
+   * provided has been provided — but not that something required to reach 120 minutes
+   * reaches it. Left below, a drawing that named every word in a fire-resistance clause and
+   * no rating at all came back with a green tick, and the excerpt underneath it did not
+   * contain the number the tick was claiming. That is the specific way this product would
+   * be worth less than nothing to somebody signing off a building.
+   *
+   * It is also the commonest unverifiable case on a drawing, and worth naming precisely:
+   * saying which figure is missing and where it belongs tells an engineer what to add.
+   */
+  const numeric = requirement.measurements[0];
+  if (numeric && comparisons.length === 0) {
+    const subject = requirement.keyTerms.slice(0, 3).join(', ');
+    return {
+      result: 'needs_evidence',
+      risk: requirement.modality === 'prohibited' ? 'high' : 'medium',
+      finding: `${requirement.reference} sets a figure of ${formatQuantity(numeric.unit, numeric.value)}${subject ? ` for ${subject}` : ''}. No value annotated to that subject appears on the reviewed sheets, so this cannot be verified from the drawing.`,
+      confidence: 0.4 + coverage * 0.2,
+      missingEvidence: uncoveredTerms(requirement, best),
+      conflicts: [],
+      recommendedAction: `Annotate the ${formatQuantity(numeric.unit, numeric.value)} required by ${requirement.reference} on the relevant sheet, or supply the calculation that demonstrates it.`,
+      supportingEvidenceIndexes: supporting,
+    };
+  }
 
   if (coverage >= COMPLIANCE_THRESHOLD && conflicts.length === 0) {
     return {
@@ -377,7 +512,7 @@ export function evaluateRequirement(
     return {
       result: 'needs_evidence',
       risk: 'medium',
-      finding: `Evidence relating to ${requirement.reference} is inconsistent across the project documents, so a single verdict cannot be reached.`,
+      finding: `Two passages of the submission disagree about ${requirement.reference} (${conflicts[0]?.description ?? 'conflicting statements'}), so a single verdict cannot be reached from the drawing.`,
       confidence: 0.45,
       missingEvidence: uncovered,
       conflicts,
@@ -391,12 +526,12 @@ export function evaluateRequirement(
     risk: requirement.modality === 'prohibited' ? 'high' : 'medium',
     finding:
       uncovered.length > 0
-        ? `The project documents partially address ${requirement.reference} but do not evidence: ${uncovered.join(', ')}.`
-        : `The project documents mention ${requirement.reference} but the passage found is not specific enough to demonstrate compliance.`,
+        ? `The passages located for ${requirement.reference} do not show: ${uncovered.join(', ')}.`
+        : `The submission mentions the subject of ${requirement.reference}, but the passage found is not specific enough to demonstrate compliance.`,
     confidence: 0.4 + coverage * 0.25,
     missingEvidence: uncovered,
     conflicts: [],
-    recommendedAction: `Supply the section that demonstrates ${uncovered.length > 0 ? uncovered.join(', ') : requirement.reference}.`,
+    recommendedAction: `Show ${uncovered.length > 0 ? uncovered.join(', ') : requirement.reference} on the drawing, or supply the document that evidences it.`,
     supportingEvidenceIndexes: supporting,
   };
 }
@@ -428,28 +563,117 @@ export function scoreRequirementEvidence(
     candidate,
     termCoverage,
     quantities: extractQuantities(candidate.content),
+    measurements: extractMeasurements(candidate.content),
     excerpt: selectExcerpt(candidate.content, query || requirement.obligationText),
   };
 }
 
-/** Every comparable quantity the project evidence states that satisfies the obligation. */
-function collectSatisfiedQuantities(
+/**
+ * Minimum share of the obligation's own subject words a passage must carry before any
+ * number inside it is compared against that obligation.
+ */
+const QUANTITY_ANCHOR_COVERAGE = 0.34;
+
+/** Subject words the two figures must share before they count as the same measurement. */
+const MIN_SHARED_SUBJECT = 2;
+
+/** One figure in the code compared against one figure in the submission. */
+export interface AnchoredComparison {
+  required: Measurement;
+  observed: Measurement;
+  /** Index into the caller's evidence array. */
+  evidenceIndex: number;
+  satisfied: boolean;
+  /** The words that tie the two figures to the same subject. */
+  sharedSubject: string[];
+  /**
+   * Set when another passage states a breaching value for this same subject — the
+   * submission disagreeing with itself, which is neither a pass nor a failure.
+   */
+  disputed?: AnchoredComparison;
+}
+
+/**
+ * Pairs a magnitude in the obligation with a magnitude in the submission — but only when
+ * both are demonstrably about the same thing.
+ *
+ * This gate is the difference between a review and a random-number generator. Sharing a
+ * unit family proves nothing: a fire code and a fire-alarm drawing both state lengths in
+ * metres on nearly every page, and comparing the first of each produced findings like
+ * "2.17.2.2 specifies 1.20 m but the project document states 152.40 m" — a guard-rail
+ * height measured against a drawing coordinate. Three conditions must all hold:
+ *
+ *  1. the passage addresses the obligation at all (`termCoverage`), so a stray sheet does
+ *     not get to decide a clause it never mentions;
+ *  2. the two figures are written among the same subject words; and
+ *  3. at least one of those shared words is one the obligation itself is about.
+ *
+ * When no pair clears all three, there is no numeric verdict — which is a `needs_evidence`
+ * outcome, never a violation.
+ */
+export function anchoredComparisons(
   requirement: RequirementDraft,
   evidence: RequirementEvidence[],
-): Array<{ description: string; index: number }> {
-  const out: Array<{ description: string; index: number }> = [];
-  for (const [unit, required] of requirement.quantities) {
-    evidence.forEach((item, index) => {
-      const actual = item.quantities.get(unit);
-      if (actual === undefined) return;
-      if (!quantitySatisfies(requirement.obligationText, required, actual)) return;
-      out.push({
-        description: `${requirement.reference} requires ${formatQuantity(unit, required)} and the project document states ${formatQuantity(unit, actual)}, which satisfies it. Supporting text: "${truncate(item.excerpt, 150)}"`,
-        index,
-      });
-    });
+  ranked: RequirementEvidence[] = evidence,
+): AnchoredComparison[] {
+  if (requirement.measurements.length === 0) return [];
+  const keyTerms = new Set(requirement.keyTerms);
+  const out: AnchoredComparison[] = [];
+
+  for (const item of ranked) {
+    if (item.termCoverage < QUANTITY_ANCHOR_COVERAGE) continue;
+    const index = evidence.indexOf(item);
+    if (index < 0) continue;
+
+    for (const required of requirement.measurements) {
+      for (const observed of item.measurements) {
+        if (observed.unit !== required.unit) continue;
+
+        const shared = required.context.filter((term) => observed.context.includes(term));
+        if (shared.length < MIN_SHARED_SUBJECT) continue;
+        // At least one shared word has to be something the obligation is actually about.
+        // "provided" and "system" appear beside every figure in both documents.
+        const onSubject = shared.filter((term) => keyTerms.has(term));
+        if (onSubject.length === 0) continue;
+
+        out.push({
+          required,
+          observed,
+          evidenceIndex: index,
+          satisfied: quantitySatisfies(requirement.obligationText, required.value, observed.value),
+          sharedSubject: onSubject.slice(0, 4),
+        });
+      }
+    }
   }
-  return out;
+
+  /*
+   * One verdict per subject.
+   *
+   * A drawing states the same kind of dimension on many sheets, so the same clause can
+   * legitimately draw several comparisons. Where they agree there is nothing to choose
+   * between them. Where they do not — one sheet satisfying the clause and another
+   * breaching it — the submission contradicts itself, and neither "compliant" nor
+   * "non-compliant" is the honest answer: the group is marked `disputed` and the caller
+   * reports it as something to reconcile, with both figures named.
+   */
+  const bySubject = new Map<string, AnchoredComparison[]>();
+  for (const comparison of out) {
+    const key = `${comparison.required.unit}:${comparison.sharedSubject.join('|')}`;
+    bySubject.set(key, [...(bySubject.get(key) ?? []), comparison]);
+  }
+
+  return [...bySubject.values()].map((group) => {
+    const pass = group.find((c) => c.satisfied);
+    const fail = group.find((c) => !c.satisfied);
+    if (pass && fail) return { ...pass, disputed: fail };
+    return (pass ?? group[0]) as AnchoredComparison;
+  });
+}
+
+/** Renders the subject words that justify a numeric comparison, for the finding text. */
+function describeAnchor(sharedSubject: string[]): string {
+  return sharedSubject.length > 0 ? ` for ${sharedSubject.join(', ')}` : '';
 }
 
 function uncoveredTerms(requirement: RequirementDraft, evidence: RequirementEvidence[]): string[] {

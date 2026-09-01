@@ -450,13 +450,51 @@ export function sourceRoutes(deps: AppDeps) {
         );
       }
 
+      /*
+       * Nor is it the same as already published.
+       *
+       * Uploading a code on the Knowledge page says "this governs". If the workspace
+       * happens to hold the same bytes from a consultation upload, deduplicating onto that
+       * copy silently answered "already in your knowledge base" about a document that was
+       * not in the knowledge base at all — leaving the screen showing success, the
+       * knowledge base empty, and every later review with nothing to judge against. The
+       * dedupe is right; skipping the promotion it asked for was not.
+       *
+       * Only ever in this direction. A consultation upload never demotes a published
+       * source: the request that publishes is the one that counts.
+       */
+      const promoted =
+        ticket.promoteToKnowledge && !existing.source.promotedToKnowledge
+          ? await deps.repos.sources.promoteToKnowledge(tenant, existing.source.id)
+          : null;
+
+      if (promoted) {
+        await deps.repos.audit.record({
+          organizationId: tenant.organizationId,
+          workspaceId: tenant.workspaceId,
+          actorUserId: tenant.userId,
+          actorName: c.get('session')?.user.fullName ?? 'Unknown',
+          action: 'source.promoted',
+          category: 'source',
+          targetType: 'source',
+          targetId: existing.source.id,
+          targetLabel: existing.source.title,
+          traceId: tenant.traceId,
+          summary: `Published "${existing.source.title}" to the knowledge base by re-uploading it there.`,
+        });
+      }
+
       return c.json({
         sourceId: existing.source.id,
         versionId: existing.version.id,
         duplicate: true,
         message: ticket.consultationId
           ? `These exact bytes are already indexed as "${existing.source.title}" (${existing.version.version}), so that copy has been attached to this consultation.`
-          : `These exact bytes are already in your knowledge base as "${existing.source.title}" (${existing.version.version}). No duplicate was created.`,
+          : promoted
+            ? `The workspace already held these exact bytes as "${existing.source.title}" (${existing.version.version}). That copy is now published to the knowledge base; no duplicate was created.`
+            : existing.source.promotedToKnowledge
+              ? `These exact bytes are already in your knowledge base as "${existing.source.title}" (${existing.version.version}). No duplicate was created.`
+              : `The workspace already holds these exact bytes as "${existing.source.title}" (${existing.version.version}), which is not part of the knowledge base. No duplicate was created.`,
         job: null,
       });
     }

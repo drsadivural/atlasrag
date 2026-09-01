@@ -18,7 +18,7 @@ is persisted, so the system cannot show you a quote that is not in the document.
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Grounded answers    | Answers come from your sources. When they cannot, the product says so rather than guessing.                                                                         |
 | Exact evidence      | Document, version, page, chapter, section, clause, character offsets and bounding boxes. One click opens the source at the right page with the passage highlighted. |
-| Compliance review   | Requirements extracted from the regulation, tested against your project documents, each with a verdict, a risk level and a citation.                                |
+| Compliance review   | Requirements extracted from the knowledge base, tested against your submission one at a time, each with a tickbox, a verdict, a risk level and a citation.          |
 | Corrected documents | Review-first, non-destructive. Proposed changes carry the rule that justifies them; you accept or reject each one; the original is never modified.                  |
 | Three answer depths | Yes/No, Optimal and Details are three views of **one** verified answer. Switching depth never re-runs retrieval, so they cannot contradict each other.              |
 
@@ -28,7 +28,16 @@ is persisted, so the system cannot show you a quote that is not in the document.
 - Says plainly when evidence is insufficient or conflicting.
 - Partial compliance is reported as **NO** with "Partially compliant" alongside — never as
   a YES.
-- Uploads are consultation inputs until explicitly promoted to knowledge.
+- Uploads are consultation inputs until explicitly promoted to knowledge. **Only the
+  knowledge base can govern a compliance review** — a file uploaded inside a consultation is
+  the thing being inspected, never the thing it is inspected against. Enforced where the
+  role is written and again where the review is run, so a client that asks for a drawing to
+  govern is refused rather than obeyed.
+- A compliance verdict has three outcomes, never two: confirmed compliant, confirmed
+  violation, and cannot be verified from the submission. The third is the honest answer when
+  a drawing simply does not say, and it is never rounded to either of the others.
+- A clause that states a figure can only be satisfied by a figure, and two figures are only
+  compared when the words around them show they measure the same thing.
 - Originals are immutable; a correction creates a new version with a change log and a
   side-by-side diff.
 - A generated PDF never claims to preserve a cryptographic signature. If the input was

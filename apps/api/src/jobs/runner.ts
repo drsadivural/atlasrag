@@ -1105,10 +1105,26 @@ async function buildScope(
     // A source the caller can no longer see silently drops out of scope rather than
     // leaking through a consultation they still own.
     if (!source) continue;
+
+    /*
+     * The knowledge base is the compliance authority, and only it.
+     *
+     * The role is already constrained where it is written, so this is the second lock on
+     * the same door — it catches the case the write-side cannot: a document that governed
+     * a consultation and was later withdrawn from the knowledge base. Demoting it has to
+     * take effect on the next run, not at the next re-selection, or a retracted standard
+     * keeps deciding findings. It is downgraded rather than dropped, so the reviewed
+     * document is still read; it simply no longer sets the rules.
+     */
+    const role =
+      row.role === 'governing' && !source.promotedToKnowledge
+        ? ('project' as const)
+        : (row.role as 'governing' | 'project');
+
     scope.push({
       sourceId: row.sourceId,
       sourceVersionId: row.sourceVersionId,
-      role: row.role as 'governing' | 'project',
+      role,
       title: row.title,
       version: row.version,
       pages: row.pages,

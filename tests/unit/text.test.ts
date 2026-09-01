@@ -170,6 +170,28 @@ describe('tokenisation', () => {
     expect(lightStem('lighting')).toBe('lighting');
   });
 
+  it('unifies a plural with its own singular', () => {
+    // The whole point of stemming. "-es" used to be stripped whole, so "lines" became "lin"
+    // while "line" stayed "line" and the two never matched — which silently cost every
+    // clause whose subject the submission wrote in the other number.
+    for (const [singular, plural] of [
+      ['line', 'lines'],
+      ['distance', 'distances'],
+      ['device', 'devices'],
+      ['valve', 'valves'],
+      ['surface', 'surfaces'],
+    ] as const) {
+      expect(lightStem(plural)).toBe(lightStem(singular));
+    }
+  });
+
+  it('still strips "-es" where it really is the plural', () => {
+    expect(lightStem('boxes')).toBe('box');
+    expect(lightStem('classes')).toBe('class');
+    expect(lightStem('churches')).toBe('church');
+    expect(lightStem('flashes')).toBe('flash');
+  });
+
   it('produces padded character n-grams', () => {
     const grams = charNgrams('exit', 3, 3);
     expect(grams).toContain('<ex');

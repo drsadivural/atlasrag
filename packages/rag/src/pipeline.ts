@@ -69,6 +69,8 @@ export interface RetrieveOptions {
   /** Evidence passages kept after reranking and diversification. */
   finalLimit?: number;
   maxPerSource?: number;
+  /** Ceiling on passages taken from any one page, so evidence spans a drawing's sheets. */
+  maxPerPage?: number;
   preferRequirements?: boolean;
   /** Restrict retrieval to a subset of the scope, e.g. only the project documents. */
   roles?: Array<'governing' | 'project'>;
@@ -157,7 +159,12 @@ export async function retrieve(
   });
 
   const deduped = dedupeCandidates(ranked);
-  const finalCandidates = diversify(deduped, finalLimit, options.maxPerSource ?? 4);
+  const finalCandidates = diversify(
+    deduped,
+    finalLimit,
+    options.maxPerSource ?? 4,
+    options.maxPerPage,
+  );
 
   return {
     candidates: finalCandidates,
@@ -533,13 +540,14 @@ async function projectVocabulary(
   ctx: TenantContext,
   repo: RetrievalRepository,
   project: SourceScope[],
-): Promise<Set<string>> {
-  const words = new Set<string>();
+): Promise<Map<string, number>> {
+  const words = new Map<string, number>();
   for (const source of project) {
     const chunks = await repo.chunksForVersion(ctx, source.sourceVersionId);
     for (const chunk of chunks) {
       for (const term of contentTokens(`${chunk.headingText} ${chunk.content}`)) {
-        words.add(lightStem(term));
+        const stem = lightStem(term);
+        words.set(stem, (words.get(stem) ?? 0) + 1);
       }
     }
   }
@@ -547,33 +555,93 @@ async function projectVocabulary(
 }
 
 /**
- * The obligations most likely to be about this submission, in document order.
+ * How much of a clause's own vocabulary the submission has to use before that clause is
+ * treated as being about the submission at all.
+ */
+const RELEVANCE_FLOOR = 0.4;
+
+/**
+ * Occurrences at which a word counts as something the submission is about.
  *
- * Scored by the share of each obligation's own key terms that appear in the submission. An
- * obligation whose vocabulary is entirely absent is not evidence that the submission fails
- * it — it is evidence that the clause is about something else — and spending the budget on
- * those is what produced a fire-alarm review full of findings about civil definitions.
+ * Presence alone is too weak a test on a real drawing set: 1300 chunks of title blocks,
+ * legends and general notes mention nearly every word in the trade at least once, so an
+ * LPG-tank clause scored as relevant to a smoke-control package on the strength of "lpg"
+ * appearing six times in boilerplate. "damper" appears on every sheet; "lpg" does not.
+ */
+const SUBJECT_OCCURRENCES = 25;
+
+/**
+ * The obligations this submission is actually about, in document order.
  *
- * When nothing scores at all, the head of the document is used unchanged: that is the
- * honest fallback, and the review says separately how much it did not look at.
+ * Scored by how much of each obligation's own vocabulary the submission uses, weighted so
+ * that the words which name the subject count and the words half the code shares do not.
+ * An obligation whose vocabulary is absent is not evidence that the submission fails it —
+ * it is evidence that the clause is about something else — and spending the budget on those
+ * is what produced a fire-alarm review full of findings about civil definitions.
+ *
+ * The floor comes before the budget, so the checklist is as long as the submission
+ * warrants rather than always exactly the budget. When nothing clears the floor, the head
+ * of the document is used unchanged: that is the honest fallback, and the review says
+ * separately how much it did not look at.
  */
 function selectRelevantRequirements(
   drafts: RequirementDraft[],
-  vocabulary: Set<string>,
+  vocabulary: Map<string, number>,
   budget: number,
 ): RequirementDraft[] {
-  if (drafts.length <= budget) return drafts;
+  /*
+   * How much a word says about what a clause is for.
+   *
+   * Weighting every key term equally is what let an LPG clause pass as relevant to a
+   * smoke-control drawing: "building", "distance", "located", "property" and "separation"
+   * all appear on the drawing, and they outvoted the two words that actually name the
+   * subject. They outvote it because they are in half the code — which is exactly what
+   * makes them uninformative, and exactly what document frequency measures. Counted over
+   * the obligations already in memory, so it costs one pass and no extra query.
+   */
+  const documentFrequency = new Map<string, number>();
+  for (const draft of drafts) {
+    for (const term of new Set(draft.keyTerms.map((t) => lightStem(t)))) {
+      documentFrequency.set(term, (documentFrequency.get(term) ?? 0) + 1);
+    }
+  }
+  const total = Math.max(1, drafts.length);
+  const informativeness = (term: string): number =>
+    Math.log(total / (1 + (documentFrequency.get(term) ?? 0))) / Math.log(total);
+
+  /** How much of the submission's attention a word has. */
+  const presence = (term: string): number => {
+    const count = vocabulary.get(term) ?? 0;
+    if (count === 0) return 0;
+    return Math.min(1, Math.log1p(count) / Math.log1p(SUBJECT_OCCURRENCES));
+  };
 
   const scored = drafts.map((draft, index) => {
-    const terms = draft.keyTerms.map((term) => lightStem(term));
-    const hits = terms.filter((term) => vocabulary.has(term)).length;
-    return { draft, index, score: terms.length === 0 ? 0 : hits / terms.length, hits };
+    const terms = [...new Set(draft.keyTerms.map((term) => lightStem(term)))];
+    let weighted = 0;
+    let weight = 0;
+    for (const term of terms) {
+      const informative = Math.max(0, informativeness(term));
+      weight += informative;
+      weighted += informative * presence(term);
+    }
+    return { draft, index, score: weight === 0 ? 0 : weighted / weight };
   });
 
-  const anyMatch = scored.some((entry) => entry.hits > 0);
-  if (!anyMatch) return drafts.slice(0, budget);
+  /*
+   * Ranking alone still fills the budget, whatever is at the bottom of the list. On a
+   * twelve-sheet smoke-control package that was clauses about LPG tanks and fire-station
+   * administrative areas, reported as "cannot be verified from the drawing" — true, and
+   * useless. The drawing is not about LPG tanks. A clause the submission does not engage
+   * with is not a gap in the submission, and listing it buries the gaps that are real.
+   */
+  const relevant = scored.filter((entry) => entry.score >= RELEVANCE_FLOOR);
 
-  return scored
+  // Nothing cleared the floor — a submission in a vocabulary the code does not share, or no
+  // project document at all. Fall back to document order so the review still says something.
+  if (relevant.length === 0) return drafts.slice(0, budget);
+
+  return relevant
     .sort((a, b) => (b.score === a.score ? a.index - b.index : b.score - a.score))
     .slice(0, budget)
     .sort((a, b) => a.index - b.index)
@@ -692,7 +760,11 @@ function buildFollowUp(scope: SourceScope[]): string {
   return `I searched ${titles} and found no passage that settles this. Can you point me at the document or clause that covers it, or upload it as a consultation input?`;
 }
 
-function toDocumentsReviewed(scope: SourceScope[]): DocumentReviewed[] {
+function toDocumentsReviewed(
+  scope: SourceScope[],
+  /** Pages actually read, per source id. */
+  sheetsBySource: Map<string, Set<number>> = new Map(),
+): DocumentReviewed[] {
   return scope.map((s) => ({
     sourceId: s.sourceId,
     sourceVersionId: s.sourceVersionId,
@@ -700,6 +772,7 @@ function toDocumentsReviewed(scope: SourceScope[]): DocumentReviewed[] {
     version: s.version,
     role: s.role,
     pages: s.pages,
+    sheetsInspected: [...(sheetsBySource.get(s.sourceId) ?? [])].sort((a, b) => a - b),
   }));
 }
 
@@ -812,6 +885,8 @@ export async function runComplianceReview(
   const allCitations: Citation[] = [];
   const requirements: Requirement[] = [];
   const findings: Finding[] = [];
+  /** Which pages of each document the review actually read. */
+  const sheetsBySource = new Map<string, Set<number>>();
 
   // --- 2. Test each requirement against the project documents -----------
   for (const [index, requirement] of usable.entries()) {
@@ -825,7 +900,15 @@ export async function runComplianceReview(
       { roles: ['governing'], finalLimit: 2, channelLimit: 20, preferRequirements: true },
     );
 
-    // Project evidence: what the customer's own documents say about it.
+    /*
+     * Project evidence: what the submission itself shows about this obligation.
+     *
+     * Spread deliberately across sheets. A fire-alarm package is one PDF of a dozen
+     * drawings, and taking the five best-scoring passages put all five on the sheet whose
+     * title block happened to match — so a clause evidenced on sheet 7 was reported as
+     * unevidenced because the search never looked past sheet 2. Two passages per sheet,
+     * over a wider budget, means every sheet that matched at all gets read.
+     */
     const projectRetrieval =
       project.length > 0
         ? await retrieve(
@@ -834,7 +917,13 @@ export async function runComplianceReview(
             deps.embedder,
             `${requirement.title} ${requirement.keyTerms.join(' ')}`,
             scope,
-            { roles: ['project'], finalLimit: 5, channelLimit: 30 },
+            {
+              roles: ['project'],
+              finalLimit: 12,
+              channelLimit: 60,
+              maxPerSource: 12,
+              maxPerPage: 2,
+            },
           )
         : { candidates: [] as FusedCandidate[], telemetry: null };
 
@@ -853,6 +942,13 @@ export async function runComplianceReview(
       requirement.keyTerms.join(' '),
       options.idFactory,
     );
+
+    for (const candidate of [...governingRetrieval.candidates, ...projectRetrieval.candidates]) {
+      if (candidate.pageNumber === null) continue;
+      const seen = sheetsBySource.get(candidate.sourceId) ?? new Set<number>();
+      seen.add(candidate.pageNumber);
+      sheetsBySource.set(candidate.sourceId, seen);
+    }
 
     const evidence = projectRetrieval.candidates.map((candidate) =>
       scoreRequirementEvidence(requirement, candidate, requirement.title),
@@ -999,7 +1095,7 @@ export async function runComplianceReview(
     claims,
     coverage,
     confidence,
-    documentsReviewed: toDocumentsReviewed(scope),
+    documentsReviewed: toDocumentsReviewed(scope, sheetsBySource),
     requirements,
     findings,
     decision,
@@ -1011,7 +1107,14 @@ export async function runComplianceReview(
     scope:
       options.scopeNote ??
       `${usable.length} mandatory requirement(s) from ${governing.length} governing source(s), tested against ${project.length} project document(s).`,
-    assumptions: buildAssumptions(governing, project, usable.length, relevant.length, omitted),
+    assumptions: buildAssumptions(
+      governing,
+      project,
+      usable.length,
+      relevant.length,
+      omitted,
+      sheetsBySource,
+    ),
     followUpQuestion:
       project.length === 0
         ? 'No project documents were attached. Upload the documents you want assessed, and I will test each requirement against them.'
@@ -1028,8 +1131,31 @@ function buildAssumptions(
   used: number,
   total: number,
   omitted = 0,
+  sheetsBySource: Map<string, Set<number>> = new Map(),
 ): string[] {
   const out: string[] = [];
+  /*
+   * Which document set the rules, named before anything else.
+   *
+   * A reader has to be able to see that the submission was measured against the knowledge
+   * base and not against itself. The separation is enforced server-side; this is where the
+   * report says so out loud.
+   */
+  if (governing.length > 0) {
+    out.push(
+      `Compliance was judged solely against the knowledge base: ${governing.map((g) => g.title).join(', ')}. The submitted document was treated as the subject of the review and never as an authority.`,
+    );
+  }
+  for (const source of project) {
+    const sheets = [...(sheetsBySource.get(source.sourceId) ?? [])].sort((a, b) => a - b);
+    if (sheets.length === 0) continue;
+    const total = source.pages;
+    out.push(
+      total && total > sheets.length
+        ? `${source.title}: ${sheets.length} of ${total} sheets carried text matching a tested clause and were inspected (${formatSheetRanges(sheets)}). The remaining sheets matched nothing and were not read.`
+        : `${source.title}: all ${sheets.length} sheet(s) were inspected (${formatSheetRanges(sheets)}).`,
+    );
+  }
   out.push(
     `Only mandatory and prohibitive provisions were treated as testable requirements; recommendations ("should") were not scored as failures.`,
   );
@@ -1042,7 +1168,7 @@ function buildAssumptions(
    */
   if (omitted > 0) {
     out.push(
-      `This review covers the first ${used} testable obligations found in the regulation. A further ${omitted} were detected and NOT examined, so it is not a verdict on the document as a whole.`,
+      `${used} obligation(s) were selected as relevant to this submission, out of ${used + omitted} testable obligations detected in the knowledge base. The other ${omitted} were not examined — either their subject does not appear in the submission, or they fell outside the size of this review — so this is not a verdict on the regulation as a whole.`,
     );
   }
   if (used < total) {
@@ -1068,6 +1194,26 @@ function buildAssumptions(
     );
   }
   return out;
+}
+
+/** "1-3, 7, 9-12" — compact enough to read, exact enough to check. */
+function formatSheetRanges(sheets: number[]): string {
+  const out: string[] = [];
+  let start = sheets[0];
+  let previous = sheets[0];
+  if (start === undefined || previous === undefined) return '';
+
+  for (const sheet of sheets.slice(1)) {
+    if (sheet === previous + 1) {
+      previous = sheet;
+      continue;
+    }
+    out.push(start === previous ? `${start}` : `${start}-${previous}`);
+    start = sheet;
+    previous = sheet;
+  }
+  out.push(start === previous ? `${start}` : `${start}-${previous}`);
+  return `sheet ${out.join(', ')}`;
 }
 
 function riskWeight(risk: Finding['risk']): number {

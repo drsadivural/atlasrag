@@ -11,6 +11,7 @@ import {
   detectModality,
   detectStructure,
   evaluateRequirement,
+  extractMeasurements,
   isRequirementText,
   quantitySatisfies,
   requirementKeyTerms,
@@ -222,6 +223,9 @@ describe('evaluateRequirement', () => {
     ordinal: 1,
     keyTerms: ['emergency', 'illumination', 'illuminance', 'floor'],
     quantities: new Map([['illuminance_lx', 10]]),
+    measurements: extractMeasurements(
+      'Emergency illumination shall provide an average illuminance of not less than 10 lux measured at the floor.',
+    ),
   };
 
   const evidence = (content: string, coverage: number) => [
@@ -233,6 +237,7 @@ describe('evaluateRequirement', () => {
           (m) => ['illuminance_lx', Number(m[1])] as const,
         ),
       ),
+      measurements: extractMeasurements(content),
       excerpt: content,
     },
   ];
@@ -270,6 +275,170 @@ describe('evaluateRequirement', () => {
       evidence('Emergency lighting is discussed in the design narrative.', 0.35),
     );
     expect(verdict.result).toBe('needs_evidence');
+  });
+});
+
+/*
+ * Every case below is a verdict the live review actually produced against a real fire-alarm
+ * drawing set. Each compared two figures that shared nothing but a unit family, and each
+ * was reported to the customer as a confirmed violation of the UAE code.
+ */
+describe('evaluateRequirement — numbers are only compared when they measure the same thing', () => {
+  const draft = (reference: string, obligationText: string, keyTerms: string[]) => ({
+    requirementId: 'r1',
+    reference,
+    title: reference,
+    obligationText,
+    modality: 'mandatory' as const,
+    sourceId: 's1',
+    sourceVersionId: 'v1',
+    sectionId: null,
+    exceptions: [],
+    crossReferences: [],
+    ordinal: 1,
+    keyTerms,
+    quantities: new Map<string, number>(),
+    measurements: extractMeasurements(obligationText),
+  });
+
+  const sheet = (content: string, coverage: number) => [
+    {
+      candidate: { content } as never,
+      termCoverage: coverage,
+      quantities: new Map<string, number>(),
+      measurements: extractMeasurements(content),
+      excerpt: content,
+    },
+  ];
+
+  it('does not fail a guard-height clause on a dimension written elsewhere on the sheet', () => {
+    // Reported live as: "2.17.2.2 specifies 1.20 m but the project document states 152.40 m."
+    // 152.40 m is a drawing coordinate. Nothing ties it to a guard.
+    const verdict = evaluateRequirement(
+      draft(
+        '2.17.2.2',
+        'Guards shall be not less than 1.20 m in height above the walking surface.',
+        ['guard', 'height', 'walking', 'surface'],
+      ),
+      sheet('GRID LINE OFFSET 152.40 m FROM DATUM. REFER TO ARCHITECTURAL LAYOUT.', 0.4),
+    );
+    expect(verdict.result).not.toBe('non_compliant');
+  });
+
+  it('does not fail a 30-minute rating on a 240-minute figure about something else', () => {
+    // Reported live as: "2.15.1.3 specifies 30 min but the project document states 240 min."
+    const verdict = evaluateRequirement(
+      draft(
+        '2.15.1.3',
+        'Smoke dampers shall close within 30 s of receiving a signal from the detection system.',
+        ['smoke', 'damper', 'close', 'signal', 'detection'],
+      ),
+      sheet('BATTERY STANDBY AUTONOMY 240 min FOR THE CENTRAL PANEL.', 0.4),
+    );
+    expect(verdict.result).not.toBe('non_compliant');
+  });
+
+  it('does not compare a 100 mm requirement against an unrelated 2.60 m dimension', () => {
+    // Reported live as: "4.5.4.3 specifies 100 mm but the project document states 2.60 m."
+    const verdict = evaluateRequirement(
+      draft('4.5.4.3', 'Lettering shall be not less than 100 mm in height.', [
+        'letter',
+        'height',
+        'sign',
+      ]),
+      sheet('FALSE CEILING LEVEL AT 2.60 m ABOVE FINISHED FLOOR.', 0.4),
+    );
+    expect(verdict.result).not.toBe('non_compliant');
+  });
+
+  it('still fails a clause when the drawing states a breaching value for that same subject', () => {
+    const verdict = evaluateRequirement(
+      draft(
+        '2.17.2.2',
+        'Guards shall be not less than 1.20 m in height above the walking surface.',
+        ['guard', 'height', 'walking', 'surface'],
+      ),
+      sheet('GUARD HEIGHT AT ROOF EDGE IS 0.90 m ABOVE THE WALKING SURFACE.', 0.7),
+    );
+    expect(verdict.result).toBe('non_compliant');
+    expect(verdict.finding).toContain('0.90 m');
+  });
+
+  it('reports a submission that contradicts itself rather than picking the flattering figure', () => {
+    const verdict = evaluateRequirement(
+      draft(
+        '2.17.2.2',
+        'Guards shall be not less than 1.20 m in height above the walking surface.',
+        ['guard', 'height', 'walking', 'surface'],
+      ),
+      [
+        ...sheet('GUARD HEIGHT AT STAIR IS 1.10 m ABOVE THE WALKING SURFACE.', 0.7),
+        ...sheet('GUARD HEIGHT AT ROOF IS 1.50 m ABOVE THE WALKING SURFACE.', 0.7),
+      ],
+    );
+    // Neither verdict is honest when the drawing says both. Naming both figures is.
+    expect(verdict.result).toBe('needs_evidence');
+    expect(verdict.finding).toContain('1.10 m');
+    expect(verdict.finding).toContain('1.50 m');
+    expect(verdict.conflicts).toHaveLength(1);
+  });
+
+  it('does not treat two sheets quoting unrelated figures as a contradiction', () => {
+    const verdict = evaluateRequirement(
+      draft('3.10.1', 'Smoke dampers shall be provided at every duct penetration.', [
+        'smoke',
+        'damper',
+        'duct',
+        'penetration',
+      ]),
+      [
+        ...sheet('DUCT SIZE 600 mm AT LEVEL 3. SMOKE DAMPER AT PENETRATION.', 0.2),
+        ...sheet('DUCT SIZE 450 mm AT LEVEL 7. SMOKE DAMPER AT PENETRATION.', 0.2),
+      ],
+    );
+    expect(verdict.conflicts).toHaveLength(0);
+  });
+
+  it('will not tick a numeric clause on word overlap alone', () => {
+    /*
+     * The passage repeats the clause almost word for word — and states no rating. Overlap
+     * that high used to be enough for a green tick, with an excerpt underneath it that did
+     * not contain the number the tick was claiming.
+     */
+    const verdict = evaluateRequirement(
+      draft(
+        '2.15.1.5',
+        'Exhaust ducts penetrating a floor shall have a fire-resistance rating of not less than 120 min.',
+        ['exhaust', 'duct', 'penetrate', 'floor', 'resistance', 'rating'],
+      ),
+      sheet('EXHAUST DUCT PENETRATING FLOOR — FIRE RESISTANCE RATING AS PER SPECIFICATION.', 0.95),
+    );
+    expect(verdict.result).toBe('needs_evidence');
+    expect(verdict.finding).toContain('120 min');
+  });
+
+  it('still ticks a provision clause the drawing plainly shows', () => {
+    // No figure in the obligation, so word overlap is the evidence there is to have.
+    const verdict = evaluateRequirement(
+      draft('4.2.1', 'Smoke dampers shall be interlocked with the fire alarm system.', [
+        'smoke',
+        'damper',
+        'interlocked',
+        'alarm',
+      ]),
+      sheet('SMOKE DAMPER INTERLOCKED WITH FIRE ALARM SYSTEM.', 0.95),
+    );
+    expect(verdict.result).toBe('compliant');
+  });
+
+  it('names the missing dimension instead of listing leftover vocabulary', () => {
+    const verdict = evaluateRequirement(
+      draft('2.17.2.2', 'Guards shall be not less than 1.20 m in height.', ['guard', 'height']),
+      sheet('GUARDS TO BE PROVIDED AT ALL ROOF EDGES. REFER TO DETAIL 4.', 0.4),
+    );
+    expect(verdict.result).toBe('needs_evidence');
+    expect(verdict.finding).toContain('cannot be verified from the drawing');
+    expect(verdict.finding).toContain('1.20 m');
   });
 });
 

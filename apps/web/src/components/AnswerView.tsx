@@ -19,6 +19,7 @@ import {
   type StructuredAnswer,
 } from '@uxe/contracts';
 import { useI18n } from '../lib/i18n.js';
+import { ComplianceChecklist, Tickbox, labelKeyFor } from './ComplianceChecklist.js';
 
 export interface AnswerViewProps {
   answer: StructuredAnswer;
@@ -325,7 +326,20 @@ function OptimalBody({
     <div className="flex flex-col gap-4">
       <p className="text-[15px] leading-relaxed text-[var(--uxe-text)]">{answer.summary}</p>
 
-      {answer.findings.length > 0 && (
+      {/*
+        A compliance check is answered as a checklist, not a paragraph: every obligation
+        tested gets its own line and its own box. The compact table below still serves the
+        other task modes, where findings are incidental rather than the whole answer.
+      */}
+      {answer.task === 'check_compliance' && answer.findings.length > 0 && (
+        <ComplianceChecklist
+          answer={answer}
+          onOpenCitation={onOpenCitation}
+          evidenceDetail={evidenceDetail}
+        />
+      )}
+
+      {answer.task !== 'check_compliance' && answer.findings.length > 0 && (
         <div className="overflow-hidden rounded-[var(--uxe-radius-card)] border border-[var(--uxe-border)]">
           <table className="w-full border-collapse text-start">
             <caption className="sr-only">{t('answer.compactTable')}</caption>
@@ -484,6 +498,18 @@ function DetailsBody({
                   {doc.version}
                   {doc.pages ? ` · ${doc.pages} pages` : ''}
                 </span>
+                {/*
+                  Which sheets were actually opened. Without it "the drawing does not show
+                  it" is indistinguishable from "that sheet was never read".
+                */}
+                {doc.sheetsInspected.length > 0 && (
+                  <span className="text-[var(--uxe-text-tertiary)]">
+                    {t('evidence.sheetsInspected', {
+                      count: String(doc.sheetsInspected.length),
+                      sheets: formatSheetRanges(doc.sheetsInspected),
+                    })}
+                  </span>
+                )}
               </li>
             ))}
           </ul>
@@ -494,6 +520,20 @@ function DetailsBody({
         <Section title={t('evidence.assumptions')}>
           <BulletList items={answer.assumptions} />
         </Section>
+      )}
+
+      {/*
+        The checklist leads the detailed view too, so the verdict a reader took from the
+        shorter form is the first thing they meet here rather than something they have to
+        reconstruct from a table. The matrix below is the evidence behind it — excerpts,
+        confidence, verification — not a second opinion.
+      */}
+      {answer.task === 'check_compliance' && answer.findings.length > 0 && (
+        <ComplianceChecklist
+          answer={answer}
+          onOpenCitation={onOpenCitation}
+          evidenceDetail={evidenceDetail}
+        />
       )}
 
       {answer.findings.length > 0 && (
@@ -546,9 +586,13 @@ function DetailsBody({
                         </span>
                       </th>
                       <td className="px-3 py-3">
-                        <Badge tone={meta.tone} size="sm">
-                          {t(meta.labelKey as 'compliance.compliant')}
-                        </Badge>
+                        {/* The same mark as the checklist, so the two views read alike. */}
+                        <span className="flex items-center gap-2">
+                          <Tickbox result={finding.result} label={t(labelKeyFor(finding.result))} />
+                          <Badge tone={meta.tone} size="sm">
+                            {t(labelKeyFor(finding.result))}
+                          </Badge>
+                        </span>
                       </td>
                       <td className="max-w-xs px-3 py-3 text-[var(--uxe-text)]">
                         {finding.finding}
@@ -840,3 +884,24 @@ function pickDecisive(answer: StructuredAnswer, limit: number): Citation[] {
 }
 
 export { ChevronDown };
+
+/** "1-3, 7, 9-12" — the sheets a reader can go and check for themselves. */
+function formatSheetRanges(sheets: number[]): string {
+  const sorted = [...sheets].sort((a, b) => a - b);
+  const out: string[] = [];
+  let start = sorted[0];
+  let previous = sorted[0];
+  if (start === undefined || previous === undefined) return '';
+
+  for (const sheet of sorted.slice(1)) {
+    if (sheet === previous + 1) {
+      previous = sheet;
+      continue;
+    }
+    out.push(start === previous ? `${start}` : `${start}-${previous}`);
+    start = sheet;
+    previous = sheet;
+  }
+  out.push(start === previous ? `${start}` : `${start}-${previous}`);
+  return out.join(', ');
+}

@@ -247,23 +247,37 @@ export function diversify(
   candidates: FusedCandidate[],
   limit: number,
   maxPerSource = 4,
+  /**
+   * Ceiling on passages taken from a single page.
+   *
+   * A drawing set is one source with a dozen sheets, so a per-source cap alone lets the
+   * whole evidence budget land on the sheet that ranked best and leaves the other eleven
+   * unexamined — which reads in the report as "the drawing does not show it" when the
+   * drawing shows it two sheets over. Capping per page forces the evidence to spread
+   * across the sheets that matched at all.
+   */
+  maxPerPage = Number.POSITIVE_INFINITY,
 ): FusedCandidate[] {
   const perSource = new Map<string, number>();
+  const perPage = new Map<string, number>();
   const picked: FusedCandidate[] = [];
   const overflow: FusedCandidate[] = [];
 
   for (const candidate of candidates) {
-    const used = perSource.get(candidate.sourceId) ?? 0;
-    if (used < maxPerSource) {
+    const pageKey = `${candidate.sourceId}:${candidate.pageNumber ?? '-'}`;
+    const usedBySource = perSource.get(candidate.sourceId) ?? 0;
+    const usedByPage = perPage.get(pageKey) ?? 0;
+    if (usedBySource < maxPerSource && usedByPage < maxPerPage) {
       picked.push(candidate);
-      perSource.set(candidate.sourceId, used + 1);
+      perSource.set(candidate.sourceId, usedBySource + 1);
+      perPage.set(pageKey, usedByPage + 1);
       if (picked.length >= limit) return picked;
     } else {
       overflow.push(candidate);
     }
   }
 
-  // Backfill from the overflow only once every source has had its fair share.
+  // Backfill from the overflow only once every source and page has had its fair share.
   for (const candidate of overflow) {
     if (picked.length >= limit) break;
     picked.push(candidate);

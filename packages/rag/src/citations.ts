@@ -1,6 +1,8 @@
 import type { BoundingBox, Citation, Entailment } from '@uxe/contracts';
 import {
+  contentTokens,
   findExcerpt,
+  lightStem,
   normalizeForMatch,
   normalizeWhitespace,
   splitSentences,
@@ -338,21 +340,66 @@ export function detectConflict(a: string, b: string): { conflict: boolean; reaso
   return { conflict: false, reason: null };
 }
 
-/** Pulls "1.2 m", "45 minutes", "30 %" style quantities out of regulatory prose. */
-export function extractQuantities(text: string): Map<string, number> {
-  const out = new Map<string, number>();
-  const pattern =
-    /(\d+(?:[.,]\d+)?)\s*(mm|cm|m|km|in|ft|kg|g|lb|s|sec|seconds?|min|minutes?|h|hours?|%|percent|lux|lx|kpa|pa|bar|db|persons?|occupants?)\b/gi;
+/** One magnitude found in a document, together with the words it was written among. */
+export interface Measurement {
+  /** Canonical unit family, e.g. `length_m`. */
+  unit: string;
+  /** Value converted to the canonical unit. */
+  value: number;
+  /** Exactly as written, e.g. "240 min". */
+  raw: string;
+  /**
+   * Stemmed content words surrounding the figure.
+   *
+   * This is what makes a numeric comparison defensible. A drawing and a code clause both
+   * state lengths in metres; only the words around the figure say whether both are talking
+   * about a guard height or one is a guard height and the other a room dimension.
+   */
+  context: string[];
+}
 
-  for (const match of text.matchAll(pattern)) {
+const QUANTITY_PATTERN =
+  /(\d+(?:[.,]\d+)?)\s*(mm|cm|m|km|in|ft|kg|g|lb|s|sec|seconds?|min|minutes?|h|hours?|%|percent|lux|lx|kpa|pa|bar|db|persons?|occupants?)\b/gi;
+
+/** How many characters either side of a figure count as its subject. */
+const CONTEXT_WINDOW = 70;
+
+/**
+ * Every magnitude in the text, each carrying the words it sits among.
+ *
+ * Unlike `extractQuantities` this keeps repeats: a drawing states dozens of lengths and
+ * the operative one for a given clause is whichever is written next to the matching
+ * subject, not whichever comes first on the sheet.
+ */
+export function extractMeasurements(text: string): Measurement[] {
+  const out: Measurement[] = [];
+  for (const match of text.matchAll(QUANTITY_PATTERN)) {
     const raw = match[1];
     const unit = match[2];
     if (!raw || !unit) continue;
     const value = Number.parseFloat(raw.replace(',', '.'));
     if (Number.isNaN(value)) continue;
-    const key = canonicalUnit(unit.toLowerCase());
+    const at = match.index ?? 0;
+    const window = text.slice(
+      Math.max(0, at - CONTEXT_WINDOW),
+      at + match[0].length + CONTEXT_WINDOW,
+    );
+    out.push({
+      unit: canonicalUnit(unit.toLowerCase()),
+      value: convertToCanonical(value, unit.toLowerCase()),
+      raw: normalizeWhitespace(match[0]),
+      context: [...new Set(contentTokens(window).map(lightStem))].filter((t) => t.length >= 3),
+    });
+  }
+  return out;
+}
+
+/** Pulls "1.2 m", "45 minutes", "30 %" style quantities out of regulatory prose. */
+export function extractQuantities(text: string): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const measurement of extractMeasurements(text)) {
     // Keep the first occurrence: the leading figure in a clause is the operative one.
-    if (!out.has(key)) out.set(key, convertToCanonical(value, unit.toLowerCase()));
+    if (!out.has(measurement.unit)) out.set(measurement.unit, measurement.value);
   }
   return out;
 }

@@ -15,6 +15,7 @@ import {
 } from '../schema/index.js';
 import { newId } from '../ids.js';
 import {
+  NotAuthorityError,
   NotFoundError,
   VersionConflictError,
   hasPermission,
@@ -194,9 +195,19 @@ export class ConsultationRepository {
   /* ---------------------------------------------------------------------- */
 
   /**
-   * Attaches sources, pinning the version that is current *right now*. A later source
-   * update creates a new version but does not move this consultation onto it, so old
-   * citations keep resolving to exactly what was reviewed.
+   * Replaces the consultation's sources for one role, pinning the version that is current
+   * *right now*. A later source update creates a new version but does not move this
+   * consultation onto it, so old citations keep resolving to exactly what was reviewed.
+   *
+   * The `governing` role is the compliance authority — the text every finding is measured
+   * against — and only the knowledge base may hold it. A file uploaded inside ConsultNow is
+   * the thing being inspected, never the thing it is inspected against, and that has to
+   * hold on the server: the role travels in the request body, so a client asking for a
+   * drawing to govern is one HTTP call away. Non-knowledge ids are dropped here rather than
+   * rejected, because the same call legitimately carries a mixed selection.
+   *
+   * Uploading a document through the Knowledge page is what makes it an authority. Nothing
+   * else does.
    */
   async setSources(
     ctx: TenantContext,
@@ -211,7 +222,12 @@ export class ConsultationRepository {
       .select({ id: sources.id, currentVersionId: sources.currentVersionId })
       .from(sources)
       .where(
-        and(inArray(sources.id, sourceIds.length ? sourceIds : ['-']), visibleSourcePredicate(ctx)),
+        and(
+          inArray(sources.id, sourceIds.length ? sourceIds : ['-']),
+          visibleSourcePredicate(ctx),
+          // Only the knowledge base may govern; see the note above.
+          role === 'governing' ? eq(sources.promotedToKnowledge, true) : undefined,
+        ),
       );
 
     return this.db.transaction(async (tx) => {
@@ -247,6 +263,9 @@ export class ConsultationRepository {
     sourceVersionId: string,
     role: 'governing' | 'project',
   ) {
+    if (role === 'governing' && !(await this.isKnowledgeBaseSource(ctx, sourceId))) {
+      throw new NotAuthorityError(sourceId);
+    }
     await this.db
       .insert(consultationSources)
       .values({
@@ -258,6 +277,22 @@ export class ConsultationRepository {
         role,
       })
       .onConflictDoNothing();
+  }
+
+  /** True only for a document published through the knowledge base. */
+  private async isKnowledgeBaseSource(ctx: TenantContext, sourceId: string): Promise<boolean> {
+    const [row] = await this.db
+      .select({ id: sources.id })
+      .from(sources)
+      .where(
+        and(
+          eq(sources.id, sourceId),
+          visibleSourcePredicate(ctx),
+          eq(sources.promotedToKnowledge, true),
+        ),
+      )
+      .limit(1);
+    return row !== undefined;
   }
 
   async listSources(ctx: TenantContext, consultationId: string) {

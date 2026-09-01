@@ -102,6 +102,7 @@ export function makeAnswer(overrides: Partial<StructuredAnswer> = {}): Structure
         version: '3',
         role: 'governing',
         pages: 812,
+        sheetsInspected: [],
       },
       {
         sourceId: 'src-plan',
@@ -110,6 +111,7 @@ export function makeAnswer(overrides: Partial<StructuredAnswer> = {}): Structure
         version: '1',
         role: 'project',
         pages: 44,
+        sheetsInspected: [3, 4, 5, 9],
       },
     ],
     assumptions: ['The building is fully sprinklered, as stated in the plan.'],

@@ -476,6 +476,77 @@ describe('a compliance review', () => {
   }, 300_000);
 });
 
+/*
+ * The rule the whole product rests on: what a submission is measured against is the
+ * knowledge base, and only the knowledge base. A file uploaded inside ConsultNow is the
+ * thing being inspected. Letting it govern would let a drawing certify itself, so the
+ * separation is enforced on the server rather than by which screen the upload came from.
+ */
+describe('the knowledge base is the only compliance authority', () => {
+  it('refuses to let a consultation upload govern, however the request asks', async () => {
+    const consultationId = await newConsultation([regulationId]);
+    const uploadedInConsult = await attachProjectDocument(
+      consultationId,
+      'submittal.pdf',
+      'project-plan.pdf',
+    );
+
+    const current = await owner.client.get<{ version: number }>(`/consultations/${consultationId}`);
+
+    // Straight from the client: name the drawing as a governing source.
+    const patched = await owner.client.patch(`/consultations/${consultationId}`, {
+      sourceIds: [regulationId, uploadedInConsult],
+      version: current.body.version,
+    });
+    expect(patched.status).toBeLessThan(300);
+
+    const detail = await owner.client.get<{
+      sources: Array<{ sourceId: string; role: string }>;
+    }>(`/consultations/${consultationId}`);
+
+    const governing = detail.body.sources.filter((s) => s.role === 'governing');
+    expect(governing.map((s) => s.sourceId)).toContain(regulationId);
+    expect(governing.map((s) => s.sourceId)).not.toContain(uploadedInConsult);
+  }, 300_000);
+
+  it('names the knowledge base as the authority in the review it produces', async () => {
+    const consultationId = await newConsultation([regulationId]);
+    await attachProjectDocument(consultationId, 'submittal.pdf', 'project-plan.pdf');
+
+    const result = await ask(owner.client, consultationId, 'Does this satisfy the code?', {
+      taskMode: 'check_compliance',
+      answerStyle: 'details',
+    });
+    const answer = result.answer!;
+
+    expect(answer.assumptions.join(' ')).toContain('solely against the knowledge base');
+    expect(answer.assumptions.join(' ')).toContain('UAE Fire and Life Safety Code');
+
+    // Every obligation tested came from the knowledge base, never from the submission.
+    const governingSourceIds = new Set(
+      answer.documentsReviewed.filter((d) => d.role === 'governing').map((d) => d.sourceId),
+    );
+    expect(governingSourceIds.has(regulationId)).toBe(true);
+    for (const requirement of answer.requirements) {
+      expect(governingSourceIds.has(requirement.sourceId)).toBe(true);
+    }
+  }, 300_000);
+
+  it('records which sheets it read, so an unread page is not reported as a silent gap', async () => {
+    const consultationId = await newConsultation([regulationId]);
+    await attachProjectDocument(consultationId, 'submittal.pdf', 'project-plan.pdf');
+
+    const result = await ask(owner.client, consultationId, 'Does this satisfy the code?', {
+      taskMode: 'check_compliance',
+      answerStyle: 'details',
+    });
+    const project = result.answer!.documentsReviewed.filter((d) => d.role === 'project').at(0);
+
+    expect(project).toBeDefined();
+    expect(project!.sheetsInspected.length).toBeGreaterThan(0);
+  }, 300_000);
+});
+
 describe('answer styles', () => {
   it('re-renders the same verified evidence at every depth, without new retrieval', async () => {
     const consultationId = await newConsultation([regulationId]);

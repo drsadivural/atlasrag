@@ -1,5 +1,10 @@
 import type { Context } from 'hono';
-import { AuthorizationError, NotFoundError, VersionConflictError } from '@uxe/db';
+import {
+  AuthorizationError,
+  NotAuthorityError,
+  NotFoundError,
+  VersionConflictError,
+} from '@uxe/db';
 import { ProviderError } from '@uxe/rag';
 import { OAuthError } from '@uxe/auth';
 import type { ErrorCode } from '@uxe/contracts';
@@ -109,6 +114,23 @@ export function toErrorResponse(
       logLevel: 'warn',
       headers,
       body: { error: { code: 'not_found', message: error.message, traceId, retryable: false } },
+    };
+  }
+
+  if (error instanceof NotAuthorityError) {
+    return {
+      status: 422,
+      logLevel: 'warn',
+      headers,
+      body: {
+        error: {
+          code: 'not_authority',
+          message: error.message,
+          details: { sourceId: error.sourceId },
+          traceId,
+          retryable: false,
+        },
+      },
     };
   }
 
