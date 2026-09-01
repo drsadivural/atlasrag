@@ -66,6 +66,41 @@ describe('detectModality', () => {
   });
 });
 
+describe('clause polarity', () => {
+  /*
+   * The defect this class exists for. "Fire dampers shall not be required in the following
+   * locations" contains "shall not", so it was filed as a prohibition and then tested like
+   * any other requirement — and a drawing showing a fire damper scored as satisfying a
+   * clause that says one is unnecessary. That was the only COMPLIANT verdict in a
+   * sixty-item review of a real drawing set, and it was backwards.
+   */
+  it('reads a clause that lifts a requirement as exemptive, not prohibitive', () => {
+    expect(detectModality('Fire dampers shall not be required in the following locations:')).toBe(
+      'exemptive',
+    );
+    expect(detectModality('Smoke dampers are not required where the duct is ducted.')).toBe(
+      'exemptive',
+    );
+    expect(
+      detectModality('Sprinklers shall be permitted to be omitted from electrical rooms.'),
+    ).toBe('exemptive');
+    expect(detectModality('Buildings under 15 m are exempt from this Section.')).toBe('exemptive');
+  });
+
+  it('still reads a real prohibition as prohibitive', () => {
+    expect(detectModality('Combustible materials shall not be stored in the stair.')).toBe(
+      'prohibited',
+    );
+    expect(detectModality('Openings must not exceed 100 mm.')).toBe('prohibited');
+  });
+
+  it('does not turn an exemptive clause into something to satisfy', () => {
+    expect(
+      isRequirementText('Fire dampers shall not be required in the following locations: ducts...'),
+    ).toBe(false);
+  });
+});
+
 describe('isRequirementText', () => {
   it('accepts a substantive obligation', () => {
     expect(

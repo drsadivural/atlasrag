@@ -13,7 +13,22 @@ export interface ExtractedPage {
 }
 
 export type SectionKind = 'heading' | 'clause' | 'table' | 'definition' | 'list' | 'paragraph';
-export type Modality = 'mandatory' | 'recommended' | 'permissive' | 'prohibited';
+export type Modality =
+  | 'mandatory'
+  | 'recommended'
+  | 'permissive'
+  | 'prohibited'
+  /**
+   * A clause that lifts a requirement rather than imposing one.
+   *
+   * "Fire dampers shall not be required in the following locations" is not an obligation
+   * to provide fire dampers, and it is not a prohibition either. Without this class it was
+   * read as a prohibition — because the text contains "shall not" — and then tested like
+   * any other requirement, so a drawing that showed a fire damper scored as satisfying a
+   * clause that says one is unnecessary. That was the single COMPLIANT verdict in a
+   * sixty-item review, and it was backwards.
+   */
+  | 'exemptive';
 
 export interface DetectedSection {
   ordinal: number;
@@ -87,6 +102,23 @@ const EFFECTIVE_DATE =
  */
 export function detectModality(text: string): Modality | null {
   const t = text.toLowerCase();
+  /*
+   * Exemption is tested before prohibition, and the order is the whole point.
+   *
+   * "shall not be required" contains "shall not". Reading it as a prohibition inverts the
+   * clause: a permission to omit becomes a duty to omit, and then anything present looks
+   * like compliance with it.
+   */
+  if (
+    /\b(?:shall|will|is|are|need)\s+not\s+be\s+required\b/.test(t) ||
+    /\b(?:is|are)\s+not\s+required\b/.test(t) ||
+    /\bnot\s+required\s+(?:in|for|at|where|when)\b/.test(t) ||
+    /\b(?:shall|may)\s+be\s+permitted\s+to\s+be\s+(?:omitted|waived)\b/.test(t) ||
+    /\b(?:is|are)\s+exempt(?:ed)?\b/.test(t) ||
+    /\bexempt(?:ion|ions)?\s+(?:from|to)\b/.test(t)
+  ) {
+    return 'exemptive';
+  }
   if (/\b(shall not|must not|may not|is prohibited|are prohibited|no .{0,30}shall)\b/.test(t)) {
     return 'prohibited';
   }

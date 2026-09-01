@@ -35,6 +35,7 @@ import {
 import {
   aggregateRisk,
   buildRequirementSet,
+  exemptiveClauses,
   decideOverall,
   evaluateRequirement,
   quantitySatisfies,
@@ -48,6 +49,23 @@ import {
   type DocumentReviewed,
 } from './answer.js';
 import { detectInjection, shouldQuarantine } from './injection.js';
+import {
+  appliesAtHeight,
+  bandLabel,
+  deriveBuildingAttributes,
+  type BuildingAttributes,
+  heightCondition,
+  type HeightCondition,
+} from './derive.js';
+import {
+  clauseDiscipline,
+  describeDisciplines,
+  disciplineLabel,
+  isInScope,
+  profileDisciplines,
+  profileText,
+  type Discipline,
+} from './discipline.js';
 import { contentTokens, lightStem, normalizeForMatch, normalizeWhitespace } from './text.js';
 
 export interface SourceScope {
@@ -540,18 +558,26 @@ async function projectVocabulary(
   ctx: TenantContext,
   repo: RetrievalRepository,
   project: SourceScope[],
-): Promise<Map<string, number>> {
+): Promise<{ words: Map<string, number>; text: string }> {
   const words = new Map<string, number>();
+  const parts: string[] = [];
   for (const source of project) {
     const chunks = await repo.chunksForVersion(ctx, source.sourceVersionId);
     for (const chunk of chunks) {
-      for (const term of contentTokens(`${chunk.headingText} ${chunk.content}`)) {
+      const text = `${chunk.headingText} ${chunk.content}`;
+      parts.push(text);
+      for (const term of contentTokens(text)) {
         const stem = lightStem(term);
         words.set(stem, (words.get(stem) ?? 0) + 1);
       }
     }
   }
-  return words;
+  /*
+   * One pass, three answers: which words the submission uses, what trade it belongs to,
+   * and how tall the building is. Reading every chunk again for each would be three passes
+   * over a document that can run to thousands of them.
+   */
+  return { words, text: profileText(parts) };
 }
 
 /**
@@ -559,6 +585,14 @@ async function projectVocabulary(
  * treated as being about the submission at all.
  */
 const RELEVANCE_FLOOR = 0.4;
+
+/**
+ * How many out-of-scope clauses a report names before it just gives the count.
+ *
+ * A fire code holds hundreds a single-trade drawing cannot answer. Listing them all would
+ * bury the findings that matter under the ones that never applied.
+ */
+const OUT_OF_SCOPE_SHOWN = 5;
 
 /**
  * Occurrences at which a word counts as something the submission is about.
@@ -876,9 +910,51 @@ export async function runComplianceReview(
    * the order the code is written.
    */
   const budget = options.maxRequirements ?? 60;
-  const vocabulary = await projectVocabulary(ctx, deps.repo, project);
-  const relevant = selectRelevantRequirements(requirementDrafts, vocabulary, budget);
-  const omitted = requirementDrafts.length - relevant.length;
+  const { words: vocabulary, text: projectText } = await projectVocabulary(ctx, deps.repo, project);
+
+  /*
+   * What trade this submission belongs to, and which clauses it could answer.
+   *
+   * A twelve-sheet smoke-ventilation layout was being tested against clauses on LPG tank
+   * installation, fire-station bedrooms, curtainwall perimeter joints and glass baluster
+   * design. Each came back "needs evidence" — which reads to a client as a gap in their
+   * design, when in truth the clause was never theirs to answer. Out of scope and unmet
+   * are different states and were being merged.
+   */
+  const submissionProfile = profileDisciplines(projectText);
+
+  /*
+   * What the building is, read off its own drawings.
+   *
+   * The height decides which clauses apply at all. A clause that opens "all Super highrise
+   * buildings (having height greater than 90 m)" is not a gap in a 23.76 m building's
+   * design — it is a clause about a different building. Reporting it as unevidenced is the
+   * same mistake as reporting an LPG clause against a smoke layout, one storey up.
+   */
+  const building = deriveBuildingAttributes(projectText);
+
+  const inScope: RequirementDraft[] = [];
+  const outOfScope: Array<{ draft: RequirementDraft; discipline: Discipline }> = [];
+  const outOfBand: Array<{ draft: RequirementDraft; condition: HeightCondition }> = [];
+  for (const draft of requirementDrafts) {
+    const text = `${draft.title} ${draft.obligationText}`;
+
+    const condition = heightCondition(text);
+    if (appliesAtHeight(condition, building.heightM) === false && condition !== null) {
+      outOfBand.push({ draft, condition });
+      continue;
+    }
+
+    const discipline = clauseDiscipline(text);
+    if (project.length > 0 && !isInScope(discipline, submissionProfile.disciplines)) {
+      outOfScope.push({ draft, discipline: discipline as Discipline });
+      continue;
+    }
+    inScope.push(draft);
+  }
+
+  const relevant = selectRelevantRequirements(inScope, vocabulary, budget);
+  const omitted = inScope.length - relevant.length;
 
   const usable = relevant.filter((r) => r.obligationText.length > 0);
 
@@ -969,18 +1045,7 @@ export async function runComplianceReview(
 
     allCitations.push(...governingCitations.citations, ...projectCitations.citations);
 
-    requirements.push({
-      requirementId: requirement.requirementId,
-      reference: requirement.reference,
-      title: requirement.title,
-      obligationText: requirement.obligationText,
-      modality: requirement.modality,
-      sourceId: requirement.sourceId,
-      sourceVersionId: requirement.sourceVersionId,
-      citationId: governingIds[0] ?? null,
-      exceptions: requirement.exceptions,
-      crossReferences: requirement.crossReferences,
-    });
+    requirements.push({ ...toRequirement(requirement), citationId: governingIds[0] ?? null });
 
     findings.push({
       findingId: options.idFactory(),
@@ -1011,6 +1076,62 @@ export async function runComplianceReview(
     });
 
     await options.onProgress?.(index + 1, usable.length);
+  }
+
+  /*
+   * Clauses that were never this document's to answer, said so.
+   *
+   * Reported rather than dropped: silence would leave a reader unable to tell a review
+   * that considered a clause and routed it elsewhere from one that never saw it. They are
+   * `not_assessed` — the enum has always had the state and nothing used it — so they
+   * cannot count towards the verdict, and they carry no risk.
+   *
+   * A sample, not the whole set: on a fire code against a single-trade drawing this is
+   * hundreds of clauses, and a report listing every one of them is a worse document than
+   * one that names a few and says how many there were.
+   */
+  /*
+   * Clauses that apply to a different building, with the arithmetic shown.
+   *
+   * The derivation is the finding: this building is 23.76 m, the clause is for buildings
+   * over 90 m, therefore it does not apply. A reader can check both halves.
+   */
+  for (const { draft, condition } of outOfBand.slice(0, OUT_OF_SCOPE_SHOWN)) {
+    requirements.push(toRequirement(draft));
+    findings.push({
+      findingId: options.idFactory(),
+      requirementId: draft.requirementId,
+      requirementReference: draft.reference,
+      requirementTitle: draft.title,
+      result: 'not_assessed',
+      risk: 'none',
+      finding: `${draft.reference} applies to buildings ${condition.direction} ${condition.threshold} m. This building is ${building.heightM} m${building.band === null ? '' : ` (${bandLabel(building.band)})`}, so the clause does not apply.`,
+      projectEvidenceCitationIds: [],
+      governingCitationIds: [],
+      missingEvidence: [],
+      conflicts: [],
+      recommendedAction: null,
+      confidence: 0.75,
+    });
+  }
+
+  for (const { draft, discipline } of outOfScope.slice(0, OUT_OF_SCOPE_SHOWN)) {
+    requirements.push(toRequirement(draft));
+    findings.push({
+      findingId: options.idFactory(),
+      requirementId: draft.requirementId,
+      requirementReference: draft.reference,
+      requirementTitle: draft.title,
+      result: 'not_assessed',
+      risk: 'none',
+      finding: `${draft.reference} is a ${disciplineLabel(discipline)} clause. This submission covers ${describeDisciplines(submissionProfile.disciplines)}, so the clause is outside its scope rather than unmet.`,
+      projectEvidenceCitationIds: [],
+      governingCitationIds: [],
+      missingEvidence: [],
+      conflicts: [],
+      recommendedAction: null,
+      confidence: 0.7,
+    });
   }
 
   // Enforce the invariant the database also enforces: no compliant finding without evidence.
@@ -1114,6 +1235,13 @@ export async function runComplianceReview(
       relevant.length,
       omitted,
       sheetsBySource,
+      {
+        disciplines: submissionProfile.disciplines,
+        outOfScope: outOfScope.length,
+        exemptive: exemptiveClauses(requirementDrafts),
+        outOfBand: outOfBand.length,
+        building,
+      },
     ),
     followUpQuestion:
       project.length === 0
@@ -1125,6 +1253,29 @@ export async function runComplianceReview(
   return { answer, requirements, findings, citations: allCitations, counts };
 }
 
+/**
+ * The record of a clause the review considered.
+ *
+ * Written for every clause that produces a finding, including the ones routed away: a
+ * finding carries a foreign key to its requirement, so a clause reported as out of scope
+ * with no row behind it fails the whole review at the point of saving it — which is how it
+ * failed, silently, on the first run of the routing work.
+ */
+function toRequirement(draft: RequirementDraft): Requirement {
+  return {
+    requirementId: draft.requirementId,
+    reference: draft.reference,
+    title: draft.title,
+    obligationText: draft.obligationText,
+    modality: draft.modality,
+    sourceId: draft.sourceId,
+    sourceVersionId: draft.sourceVersionId,
+    citationId: null,
+    exceptions: draft.exceptions,
+    crossReferences: draft.crossReferences,
+  };
+}
+
 function buildAssumptions(
   governing: SourceScope[],
   project: SourceScope[],
@@ -1132,6 +1283,26 @@ function buildAssumptions(
   total: number,
   omitted = 0,
   sheetsBySource: Map<string, Set<number>> = new Map(),
+  routing: {
+    disciplines: Discipline[];
+    outOfScope: number;
+    exemptive: number;
+    outOfBand: number;
+    building: BuildingAttributes;
+  } = {
+    disciplines: [],
+    outOfScope: 0,
+    exemptive: 0,
+    outOfBand: 0,
+    building: {
+      heightM: null,
+      band: null,
+      heightEvidence: null,
+      sprinklered: null,
+      sprinkleredEvidence: null,
+      basement: false,
+    },
+  },
 ): string[] {
   const out: string[] = [];
   /*
@@ -1159,6 +1330,37 @@ function buildAssumptions(
   out.push(
     `Only mandatory and prohibitive provisions were treated as testable requirements; recommendations ("should") were not scored as failures.`,
   );
+  if (routing.exemptive > 0) {
+    out.push(
+      `${routing.exemptive} clause(s) lift a requirement rather than impose one — "shall not be required in..." and similar — and were not treated as things to satisfy.`,
+    );
+  }
+  if (routing.outOfScope > 0 && routing.disciplines.length > 0) {
+    out.push(
+      `This submission was read as covering ${describeDisciplines(routing.disciplines)}. ${routing.outOfScope} clause(s) belonging to other trades were set aside as outside its scope rather than reported as unmet.`,
+    );
+  }
+  /*
+   * The derivation, stated so it can be disagreed with.
+   *
+   * Everything the height band decides rests on one number read off a drawing. Printing
+   * the number and the line it came from is what makes that checkable rather than a
+   * verdict from nowhere.
+   */
+  if (routing.building.heightM !== null && routing.building.band !== null) {
+    out.push(
+      `The building was read as ${routing.building.heightM} m tall (${bandLabel(routing.building.band)}) from "${routing.building.heightEvidence ?? 'a level annotation'}". ${routing.outOfBand} clause(s) that apply only to other height bands were set aside on that basis. If the height is wrong, so are those exclusions.`,
+    );
+  } else if (routing.outOfBand === 0 && project.length > 0) {
+    out.push(
+      'No floor level annotation was found, so the building height could not be derived and no clause was excluded on height. Clauses that apply only above or below a height threshold were tested regardless.',
+    );
+  }
+  if (routing.building.sprinklered !== null) {
+    out.push(
+      `The building was read as ${routing.building.sprinklered ? 'sprinklered' : 'not sprinklered'} from "${routing.building.sprinkleredEvidence ?? 'the drawing text'}". This was not used to exclude any clause.`,
+    );
+  }
   /*
    * Said first, and said plainly.
    *

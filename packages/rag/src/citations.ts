@@ -358,8 +358,17 @@ export interface Measurement {
   context: string[];
 }
 
+/*
+ * Area and volume are matched before length, and the superscript is optional.
+ *
+ * Extraction separates the superscript: "23.73 m²" arrives as "23.73 m ²", and reading the
+ * "m" alone turned a floor area into a height. That is how a review came to report
+ * "2.9.5 specifies 90.00 m but the project document states 23.73 m" — comparing a
+ * building-height threshold against the floor area of a substation. A quantity carries a
+ * dimension, and a comparison across dimensions is not a comparison.
+ */
 const QUANTITY_PATTERN =
-  /(\d+(?:[.,]\d+)?)\s*(mm|cm|m|km|in|ft|kg|g|lb|s|sec|seconds?|min|minutes?|h|hours?|%|percent|lux|lx|kpa|pa|bar|db|persons?|occupants?)\b/gi;
+  /(\d+(?:[.,]\d+)?)\s*(mm2|cm2|m2|sqm|mm3|cm3|m3|cbm|mm|cm|m|km|in|ft|kg|g|lb|s|sec|seconds?|min|minutes?|h|hours?|%|percent|lux|lx|kpa|pa|bar|db|cfm|ach|persons?|occupants?)\s*([²³]?)(?![a-z0-9])/gi;
 
 /** How many characters either side of a figure count as its subject. */
 const CONTEXT_WINDOW = 70;
@@ -375,8 +384,11 @@ export function extractMeasurements(text: string): Measurement[] {
   const out: Measurement[] = [];
   for (const match of text.matchAll(QUANTITY_PATTERN)) {
     const raw = match[1];
-    const unit = match[2];
-    if (!raw || !unit) continue;
+    const base = match[2];
+    const superscript = match[3];
+    if (!raw || !base) continue;
+    // "m" followed by a detached superscript is m2 or m3, not metres.
+    const unit = superscript === '²' ? `${base}2` : superscript === '³' ? `${base}3` : base;
     const value = Number.parseFloat(raw.replace(',', '.'));
     if (Number.isNaN(value)) continue;
     const at = match.index ?? 0;
@@ -405,6 +417,11 @@ export function extractQuantities(text: string): Map<string, number> {
 }
 
 function canonicalUnit(unit: string): string {
+  // Area and volume first: "m2" would otherwise never be reached past the "m" test.
+  if (['mm2', 'cm2', 'm2', 'sqm'].includes(unit)) return 'area_m2';
+  if (['mm3', 'cm3', 'm3', 'cbm'].includes(unit)) return 'volume_m3';
+  if (['cfm'].includes(unit)) return 'flow_cfm';
+  if (['ach'].includes(unit)) return 'air_changes';
   if (['mm', 'cm', 'm', 'km', 'in', 'ft'].includes(unit)) return 'length_m';
   if (
     ['s', 'sec', 'second', 'seconds', 'min', 'minute', 'minutes', 'h', 'hour', 'hours'].includes(
@@ -423,6 +440,14 @@ function canonicalUnit(unit: string): string {
 
 function convertToCanonical(value: number, unit: string): number {
   switch (unit) {
+    case 'mm2':
+      return value / 1_000_000;
+    case 'cm2':
+      return value / 10_000;
+    case 'mm3':
+      return value / 1_000_000_000;
+    case 'cm3':
+      return value / 1_000_000;
     case 'mm':
       return value / 1000;
     case 'cm':

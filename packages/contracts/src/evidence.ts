@@ -116,7 +116,7 @@ export const Requirement = z.object({
   title: z.string().min(1),
   obligationText: z.string().min(1),
   /** "shall"/"must" are mandatory; "should" is recommended; "may" is permissive. */
-  modality: z.enum(['mandatory', 'recommended', 'permissive', 'prohibited']),
+  modality: z.enum(['mandatory', 'recommended', 'permissive', 'prohibited', 'exemptive']),
   sourceId: Id,
   sourceVersionId: Id,
   citationId: Id.nullable(),

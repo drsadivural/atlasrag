@@ -15,7 +15,7 @@ import {
   splitSentences,
 } from './text.js';
 import type { DetectedSection } from './structure.js';
-import { sectionReference } from './structure.js';
+import { detectModality, sectionReference } from './structure.js';
 
 export interface RequirementDraft {
   requirementId: string;
@@ -63,6 +63,8 @@ export function buildRequirementSet(
    * what was and was not looked at.
    */
   let omitted = 0;
+  /** Clauses that turned out to lift a requirement rather than impose one. */
+  let exempted = 0;
 
   for (const section of sections) {
     if (out.length >= max) {
@@ -71,6 +73,23 @@ export function buildRequirementSet(
     }
     if (!section.isRequirement) continue;
     if (section.modality !== 'mandatory' && section.modality !== 'prohibited') continue;
+
+    /*
+     * Re-read the polarity from the text rather than trusting what was stored.
+     *
+     * Modality is computed at ingest, so a knowledge base indexed before exemptive clauses
+     * were recognised still has "Fire dampers shall not be required in..." filed as a
+     * prohibition. Testing it produced the review's single COMPLIANT verdict, on a clause
+     * saying the thing was unnecessary — a false pass on an already-indexed document that
+     * would otherwise survive until somebody re-indexed 1,348 pages.
+     *
+     * Cheap enough to do here: one regex against text already in memory, on the way past.
+     */
+    const polarity = detectModality(`${section.title} ${section.body}`);
+    if (polarity === 'exemptive' || polarity === 'permissive' || polarity === 'recommended') {
+      exempted += 1;
+      continue;
+    }
 
     const reference = sectionReference(section);
     /*
@@ -119,12 +138,18 @@ export function buildRequirementSet(
   // Attached to the array rather than changing the return type: every caller keeps working,
   // and the one that reports scope can say how much of the document was actually tested.
   Object.defineProperty(out, 'omittedRequirements', { value: omitted, enumerable: false });
+  Object.defineProperty(out, 'exemptiveClauses', { value: exempted, enumerable: false });
   return out;
 }
 
 /** How many obligations the cap left untested, for a caller that has to disclose it. */
 export function omittedRequirements(drafts: RequirementDraft[]): number {
   return (drafts as RequirementDraft[] & { omittedRequirements?: number }).omittedRequirements ?? 0;
+}
+
+/** How many clauses were set aside because they lift a requirement rather than impose one. */
+export function exemptiveClauses(drafts: RequirementDraft[]): number {
+  return (drafts as RequirementDraft[] & { exemptiveClauses?: number }).exemptiveClauses ?? 0;
 }
 
 /** Keeps only the sentences that actually carry the obligation. */
@@ -803,6 +828,10 @@ function formatQuantity(unit: string, value: number): string {
     illuminance_lx: (v) => `${v.toFixed(0)} lux`,
     pressure_pa: (v) => `${(v / 1000).toFixed(1)} kPa`,
     people: (v) => `${v.toFixed(0)} persons`,
+    area_m2: (v) => `${trimZeros(v.toFixed(2))} m2`,
+    volume_m3: (v) => `${trimZeros(v.toFixed(2))} m3`,
+    flow_cfm: (v) => `${v.toFixed(0)} CFM`,
+    air_changes: (v) => `${trimZeros(v.toFixed(1))} ACH`,
   };
   return labels[unit]?.(value) ?? `${value} ${unit}`;
 }
