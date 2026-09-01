@@ -30,6 +30,7 @@ import {
   Card,
   Checkbox,
   Dialog,
+  DropdownMenu,
   EmptyState,
   ErrorState,
   StaleNotice,
@@ -489,6 +490,15 @@ function AnswerActions({ consultation }: { consultation: ConsultationDetail }) {
   const { t } = useI18n();
   const { push } = useToast();
 
+  /*
+   * What goes into the report, chosen next to the button that makes it.
+   *
+   * A choice about one document, made once, at the moment of asking for it — so it lives
+   * here rather than in the consultation's saved settings, where it would silently govern
+   * every future report somebody else generated.
+   */
+  const [includeEvidence, setIncludeEvidence] = useState(true);
+
   const latestAnswerMessageId = useMemo(
     () => [...consultation.messages].reverse().find((m) => m.answer)?.id ?? null,
     [consultation.messages],
@@ -510,15 +520,20 @@ function AnswerActions({ consultation }: { consultation: ConsultationDetail }) {
           messageId: latestAnswerMessageId,
           format: request.format,
           kind: request.kind,
+          // The matrix IS the evidence; excluding it there would produce an empty file.
+          includeEvidence: request.kind === 'evidence_matrix' ? true : includeEvidence,
           idempotencyKey: newIdempotencyKey(),
         },
         newIdempotencyKey(),
       ),
-    onSuccess: () =>
+    onSuccess: (_result, request) =>
       push({
         tone: 'success',
         title: 'Queued',
-        description: 'It appears in Reports when ready.',
+        description:
+          request.kind === 'compliance_report' && !includeEvidence
+            ? t('consult.reportQueuedWithoutEvidence')
+            : t('consult.reportQueued'),
       }),
     onError: (error: ApiError) =>
       push({ tone: 'error', title: 'Could not create it', description: error.message }),
@@ -530,17 +545,53 @@ function AnswerActions({ consultation }: { consultation: ConsultationDetail }) {
   return (
     <div className="shrink-0 border-t border-[var(--uxe-border)] bg-[var(--uxe-surface)] px-4 py-2.5 sm:px-6">
       <div className="mx-auto flex max-w-4xl flex-wrap items-center gap-2">
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={() => generate.mutate({ kind: 'compliance_report', format: 'pdf' })}
-          loading={generate.isPending && generate.variables?.kind === 'compliance_report'}
-          disabled={!ready}
-          title={whyDisabled}
-        >
-          <FileText className="h-4 w-4" aria-hidden />
-          {t('consult.createReport')}
-        </Button>
+        {/*
+          The button and its one option, joined into a split control.
+          What a report contains is a decision about that report, so it belongs on the
+          control that makes it rather than in a settings panel two clicks away.
+        */}
+        <span className="flex items-center">
+          <Button
+            variant="secondary"
+            size="sm"
+            className="rounded-e-none"
+            onClick={() => generate.mutate({ kind: 'compliance_report', format: 'pdf' })}
+            loading={generate.isPending && generate.variables?.kind === 'compliance_report'}
+            disabled={!ready}
+            title={whyDisabled}
+          >
+            <FileText className="h-4 w-4" aria-hidden />
+            {t('consult.createReport')}
+            {!includeEvidence && (
+              <span className="text-[var(--uxe-text-secondary)]">
+                · {t('consult.withoutEvidence')}
+              </span>
+            )}
+          </Button>
+          <DropdownMenu
+            label={t('consult.reportOptions')}
+            items={[
+              {
+                label: t('consult.includeEvidence'),
+                description: t('consult.includeEvidenceHint'),
+                checked: includeEvidence,
+                onSelect: () => setIncludeEvidence((value) => !value),
+              },
+            ]}
+            trigger={
+              <Button
+                variant="secondary"
+                size="icon-sm"
+                className="-ms-px rounded-s-none"
+                disabled={!ready}
+                title={whyDisabled}
+                aria-label={t('consult.reportOptions')}
+              >
+                <Settings2 className="h-3.5 w-3.5" aria-hidden />
+              </Button>
+            }
+          />
+        </span>
         <Button
           variant="ghost"
           size="sm"

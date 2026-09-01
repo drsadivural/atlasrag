@@ -214,6 +214,13 @@ export const ar: Catalogue = {
   'consult.generateCorrected': 'إنشاء {format} مصحح',
   'consult.consultationSettings': 'إعدادات الاستشارة',
   'consult.reportNeedsAnswer': 'اطرح سؤالًا أولًا — يُبنى التقرير من إجابة.',
+  'consult.reportOptions': 'خيارات التقرير',
+  'consult.includeEvidence': 'تضمين الأدلة',
+  'consult.includeEvidenceHint': 'كل متطلب مع بنده وصفحته والمقطع المقتبس.',
+  'consult.withoutEvidence': 'بدون أدلة',
+  'consult.reportQueued': 'سيظهر في التقارير عند جاهزيته.',
+  'consult.reportQueuedWithoutEvidence':
+    'نسخة مختصرة بدون مصفوفة الأدلة. ستظهر في التقارير عند جاهزيتها.',
   'consult.createReport': 'إنشاء تقرير امتثال كامل',
   'consult.evidenceCoverage': 'تغطية الأدلة',
   'consult.citedPassages': '{count} مقاطع مقتبسة',

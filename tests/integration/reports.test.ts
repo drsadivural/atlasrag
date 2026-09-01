@@ -70,6 +70,7 @@ afterAll(async () => {
 async function generateReport(
   format: string,
   kind: 'compliance_report' | 'summary' | 'evidence_matrix' = 'compliance_report',
+  options: { includeEvidence?: boolean } = {},
 ): Promise<{ artifactId: string }> {
   const response = await owner.client.post<{ job: { id: string }; artifactId?: string }>(
     `/consultations/${consultationId}/reports`,
@@ -77,7 +78,10 @@ async function generateReport(
       format,
       kind,
       reviewId,
-      idempotencyKey: `report-${format}-${Date.now()}`,
+      ...(options.includeEvidence === undefined
+        ? {}
+        : { includeEvidence: options.includeEvidence }),
+      idempotencyKey: `report-${format}-${kind}-${options.includeEvidence ?? 'default'}-${Date.now()}`,
     },
   );
   expect(response.status).toBeLessThan(300);
@@ -87,11 +91,17 @@ async function generateReport(
   const artifacts = await owner.client.get<{
     items: Array<{ id: string; documentType: string; sizeBytes: number; status: string }>;
   }>('/artifacts?pageSize=50');
-  const artifact = artifacts.body.items.find((a) => a.documentType === format);
-  expect(
-    artifact,
-    `no ${format} artifact was produced: ${JSON.stringify(artifacts.body.items)}`,
-  ).toBeDefined();
+  /*
+   * `documentType` is the stored type, not the requested format: markdown is filed as
+   * text, which is what the artifact list has always shown.
+   *
+   * The list is newest first, so `find` takes the most recent of that type — which matters
+   * now that two markdown reports are generated below and taking whichever came first
+   * would assert about the wrong file.
+   */
+  const storedType = format === 'markdown' ? 'text' : format;
+  const artifact = artifacts.body.items.find((a) => a.documentType === storedType);
+  expect(artifact, `no ${format} (${storedType}) artifact was produced`).toBeDefined();
   expect(artifact!.sizeBytes).toBeGreaterThan(0);
   expect(artifact!.status).toBe('ready');
   return { artifactId: artifact!.id };
@@ -130,6 +140,34 @@ describe('compliance reports', () => {
     const bytes = await downloadArtifact(artifactId);
     // A DOCX is an OPC zip container; "PK" is the only proof that it really is one.
     expect([bytes[0], bytes[1]]).toEqual([0x50, 0x4b]);
+  }, 300_000);
+
+  it('omits the evidence matrix when asked to, and says on the report that it did', async () => {
+    /*
+     * The option exists so a decision can be circulated without a hundred pages of
+     * quotations behind it. What it must never produce is a document that looks complete
+     * and is not — so the shorter edition carries a line saying what was left out and how
+     * many findings there were, and the artifact records that it went out that way.
+     */
+    const { artifactId } = await generateReport('markdown', 'compliance_report', {
+      includeEvidence: false,
+    });
+    const text = new TextDecoder().decode(await downloadArtifact(artifactId));
+
+    expect(text).toMatch(/omits the evidence matrix/i);
+    expect(text).toMatch(/finding\(s\) were assessed/i);
+    // The matrix section is gone; the verdict and the summary survive.
+    expect(text).not.toMatch(/## Evidence matrix/);
+    expect(text).toMatch(/## Summary/);
+  }, 300_000);
+
+  it('includes the evidence matrix by default', async () => {
+    const { artifactId } = await generateReport('markdown');
+    const text = new TextDecoder().decode(await downloadArtifact(artifactId));
+
+    expect(text).toMatch(/## Evidence matrix/);
+    expect(text).toMatch(/traceable to the source version/i);
+    expect(text).not.toMatch(/omits the evidence matrix/i);
   }, 300_000);
 
   it('produces an evidence matrix export with one row per finding', async () => {

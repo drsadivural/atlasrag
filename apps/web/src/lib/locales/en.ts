@@ -210,6 +210,13 @@ export const en = {
   'consult.generateCorrected': 'Generate corrected {format}',
   'consult.consultationSettings': 'Consultation settings',
   'consult.reportNeedsAnswer': 'Ask a question first — a report is built from an answer.',
+  'consult.reportOptions': 'Report options',
+  'consult.includeEvidence': 'Include evidence',
+  'consult.includeEvidenceHint': 'Every requirement with its clause, page and quoted passage.',
+  'consult.withoutEvidence': 'without evidence',
+  'consult.reportQueued': 'It appears in Reports when ready.',
+  'consult.reportQueuedWithoutEvidence':
+    'A short edition without the evidence matrix. It appears in Reports when ready.',
   'consult.createReport': 'Create full compliance report',
   'consult.evidenceCoverage': 'Evidence coverage',
   'consult.citedPassages': '{count} cited passages',

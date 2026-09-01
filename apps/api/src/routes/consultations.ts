@@ -488,6 +488,7 @@ export function consultationRoutes(deps: AppDeps) {
           format: input.format,
           kind: input.kind,
           title: input.title ?? null,
+          includeEvidence: input.includeEvidence,
         },
         targetType: 'consultation',
         targetId: id,

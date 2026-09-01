@@ -780,6 +780,15 @@ export const CreateReportRequest = z.object({
   format: z.enum(['pdf', 'docx', 'xlsx', 'csv', 'markdown']),
   kind: z.enum(['compliance_report', 'summary', 'evidence_matrix']),
   title: z.string().trim().min(1).max(200).optional(),
+  /**
+   * Whether the report carries the evidence matrix — every requirement with its verdict,
+   * its clause and page, and the quoted passage behind it.
+   *
+   * Off produces a short edition for circulation: decision, summary, documents reviewed,
+   * assumptions and recommended actions. Defaults to on, and a report built without it
+   * says so in its own disclosures rather than reading as a complete one.
+   */
+  includeEvidence: z.boolean().default(true),
   idempotencyKey: z.string().min(8).max(128),
 });
 export type CreateReportRequest = z.infer<typeof CreateReportRequest>;

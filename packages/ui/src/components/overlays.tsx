@@ -1,7 +1,7 @@
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import * as TooltipPrimitive from '@radix-ui/react-tooltip';
 import * as DropdownPrimitive from '@radix-ui/react-dropdown-menu';
-import { X } from 'lucide-react';
+import { Check, X } from 'lucide-react';
 import {
   createContext,
   useCallback,
@@ -307,6 +307,16 @@ export interface MenuItem {
   /** Shown as the reason when disabled, so a dead-looking control explains itself. */
   disabledReason?: string;
   separatorBefore?: boolean;
+  /**
+   * Makes this a toggle rather than a command.
+   *
+   * Rendered as a real `menuitemcheckbox` so its state is announced and readable, instead
+   * of being smuggled into the label as a tick character that only sighted users get.
+   * `onSelect` fires on each activation; the caller owns the value.
+   */
+  checked?: boolean;
+  /** Secondary line under the label, for what a toggle actually changes. */
+  description?: string;
 }
 
 export function DropdownMenu({
@@ -341,34 +351,79 @@ export function DropdownMenu({
             'data-[state=open]:animate-[uxe-fade-in_var(--uxe-duration-fast)_var(--uxe-ease)]',
           )}
         >
-          {items.map((item, index) => (
-            <div key={`${item.label}-${index}`}>
-              {item.separatorBefore && (
-                <DropdownPrimitive.Separator className="my-1.5 h-px bg-[var(--uxe-border)]" />
-              )}
-              <DropdownPrimitive.Item
-                disabled={item.disabled}
-                onSelect={item.onSelect}
-                title={item.disabled ? item.disabledReason : undefined}
-                className={cn(
-                  'flex cursor-pointer items-center gap-2.5 rounded-[var(--uxe-radius-control)] px-2.5 py-2',
-                  'text-[13px] font-medium outline-none',
-                  'data-[highlighted]:bg-[var(--uxe-surface-hover)]',
-                  'data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
-                  item.destructive
-                    ? 'text-[var(--uxe-danger-text)] data-[highlighted]:bg-[var(--uxe-danger-bg)]'
-                    : 'text-[var(--uxe-text)]',
-                )}
-              >
-                {item.icon && (
-                  <span aria-hidden className="flex shrink-0">
-                    {item.icon}
+          {items.map((item, index) => {
+            const itemClass = cn(
+              'flex cursor-pointer items-start gap-2.5 rounded-[var(--uxe-radius-control)] px-2.5 py-2',
+              'text-[13px] font-medium outline-none',
+              'data-[highlighted]:bg-[var(--uxe-surface-hover)]',
+              'data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
+              item.destructive
+                ? 'text-[var(--uxe-danger-text)] data-[highlighted]:bg-[var(--uxe-danger-bg)]'
+                : 'text-[var(--uxe-text)]',
+            );
+
+            const body = (
+              <span className="flex min-w-0 flex-col">
+                <span>{item.label}</span>
+                {item.description !== undefined && (
+                  <span className="text-[12px] font-normal text-[var(--uxe-text-secondary)]">
+                    {item.description}
                   </span>
                 )}
-                {item.label}
-              </DropdownPrimitive.Item>
-            </div>
-          ))}
+              </span>
+            );
+
+            return (
+              <div key={`${item.label}-${index}`}>
+                {item.separatorBefore && (
+                  <DropdownPrimitive.Separator className="my-1.5 h-px bg-[var(--uxe-border)]" />
+                )}
+                {item.checked === undefined ? (
+                  <DropdownPrimitive.Item
+                    disabled={item.disabled}
+                    onSelect={item.onSelect}
+                    title={item.disabled ? item.disabledReason : undefined}
+                    className={itemClass}
+                  >
+                    {item.icon && (
+                      <span aria-hidden className="mt-0.5 flex shrink-0">
+                        {item.icon}
+                      </span>
+                    )}
+                    {body}
+                  </DropdownPrimitive.Item>
+                ) : (
+                  <DropdownPrimitive.CheckboxItem
+                    checked={item.checked}
+                    disabled={item.disabled}
+                    // Toggling is not choosing: the menu stays open so a second option can
+                    // be set without reopening it.
+                    onSelect={(event) => {
+                      event.preventDefault();
+                      item.onSelect();
+                    }}
+                    title={item.disabled ? item.disabledReason : undefined}
+                    className={itemClass}
+                  >
+                    <span
+                      aria-hidden
+                      className={cn(
+                        'mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-[3px] border',
+                        item.checked
+                          ? 'border-[var(--uxe-cobalt)] bg-[var(--uxe-cobalt)] text-white'
+                          : 'border-[var(--uxe-border-strong)]',
+                      )}
+                    >
+                      <DropdownPrimitive.ItemIndicator>
+                        <Check className="h-3 w-3" strokeWidth={3} />
+                      </DropdownPrimitive.ItemIndicator>
+                    </span>
+                    {body}
+                  </DropdownPrimitive.CheckboxItem>
+                )}
+              </div>
+            );
+          })}
         </DropdownPrimitive.Content>
       </DropdownPrimitive.Portal>
     </DropdownPrimitive.Root>
