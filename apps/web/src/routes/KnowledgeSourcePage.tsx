@@ -132,7 +132,7 @@ export function KnowledgeSourcePage() {
         />
       )}
       <Button asChild variant="ghost" size="sm" className="mb-3">
-        <Link to="/knowledge">
+        <Link to="/settings/knowledge">
           <ArrowLeft className="h-4 w-4" aria-hidden />
           {t('knowledge.title')}
         </Link>

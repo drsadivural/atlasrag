@@ -7,6 +7,7 @@ import {
   Building2,
   CheckCircle2,
   Cpu,
+  Database,
   KeyRound,
   Link2,
   Loader2,
@@ -43,24 +44,43 @@ import type {
   ConnectorProvider,
   ConnectorsResponse,
   ModelConfiguration,
+  Permission,
   WorkspaceSettings,
 } from '@uxe/contracts';
 import { type ApiError, api, newIdempotencyKey } from '../lib/api.js';
 import { useSyncedState } from '../lib/forms.js';
-import { useI18n } from '../lib/i18n.js';
+import { useI18n, type MessageKey } from '../lib/i18n.js';
 import { useSession } from '../lib/session.js';
 import { useTheme } from '../lib/theme.js';
 import { PageHeader } from '../components/PageHeader.js';
 import { Ayumi } from '../components/Brand.js';
+import { KnowledgeSection } from './KnowledgePage.js';
 
-const SECTIONS = [
+interface SettingsSection {
+  key: string;
+  labelKey: MessageKey;
+  icon: typeof Building2;
+  /** When set, the tab is only offered to somebody holding it. */
+  permission?: Permission;
+}
+
+const SECTIONS: SettingsSection[] = [
   { key: 'general', labelKey: 'settings.general', icon: Building2 },
+  /*
+   * The knowledge base sits here rather than in the sidebar.
+   *
+   * It is where a workspace is set up — documents published, connectors wired, retention
+   * decided — not where the day's work happens. Next to Consult and Reports it competed
+   * for attention with the two screens people actually live in; next to Connectors and
+   * Retention it sits with the rest of the configuration it belongs to.
+   */
+  { key: 'knowledge', labelKey: 'nav.knowledge', icon: Database, permission: 'source:read' },
   { key: 'consultant', labelKey: 'settings.consultant', icon: UserCircle },
   { key: 'models', labelKey: 'settings.models', icon: Cpu },
   { key: 'security', labelKey: 'settings.security', icon: ShieldCheck },
   { key: 'connectors', labelKey: 'settings.connectors', icon: Plug },
   { key: 'retention', labelKey: 'settings.retention', icon: Trash2 },
-] as const;
+];
 
 interface SettingsResponse {
   settings: WorkspaceSettings;
@@ -72,13 +92,26 @@ export function SettingsPage() {
   const { t } = useI18n();
   const { can } = useSession();
 
+  // The knowledge base is a document library, not a settings form, and it is the widest
+  // thing here: a table, a pipeline panel and a health panel side by side.
+  const isKnowledge = section === 'knowledge';
+
   const query = useQuery<SettingsResponse, ApiError>({
     queryKey: ['settings'],
     queryFn: () => api.get<SettingsResponse>('/settings'),
+    // The knowledge section reads sources, never workspace settings. Fetching them anyway
+    // would put a request on the wire for data nothing on the screen shows.
+    enabled: !isKnowledge,
   });
 
+  const sections = SECTIONS.filter(
+    (entry) => entry.permission === undefined || can(entry.permission),
+  );
+
   return (
-    <div className="mx-auto w-full max-w-[1200px] p-4 sm:p-6">
+    <div
+      className={cn('mx-auto w-full p-4 sm:p-6', isKnowledge ? 'max-w-[1600px]' : 'max-w-[1200px]')}
+    >
       <PageHeader title={t('settings.title')} />
 
       <div className="mt-5 flex flex-col gap-5">
@@ -90,7 +123,7 @@ export function SettingsPage() {
         <nav aria-label={t('settings.title')} className="border-b border-[var(--uxe-border)]">
           {/* Scrolls within itself on a narrow screen, so the page never scrolls sideways. */}
           <ul className="-mb-px flex gap-1 overflow-x-auto">
-            {SECTIONS.map((entry) => (
+            {sections.map((entry) => (
               <li key={entry.key}>
                 <NavLink
                   to={`/settings/${entry.key}`}
@@ -114,7 +147,9 @@ export function SettingsPage() {
         </nav>
 
         <div className="min-w-0">
-          {query.isLoading ? (
+          {isKnowledge ? (
+            <KnowledgeSection />
+          ) : query.isLoading ? (
             <LoadingRegion label={t('settings.loading')}>
               <Skeleton className="h-64 w-full rounded-[var(--uxe-radius-card)]" />
             </LoadingRegion>

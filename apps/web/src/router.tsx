@@ -1,5 +1,5 @@
 import { lazy, Suspense, type ReactNode } from 'react';
-import { createBrowserRouter, Navigate, Outlet, useLocation } from 'react-router-dom';
+import { createBrowserRouter, Navigate, Outlet, useLocation, useParams } from 'react-router-dom';
 import { EmptyState, Button, LoadingRegion, Skeleton } from '@uxe/ui';
 import { useSession } from './lib/session.js';
 import { AppShell } from './components/AppShell.js';
@@ -11,7 +11,6 @@ import { PolicyPage } from './routes/PolicyPage.js';
 import { RegisterPage } from './routes/RegisterPage.js';
 import { ForgotPasswordPage } from './routes/ForgotPasswordPage.js';
 import { DashboardPage } from './routes/DashboardPage.js';
-import { KnowledgePage } from './routes/KnowledgePage.js';
 import { ConsultPage } from './routes/ConsultPage.js';
 
 // Routes below the fold of the primary experience are split, so the first authenticated
@@ -153,6 +152,18 @@ function NotFoundPage() {
   );
 }
 
+/** Sends a bookmark to its new home with its search string intact. */
+function RedirectKeepingQuery({ to }: { to: string }) {
+  const { search } = useLocation();
+  return <Navigate to={`${to}${search}`} replace />;
+}
+
+/** `/knowledge/:sourceId` -> `/settings/knowledge/:sourceId`. */
+function RedirectSourceToSettings() {
+  const { sourceId } = useParams<{ sourceId: string }>();
+  return <Navigate to={`/settings/knowledge/${sourceId ?? ''}`} replace />;
+}
+
 export const router = createBrowserRouter([
   {
     element: <RequireAnonymous />,
@@ -178,13 +189,23 @@ export const router = createBrowserRouter([
       { path: '/dashboard', element: <DashboardPage /> },
       { path: '/consult', element: <ConsultPage /> },
       { path: '/consult/:consultationId', element: <ConsultPage /> },
-      { path: '/knowledge', element: <KnowledgePage /> },
-      { path: '/knowledge/:sourceId', element: <KnowledgeSourcePage /> },
+      /*
+       * The knowledge base moved under Settings, and the old addresses still work.
+       *
+       * A workspace's documents are configuration — set up once, revisited rarely — and it
+       * shared a sidebar with the two screens people are in all day. Redirecting rather
+       * than renaming keeps every bookmark, every link in an email, and every `href` this
+       * server has ever handed out pointing somewhere real. The query string comes along,
+       * so a saved search still lands on that search.
+       */
+      { path: '/knowledge', element: <RedirectKeepingQuery to="/settings/knowledge" /> },
+      { path: '/knowledge/:sourceId', element: <RedirectSourceToSettings /> },
       { path: '/reports', element: <ReportsPage /> },
       { path: '/reports/:reportId', element: <ReportDetailPage /> },
       { path: '/activity', element: <ActivityPage /> },
       { path: '/users', element: <UsersPage /> },
       { path: '/settings', element: <Navigate to="/settings/general" replace /> },
+      { path: '/settings/knowledge/:sourceId', element: <KnowledgeSourcePage /> },
       { path: '/settings/:section', element: <SettingsPage /> },
     ],
   },

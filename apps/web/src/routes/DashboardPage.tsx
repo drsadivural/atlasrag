@@ -89,7 +89,7 @@ export function DashboardPage() {
               title={t('dashboard.emptyTitle')}
               description={t('dashboard.emptyBody')}
               action={
-                <Button variant="primary" onClick={() => navigate('/knowledge')}>
+                <Button variant="primary" onClick={() => navigate('/settings/knowledge')}>
                   {t('dashboard.addSources')}
                 </Button>
               }

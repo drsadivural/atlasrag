@@ -47,7 +47,7 @@ test.describe('sign in', () => {
     await expect(page).toHaveURL(/\/login/, { timeout: 20_000 });
 
     // The session is really gone, not just the page.
-    await page.goto('/knowledge');
+    await page.goto('/settings/knowledge');
     await expect(page).toHaveURL(/\/login/, { timeout: 20_000 });
   });
 });
@@ -116,7 +116,7 @@ test.describe('creating an account', () => {
 
 test.describe('knowledge base', () => {
   test('uploads a document and reports it ready', async ({ page }) => {
-    await page.goto('/knowledge');
+    await page.goto('/settings/knowledge');
     await waitForSettled(page);
 
     // A document the workspace cannot already hold, so the assertion is about ingestion
@@ -151,7 +151,7 @@ test.describe('knowledge base', () => {
   });
 
   test('explains a duplicate instead of silently discarding it', async ({ page }) => {
-    await page.goto('/knowledge');
+    await page.goto('/settings/knowledge');
     await waitForSettled(page);
 
     await page.setInputFiles('input[type="file"]', `${FIXTURES}regulation-native.pdf`);
@@ -163,7 +163,7 @@ test.describe('knowledge base', () => {
   });
 
   test('opens a source and shows its versions and processing log', async ({ page }) => {
-    await page.goto('/knowledge');
+    await page.goto('/settings/knowledge');
     await waitForSettled(page);
 
     // Search for it rather than assuming where it sits in the list, which depends on how
@@ -331,7 +331,7 @@ test.describe('permissions', () => {
     await signIn(page, 'guest.auditor@uxe.example.com', 'Tr0ubad0ur-Nimbus-42');
     await waitForSettled(page);
 
-    await page.goto('/knowledge');
+    await page.goto('/settings/knowledge');
     await waitForSettled(page);
 
     // No upload affordance for somebody without source:create.

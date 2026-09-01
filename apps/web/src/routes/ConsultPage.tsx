@@ -4,7 +4,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { hasStalled } from '../lib/staleness.js';
 import {
   AlertTriangle,
-  ArrowRight,
   CheckCircle2,
   ChevronLeft,
   ClipboardCheck,
@@ -23,7 +22,6 @@ import {
   Sparkles,
   Table2,
   Square,
-  X,
 } from 'lucide-react';
 import {
   Avatar,
@@ -32,7 +30,6 @@ import {
   Card,
   Checkbox,
   Dialog,
-  DropdownMenu,
   EmptyState,
   ErrorState,
   StaleNotice,
@@ -54,8 +51,6 @@ import {
 import type {
   AnswerStyle,
   ConsultationDetail,
-  ConsultationSummary,
-  Paginated,
   SourcesResponse,
   TaskMode,
   UploadTicket,
@@ -87,15 +82,9 @@ export function ConsultPage() {
   const queryClient = useQueryClient();
   const { push } = useToast();
 
-  const [historyOpen, setHistoryOpen] = useState(false);
   const [railOpen, setRailOpen] = useState(false);
   const [sourceDialogOpen, setSourceDialogOpen] = useState(false);
   const [openCitationId, setOpenCitationId] = useState<string | null>(null);
-
-  const list = useQuery<Paginated<ConsultationSummary>, ApiError>({
-    queryKey: ['consultations'],
-    queryFn: () => api.get<Paginated<ConsultationSummary>>('/consultations?pageSize=50'),
-  });
 
   const detail = useQuery<ConsultationDetail, ApiError>({
     queryKey: ['consultation', consultationId],
@@ -139,7 +128,6 @@ export function ConsultPage() {
     onSuccess: (created) => {
       void queryClient.invalidateQueries({ queryKey: ['consultations'] });
       navigate(`/consult/${created.id}`);
-      setHistoryOpen(false);
     },
     onError: (error: ApiError) =>
       push({ tone: 'error', title: 'Could not start a consultation', description: error.message }),
@@ -189,27 +177,37 @@ export function ConsultPage() {
 
   return (
     <div className="flex h-[calc(100dvh-var(--uxe-header-height))] min-h-0 flex-col md:flex-row">
-      {/* Left: history. A drawer below xl. */}
-      <HistoryPanel
-        open={historyOpen}
-        onOpenChange={setHistoryOpen}
-        consultations={list.data?.items ?? []}
-        loading={list.isLoading}
-        activeId={consultationId ?? null}
-        onCreate={() => create.mutate()}
-        creating={create.isPending}
-      />
-
-      {/* Centre: workspace. */}
+      {/*
+        The history rail is gone; past consultations live on the Activity page.
+        A permanent 300px column is a lot of screen for a list somebody opens when they want
+        to go back to something, and it was the same list on every visit. What stays here is
+        the way out of it: back to that list, and a button to start a new one.
+      */}
       <section className="flex min-h-0 min-w-0 flex-1 flex-col" aria-label={t('consult.title')}>
-        <div className="flex shrink-0 items-center gap-2 border-b border-[var(--uxe-border)] bg-[var(--uxe-surface)] px-3 py-2.5 xl:hidden">
-          <Button variant="ghost" size="sm" onClick={() => setHistoryOpen(true)}>
-            <ChevronLeft className="h-4 w-4" aria-hidden />
-            {t('consult.consultations')}
+        <div className="flex shrink-0 items-center gap-2 border-b border-[var(--uxe-border)] bg-[var(--uxe-surface)] px-3 py-2.5">
+          <Button asChild variant="ghost" size="sm">
+            <Link to="/activity?tab=consultations">
+              <ChevronLeft className="h-4 w-4" aria-hidden />
+              {t('consult.consultations')}
+            </Link>
           </Button>
           <span className="ms-auto" />
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => create.mutate()}
+            loading={create.isPending}
+          >
+            <Plus className="h-4 w-4" aria-hidden />
+            {t('consult.newConsultation')}
+          </Button>
           {consultation && (
-            <Button variant="secondary" size="sm" onClick={() => setRailOpen(true)}>
+            <Button
+              variant="secondary"
+              size="sm"
+              className="xl:hidden"
+              onClick={() => setRailOpen(true)}
+            >
               <Settings2 className="h-4 w-4" aria-hidden />
               {t('consult.evidenceOutput')}
             </Button>
@@ -293,262 +291,6 @@ export function ConsultPage() {
         onClose={() => setOpenCitationId(null)}
         onNavigate={setOpenCitationId}
       />
-    </div>
-  );
-}
-
-/* -------------------------------------------------------------------------- */
-/* History                                                                    */
-/* -------------------------------------------------------------------------- */
-
-function HistoryPanel({
-  open,
-  onOpenChange,
-  consultations,
-  loading,
-  activeId,
-  onCreate,
-  creating,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  consultations: ConsultationSummary[];
-  loading: boolean;
-  activeId: string | null;
-  onCreate: () => void;
-  creating: boolean;
-}) {
-  const { t } = useI18n();
-  const [query, setQuery] = useState('');
-
-  const filtered = useMemo(() => {
-    const term = query.trim().toLowerCase();
-    const matched = term
-      ? consultations.filter((c) => c.title.toLowerCase().includes(term))
-      : consultations;
-    // Pinned first, then most recently touched.
-    return [...matched].sort((a, b) => {
-      if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
-      return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
-    });
-  }, [consultations, query]);
-
-  const content = (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="flex shrink-0 items-center justify-between gap-2 p-4">
-        <h2 className="text-[12px] font-semibold tracking-wider text-[var(--uxe-text-secondary)] uppercase">
-          {t('consult.consultations')}
-        </h2>
-        <Button
-          variant="primary"
-          size="icon-sm"
-          onClick={onCreate}
-          loading={creating}
-          aria-label={t('consult.newConsultation')}
-        >
-          <Plus className="h-4 w-4" aria-hidden />
-        </Button>
-      </div>
-
-      <div className="shrink-0 px-4 pb-3">
-        <Input
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder={t('consult.searchConversations')}
-          aria-label={t('consult.searchConversations')}
-          iconLeft={<Search className="h-4 w-4" aria-hidden />}
-          className="h-9 text-[13px]"
-        />
-      </div>
-
-      <nav
-        aria-label={t('consult.consultations')}
-        className="min-h-0 flex-1 overflow-y-auto px-3 pb-3"
-      >
-        {loading ? (
-          <LoadingRegion label={t('consult.loadingList')}>
-            <div className="flex flex-col gap-2">
-              {[0, 1, 2, 3].map((i) => (
-                <Skeleton key={i} className="h-16 w-full" />
-              ))}
-            </div>
-          </LoadingRegion>
-        ) : filtered.length === 0 ? (
-          <p className="px-2 py-6 text-center text-[13px] text-[var(--uxe-text-secondary)]">
-            {query ? 'No conversations match that search.' : 'No consultations yet.'}
-          </p>
-        ) : (
-          <ul className="flex flex-col gap-1">
-            {filtered.map((consultation) => (
-              <li key={consultation.id}>
-                <ConsultationListItem
-                  consultation={consultation}
-                  active={consultation.id === activeId}
-                  onSelected={() => onOpenChange(false)}
-                />
-              </li>
-            ))}
-          </ul>
-        )}
-      </nav>
-
-      <AyumiStatusCard />
-    </div>
-  );
-
-  return (
-    <>
-      <aside
-        className="hidden w-[300px] shrink-0 border-e border-[var(--uxe-border)] bg-[var(--uxe-surface)] xl:block"
-        aria-label={t('consult.consultations')}
-      >
-        {content}
-      </aside>
-
-      <SlideOver
-        open={open}
-        onOpenChange={onOpenChange}
-        title={t('consult.consultations')}
-        width="sm"
-      >
-        {content}
-      </SlideOver>
-    </>
-  );
-}
-
-function ConsultationListItem({
-  consultation,
-  active,
-  onSelected,
-}: {
-  consultation: ConsultationSummary;
-  active: boolean;
-  /** Called after navigation, so the drawer closes instead of covering the conversation. */
-  onSelected?: () => void;
-}) {
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
-  const { push } = useToast();
-
-  const remove = useMutation({
-    mutationFn: () => api.delete(`/consultations/${consultation.id}`),
-    onSuccess: () => {
-      push({ tone: 'success', title: 'Consultation deleted' });
-      void queryClient.invalidateQueries({ queryKey: ['consultations'] });
-      if (active) navigate('/consult');
-    },
-    onError: (error: ApiError) =>
-      push({ tone: 'error', title: 'Could not delete', description: error.message }),
-  });
-
-  const statusDot =
-    consultation.status === 'action_required'
-      ? 'bg-[var(--uxe-danger)]'
-      : consultation.status === 'report_ready'
-        ? 'bg-[var(--uxe-success)]'
-        : consultation.status === 'processing'
-          ? 'bg-[var(--uxe-info)] animate-[uxe-pulse-dot_1.4s_ease-in-out_infinite]'
-          : 'bg-[var(--uxe-border-strong)]';
-
-  return (
-    <div
-      className={cn(
-        'group flex items-start gap-2.5 rounded-[var(--uxe-radius-card)] border p-3 transition-colors',
-        active
-          ? 'border-[var(--uxe-cobalt)] bg-[var(--uxe-surface-selected)]'
-          : 'border-transparent hover:bg-[var(--uxe-surface-hover)]',
-      )}
-    >
-      <button
-        type="button"
-        onClick={() => {
-          navigate(`/consult/${consultation.id}`);
-          onSelected?.();
-        }}
-        className="flex min-w-0 flex-1 items-start gap-2.5 text-start"
-        aria-current={active ? 'page' : undefined}
-      >
-        <span
-          aria-hidden
-          className={cn(
-            'mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--uxe-radius-control)]',
-            active
-              ? 'bg-[var(--uxe-cobalt)]/12 text-[var(--uxe-cobalt)]'
-              : 'bg-[var(--uxe-neutral-bg)] text-[var(--uxe-text-secondary)]',
-          )}
-        >
-          <FileText className="h-4 w-4" />
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-[14px] font-medium text-[var(--uxe-text)]">
-            {consultation.title}
-          </span>
-          <span className="mt-0.5 block truncate text-[12px] text-[var(--uxe-text-secondary)]">
-            {consultation.documentCount > 0 && `${consultation.documentCount} documents · `}
-            {formatRelative(consultation.lastMessageAt ?? consultation.updatedAt)}
-          </span>
-        </span>
-        <span aria-hidden className={cn('mt-1.5 h-2 w-2 shrink-0 rounded-full', statusDot)} />
-      </button>
-
-      <DropdownMenu
-        label={`Actions for ${consultation.title}`}
-        trigger={
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            className="opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
-            aria-label={`Actions for ${consultation.title}`}
-          >
-            <Settings2 className="h-3.5 w-3.5" aria-hidden />
-          </Button>
-        }
-        items={[
-          {
-            label: 'Open',
-            icon: <ArrowRight className="h-4 w-4" aria-hidden />,
-            onSelect: () => {
-              navigate(`/consult/${consultation.id}`);
-              onSelected?.();
-            },
-          },
-          {
-            label: 'Delete',
-            icon: <X className="h-4 w-4" aria-hidden />,
-            onSelect: () => remove.mutate(),
-            destructive: true,
-            separatorBefore: true,
-          },
-        ]}
-      />
-    </div>
-  );
-}
-
-function AyumiStatusCard() {
-  const { t } = useI18n();
-  return (
-    <div className="relative shrink-0 overflow-hidden border-t border-[var(--uxe-border)] bg-[linear-gradient(180deg,var(--uxe-surface)_0%,var(--uxe-surface-selected)_100%)]">
-      <div className="relative flex h-[188px] items-end justify-center">
-        <div className="h-full w-full">
-          <Ayumi variant="md" decorative />
-        </div>
-        <span
-          aria-hidden
-          className="absolute top-4 right-4 flex h-7 w-7 items-center justify-center rounded-full bg-[var(--uxe-success)] text-white shadow-[var(--uxe-shadow-sm)]"
-        >
-          <CheckCircle2 className="h-4 w-4" />
-        </span>
-      </div>
-      <div className="px-4 pb-4 text-center">
-        <p className="text-[15px] font-semibold text-[var(--uxe-text)]">
-          {t('app.consultant')} is <span className="text-[var(--uxe-success)]">online</span>
-        </p>
-        <p className="mt-1 text-[12px] leading-snug text-[var(--uxe-text-secondary)]">
-          {t('consult.groundedIn')}
-        </p>
-      </div>
     </div>
   );
 }
@@ -1066,7 +808,7 @@ function Composer({
             <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden />
             {t('consult.noSourcesSelected')}
             <Link
-              to="/knowledge"
+              to="/settings/knowledge"
               className="font-semibold underline underline-offset-2 hover:no-underline"
             >
               {t('consult.noSourcesAction')}
@@ -1194,7 +936,7 @@ function ConnectorChip({ label, icon }: { label: string; icon: React.ReactNode }
           tone: 'info',
           title: `${label} is not connected`,
           description: 'Connect it in the Knowledge Base, then attach files from there.',
-          action: { label: 'Open Knowledge Base', onClick: () => navigate('/knowledge') },
+          action: { label: 'Open Knowledge Base', onClick: () => navigate('/settings/knowledge') },
         })
       }
     >

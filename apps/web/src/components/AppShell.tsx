@@ -5,7 +5,6 @@ import {
   Bell,
   Building2,
   ChevronDown,
-  Database,
   FileBarChart,
   LayoutDashboard,
   LogOut,
@@ -31,13 +30,7 @@ import { useAttention } from './NeedsAttention.js';
 interface NavEntry {
   to: string;
   labelKey:
-    | 'nav.dashboard'
-    | 'nav.consult'
-    | 'nav.knowledge'
-    | 'nav.reports'
-    | 'nav.activity'
-    | 'nav.users'
-    | 'nav.settings';
+    'nav.dashboard' | 'nav.consult' | 'nav.reports' | 'nav.activity' | 'nav.users' | 'nav.settings';
   icon: ReactNode;
   permission?: Permission;
   /** Shown in the mobile bottom bar; the rest live behind "More". */
@@ -58,13 +51,13 @@ const NAV: NavEntry[] = [
     permission: 'consultation:read',
     primaryMobile: true,
   },
-  {
-    to: '/knowledge',
-    labelKey: 'nav.knowledge',
-    icon: <Database className="h-5 w-5" />,
-    permission: 'source:read',
-    primaryMobile: true,
-  },
+  /*
+   * The knowledge base is not here. It is a Settings tab.
+   *
+   * Publishing documents is something a workspace does when it is being set up and rarely
+   * afterwards; it does not belong beside the two screens people are in every day. The
+   * old addresses redirect, so nothing that pointed at it has broken.
+   */
   {
     to: '/reports',
     labelKey: 'nav.reports',
@@ -72,11 +65,21 @@ const NAV: NavEntry[] = [
     permission: 'artifact:read',
     primaryMobile: true,
   },
+  /*
+   * Activity is no longer just the audit log, so it is no longer gated on reading one.
+   *
+   * It carries three tabs now: what needs attention, past consultations, and the log. The
+   * first two are for everybody — and past consultations moved here out of the Consult
+   * rail, so gating the whole destination on `audit:read` would have left a consultant
+   * with no way to reach their own conversations except by guessing at the bell. The audit
+   * tab checks for itself, and is not offered to somebody who may not read it.
+   */
   {
     to: '/activity',
     labelKey: 'nav.activity',
     icon: <Activity className="h-5 w-5" />,
-    permission: 'audit:read',
+    permission: 'consultation:read',
+    primaryMobile: true,
   },
   {
     to: '/users',
@@ -264,7 +267,7 @@ function SourcesVerifiedCard() {
         {t('shell.groundedNote')}
       </p>
       <Button asChild variant="secondary" size="sm" full className="mt-3">
-        <NavLink to="/knowledge">{t('shell.viewSources')}</NavLink>
+        <NavLink to="/settings/knowledge">{t('shell.viewSources')}</NavLink>
       </Button>
     </div>
   );
@@ -371,7 +374,7 @@ function TopBar({ onOpenMenu }: { onOpenMenu: () => void }) {
         className="mx-auto hidden w-full max-w-xl md:block"
         onSubmit={(event) => {
           event.preventDefault();
-          if (query.trim()) navigate(`/knowledge?q=${encodeURIComponent(query.trim())}`);
+          if (query.trim()) navigate(`/settings/knowledge?q=${encodeURIComponent(query.trim())}`);
         }}
       >
         <label htmlFor="global-search" className="sr-only">

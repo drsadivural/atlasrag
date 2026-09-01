@@ -269,7 +269,7 @@ export class MetricsRepository {
         title: source.title,
         detail: 'Not synced in over 180 days',
         severity: 'info',
-        href: `/knowledge/${source.id}`,
+        href: `/settings/knowledge/${source.id}`,
       });
     }
 

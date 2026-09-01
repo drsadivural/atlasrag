@@ -14,6 +14,10 @@ import {
   LoadingRegion,
   Pagination,
   Skeleton,
+  Tab,
+  TabList,
+  TabPanel,
+  Tabs,
   Tooltip,
   formatDateTime,
 } from '@uxe/ui';
@@ -22,7 +26,11 @@ import { type ApiError, api } from '../lib/api.js';
 import { useI18n } from '../lib/i18n.js';
 import { useSession } from '../lib/session.js';
 import { PageHeader } from '../components/PageHeader.js';
-import { NeedsAttention } from '../components/NeedsAttention.js';
+import { NeedsAttention, useAttention } from '../components/NeedsAttention.js';
+import { PastConsultations } from '../components/PastConsultations.js';
+
+const TABS = ['attention', 'consultations', 'audit'] as const;
+type Tab = (typeof TABS)[number];
 
 const CATEGORIES = [
   'all',
@@ -41,6 +49,21 @@ export function ActivityPage() {
   const { t } = useI18n();
   const { can } = useSession();
   const [searchParams, setSearchParams] = useSearchParams();
+
+  const attention = useAttention();
+
+  /*
+   * Three things belong on this page and only one fits above the fold, so they are tabs.
+   *
+   * The order is what a person is most likely to want: what is outstanding, then what has
+   * been done, then the record of everything. The bell links here without a tab, which
+   * lands on the first — which is what it promises.
+   *
+   * The choice is in the URL so it survives a reload and can be linked to, and unknown
+   * values fall back rather than rendering nothing.
+   */
+  const requestedTab = searchParams.get('tab');
+  const tab: Tab = TABS.includes(requestedTab as Tab) ? (requestedTab as Tab) : 'attention';
 
   const category = searchParams.get('category') ?? 'all';
   const result = searchParams.get('result') ?? 'all';
@@ -66,7 +89,9 @@ export function ActivityPage() {
   const mayReadAudit = can('audit:read');
 
   const query = useQuery<Paginated<AuditEvent>, ApiError>({
-    enabled: mayReadAudit,
+    // Only when the tab showing it is the one on screen: the other two tabs never display
+    // an audit row, so asking for twenty-five of them is a request with no reader.
+    enabled: mayReadAudit && tab === 'audit',
     queryKey: ['audit', { category, result, q, page }],
     queryFn: () =>
       api.get<Paginated<AuditEvent>>(
@@ -87,7 +112,7 @@ export function ActivityPage() {
         title={t('activity.title')}
         subtitle={t('activity.subtitle')}
         actions={
-          can('audit:export') ? (
+          tab === 'audit' && can('audit:export') ? (
             <Button asChild variant="secondary">
               {/* Server-rendered CSV so the export matches exactly what the filters select. */}
               <a href={`/api/v1/audit-events/export?category=${category}&result=${result}`}>
@@ -99,23 +124,25 @@ export function ActivityPage() {
         }
       />
 
-      {/*
-        What the bell points at, first on the page.
-        The audit log below is the record of what happened; this is the shorter, more urgent
-        question of what is still outstanding. Someone arriving here from the bell came for
-        this, so it is not below a table of twenty-five rows and a set of filters.
-      */}
-      <div className="mt-5">
-        <NeedsAttention />
-      </div>
+      <Tabs value={tab} onValueChange={(next) => setParam('tab', next)} className="mt-5">
+        <TabList ariaLabel={t('activity.title')}>
+          <Tab value="attention" count={attention.data?.items?.length}>
+            {t('activity.needsAttentionTab')}
+          </Tab>
+          <Tab value="consultations">{t('activity.pastConsultations')}</Tab>
+          {mayReadAudit && <Tab value="audit">{t('activity.auditLogTab')}</Tab>}
+        </TabList>
 
-      {mayReadAudit && (
-        <>
-          <h2 className="mt-6 text-[15px] font-semibold text-[var(--uxe-text)]">
-            {t('activity.auditLog')}
-          </h2>
+        <TabPanel value="attention" className="mt-4">
+          <NeedsAttention />
+        </TabPanel>
 
-          <div className="mt-3 flex flex-wrap items-center gap-2">
+        <TabPanel value="consultations" className="mt-4">
+          <PastConsultations />
+        </TabPanel>
+
+        <TabPanel value="audit" className="mt-4">
+          <div className="flex flex-wrap items-center gap-2">
             <div
               role="group"
               aria-label={t('activity.filterCategory')}
@@ -255,8 +282,8 @@ export function ActivityPage() {
               </>
             )}
           </Card>
-        </>
-      )}
+        </TabPanel>
+      </Tabs>
     </div>
   );
 }

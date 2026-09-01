@@ -52,7 +52,23 @@ function sessionFor(role: Role): SessionResponse {
   } as SessionResponse;
 }
 
-function renderActivity(role: Role, items: AttentionItem[] = []) {
+const CONSULTATION = {
+  id: 'con-1',
+  title: 'UAE Fire Code Review',
+  status: 'report_ready',
+  taskMode: 'check_compliance',
+  documentCount: 2,
+  sourceCount: 1,
+  complianceScore: 74,
+  pinned: false,
+  ownerId: 'usr-1',
+  ownerName: 'Dr Sadi Vural',
+  lastMessageAt: '2026-08-30T09:00:00.000Z',
+  updatedAt: '2026-08-30T09:00:00.000Z',
+  createdAt: '2026-08-01T09:00:00.000Z',
+};
+
+function renderActivity(role: Role, items: AttentionItem[] = [], route = '/activity') {
   const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input);
     const json = (body: unknown) =>
@@ -68,6 +84,9 @@ function renderActivity(role: Role, items: AttentionItem[] = []) {
     if (url.includes('/audit-events')) {
       return json({ items: [], total: 0, page: 1, pageSize: 25, totalPages: 0 });
     }
+    if (url.includes('/consultations')) {
+      return json({ items: [CONSULTATION], total: 1, page: 1, pageSize: 20, totalPages: 1 });
+    }
     return json({});
   });
   vi.stubGlobal('fetch', fetchMock);
@@ -81,7 +100,7 @@ function renderActivity(role: Role, items: AttentionItem[] = []) {
         <TooltipProvider>
           <ToastProvider>
             <SessionProvider>
-              <MemoryRouter initialEntries={['/activity']}>{children}</MemoryRouter>
+              <MemoryRouter initialEntries={[route]}>{children}</MemoryRouter>
             </SessionProvider>
           </ToastProvider>
         </TooltipProvider>
@@ -146,5 +165,49 @@ describe('the page the bell opens', () => {
       String(url).includes('/audit-events'),
     );
     expect(askedForAudit).toBe(false);
+  });
+});
+
+/*
+ * Past consultations moved off the Consult rail and onto this page as a tab. That makes
+ * the tab strip the only way back to a conversation, so what it offers and which tab it
+ * opens on both matter.
+ */
+describe('the Activity tabs', () => {
+  it('opens on what needs attention, which is what the bell promises', async () => {
+    renderActivity('owner', [ITEM]);
+    expect(await screen.findByRole('tab', { name: /Needs attention/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    expect(await screen.findByText('Marina Tower Evacuation Plan')).toBeInTheDocument();
+  });
+
+  it('carries past consultations, and opens straight onto them when linked that way', async () => {
+    renderActivity('owner', [], '/activity?tab=consultations');
+    expect(await screen.findByRole('tab', { name: 'Past consultations' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    // DataTable renders a desktop row and a mobile card from the same data, so each cell
+    // appears twice in the DOM; one of them is always hidden by CSS.
+    expect((await screen.findAllByText('UAE Fire Code Review')).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText(/2 document\(s\) reviewed/)).length).toBeGreaterThan(0);
+  });
+
+  it('gives a consultant their consultations without the audit tab', async () => {
+    // The whole destination used to need audit:read. Past consultations living here would
+    // have left a consultant with no way to reach their own conversations.
+    renderActivity('consultant', [], '/activity?tab=consultations');
+    expect((await screen.findAllByText('UAE Fire Code Review')).length).toBeGreaterThan(0);
+    expect(screen.queryByRole('tab', { name: 'Audit log' })).not.toBeInTheDocument();
+  });
+
+  it('falls back to the first tab rather than rendering nothing for a bad value', async () => {
+    renderActivity('owner', [ITEM], '/activity?tab=nonsense');
+    expect(await screen.findByRole('tab', { name: /Needs attention/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
   });
 });

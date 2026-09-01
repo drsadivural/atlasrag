@@ -116,11 +116,20 @@ describe('navigation', () => {
     renderShell('consultant');
     const sidebar = await screen.findByRole('navigation', { name: 'Main navigation' });
 
-    for (const label of ['Dashboard', 'Consult now', 'Knowledge base', 'Reports']) {
+    for (const label of ['Dashboard', 'Consult now', 'Reports', 'Activity']) {
       expect(within(sidebar).getByRole('link', { name: label })).toBeInTheDocument();
     }
-    // A consultant holds no audit permission, so the activity log is not offered.
-    expect(within(sidebar).queryByRole('link', { name: 'Activity' })).not.toBeInTheDocument();
+    /*
+     * Two things this asserts, both deliberate.
+     *
+     * The knowledge base is not a destination any more — it is a Settings tab, because
+     * publishing documents is setup rather than daily work.
+     *
+     * Activity is a destination for a consultant even though they hold no audit
+     * permission: it carries their past consultations and what needs their attention, and
+     * the audit tab inside it checks separately.
+     */
+    expect(within(sidebar).queryByRole('link', { name: 'Knowledge base' })).not.toBeInTheDocument();
   });
 
   it('gives an owner the administrative destinations as well', async () => {
@@ -135,24 +144,17 @@ describe('navigation', () => {
     renderShell('read_only');
     const sidebar = await screen.findByRole('navigation', { name: 'Main navigation' });
     // read_only carries source:read, artifact:read, member:read and settings:read.
-    for (const label of [
-      'Dashboard',
-      'Consult now',
-      'Knowledge base',
-      'Reports',
-      'Users',
-      'Settings',
-    ]) {
+    for (const label of ['Dashboard', 'Consult now', 'Reports', 'Activity', 'Users', 'Settings']) {
       expect(within(sidebar).getByRole('link', { name: label })).toBeInTheDocument();
     }
-    // It does not carry audit:read.
-    expect(within(sidebar).queryByRole('link', { name: 'Activity' })).not.toBeInTheDocument();
+    // Reaching Activity is not reading the audit log; that tab is gated inside the page.
+    expect(within(sidebar).queryByRole('link', { name: 'Knowledge base' })).not.toBeInTheDocument();
   });
 
   it('marks the current destination for assistive technology, not with colour alone', async () => {
-    renderShell('consultant', '/knowledge');
+    renderShell('consultant', '/reports');
     const sidebar = await screen.findByRole('navigation', { name: 'Main navigation' });
-    expect(within(sidebar).getByRole('link', { name: 'Knowledge base' })).toHaveAttribute(
+    expect(within(sidebar).getByRole('link', { name: 'Reports' })).toHaveAttribute(
       'aria-current',
       'page',
     );
@@ -178,8 +180,8 @@ describe('navigation', () => {
     expect(links.map((l) => l.textContent)).toEqual([
       'Dashboard',
       'Consult now',
-      'Knowledge base',
       'Reports',
+      'Activity',
     ]);
     expect(within(mobile).getByRole('button', { name: /more/i })).toBeInTheDocument();
   });
@@ -193,7 +195,7 @@ describe('navigation', () => {
     const items = within(menu)
       .getAllByRole('menuitem')
       .map((i) => i.textContent);
-    expect(items).toContain('Activity');
+    // Activity is a primary destination now, so what remains behind More is administration.
     expect(items).toContain('Users');
     expect(items).toContain('Settings');
   });

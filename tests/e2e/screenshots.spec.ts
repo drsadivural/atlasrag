@@ -41,7 +41,7 @@ test.describe('@visual primary screens', () => {
   });
 
   test('knowledge base', async ({ page }, testInfo) => {
-    await page.goto('/knowledge');
+    await page.goto('/settings/knowledge');
     await waitForSettled(page);
     await expect(page.getByRole('heading', { name: 'Knowledge Base' })).toBeVisible();
     await capture(page, testInfo.project.name, '03-knowledge-base');

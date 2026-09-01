@@ -101,7 +101,7 @@ export function dashboardRoutes(deps: AppDeps) {
           unit: 'count',
           changePercent: change(current.documentsReviewed, prior.documentsReviewed),
           comparedToDays: days,
-          href: '/knowledge',
+          href: '/settings/knowledge',
         },
         {
           key: 'compliance_rate',

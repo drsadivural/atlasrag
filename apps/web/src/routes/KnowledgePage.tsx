@@ -100,7 +100,14 @@ function positiveInt(raw: string | null, fallback: number): number {
   return Number.isInteger(value) && value >= 1 ? value : fallback;
 }
 
-export function KnowledgePage() {
+/**
+ * The knowledge base, as a section of Settings.
+ *
+ * The page lives under Settings now, so it renders inside that page's container and tab
+ * strip rather than carrying its own. Everything below is unchanged; only the outer
+ * wrapper moved out.
+ */
+export function KnowledgeSection() {
   const { t, formatNumber } = useI18n();
   const { can } = useSession();
   const navigate = useNavigate();
@@ -315,7 +322,7 @@ export function KnowledgePage() {
   );
 
   return (
-    <div className="mx-auto w-full max-w-[1600px] p-4 sm:p-6">
+    <>
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
         <div className="flex min-w-0 flex-col gap-5">
           <PageHeader
@@ -475,7 +482,7 @@ export function KnowledgePage() {
                     caption={t('knowledge.tableCaption')}
                     rows={data?.items ?? []}
                     rowKey={(row) => row.id}
-                    onRowClick={(row) => navigate(`/knowledge/${row.id}`)}
+                    onRowClick={(row) => navigate(`/settings/knowledge/${row.id}`)}
                     selection={
                       can('source:update')
                         ? {
@@ -645,7 +652,7 @@ export function KnowledgePage() {
 
       <AddUrlDialog open={urlDialogOpen} onOpenChange={setUrlDialogOpen} />
       <AddTextDialog open={textDialogOpen} onOpenChange={setTextDialogOpen} />
-    </div>
+    </>
   );
 }
 
@@ -875,7 +882,7 @@ function ConnectorButton({
       } else {
         const result = await api.post<{ authorizeUrl: string }>(
           `/connectors/${connector}/authorize`,
-          { returnTo: '/knowledge' },
+          { returnTo: '/settings/knowledge' },
         );
         window.location.assign(result.authorizeUrl);
       }
@@ -1007,7 +1014,7 @@ function SourceTitleCell({ source }: { source: SourceSummary }) {
       </span>
       <span className="min-w-0">
         <Link
-          to={`/knowledge/${source.id}`}
+          to={`/settings/knowledge/${source.id}`}
           // The title truncates in a narrow column; the full text stays readable on hover
           // and is what assistive technology announces either way.
           title={source.title}
@@ -1251,7 +1258,7 @@ function PipelineCard({ pipeline }: { pipeline: SourcesResponse['pipeline'] }) {
                       {stage.documents.map((document) => (
                         <li key={`${document.sourceId}-${document.state}`}>
                           <Link
-                            to={`/knowledge/${document.sourceId}`}
+                            to={`/settings/knowledge/${document.sourceId}`}
                             className="flex items-start gap-2 rounded-[var(--uxe-radius-control)] p-1 hover:bg-[var(--uxe-surface-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--uxe-cobalt)]"
                           >
                             {document.state === 'failed' ? (

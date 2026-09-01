@@ -65,35 +65,19 @@ export async function waitForSettled(page: Page): Promise<void> {
 }
 
 /**
- * Opens the consultation history and picks a conversation.
+ * Picks a conversation from the past-consultations list.
  *
- * Below 1280px the history is an off-canvas drawer, so a test that clicks straight at the
- * list would only pass on desktop — and would say nothing about whether the other layouts
- * work.
+ * The list used to be a rail beside the workspace, and a drawer below 1280px; it is a tab
+ * on the Activity page now, which is one list at every width. Going through the page
+ * rather than a stored id is deliberate — it is the route a person takes, so the test
+ * fails if that route breaks.
  */
 export async function openConsultation(page: Page, name: RegExp): Promise<void> {
-  const item = page.getByRole('button', { name });
-  if (
-    !(await item
-      .first()
-      .isVisible()
-      .catch(() => false))
-  ) {
-    const history = page.getByRole('button', { name: /consultations|history/i }).first();
-    if (await history.isVisible().catch(() => false)) {
-      await history.click();
-      await page.waitForTimeout(500);
-    }
-  }
-  await item.first().click();
-
-  // Below 1280px the list is a drawer that closes itself on selection; wait for it to go
-  // so the conversation underneath is what the test interacts with.
-  await page
-    .getByRole('dialog', { name: /consultations/i })
-    .waitFor({ state: 'hidden', timeout: 5_000 })
-    .catch(() => {});
-  await page.waitForTimeout(1200);
+  await page.goto('/activity?tab=consultations');
+  await waitForSettled(page);
+  await page.getByRole('row', { name }).first().click();
+  await page.waitForURL(/\/consult\/.+/, { timeout: 20_000 });
+  await waitForSettled(page);
 }
 
 /** Opens the Evidence & Output panel, which is a drawer below 1280px. */

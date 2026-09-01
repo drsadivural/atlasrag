@@ -179,7 +179,6 @@ export const en = {
   'consult.newConsultation': 'New consultation',
   'consult.searchConversations': 'Search conversations',
   'consult.ayumiOnline': 'Ayumi is online',
-  'consult.groundedIn': 'Grounded in your approved sources',
   'consult.manageSources': 'Manage sources',
   'consult.documents': '{count} documents',
   'consult.ask': 'Ask',
@@ -293,6 +292,15 @@ export const en = {
   'attention.truncated': 'Showing the first {shown}. Resolve some to see the rest.',
   'attention.bellLabel': 'Notifications — {count} need attention',
   'attention.bellLabelClear': 'Notifications — nothing needs attention',
+  'activity.pastConsultations': 'Past consultations',
+  'activity.needsAttentionTab': 'Needs attention',
+  'activity.auditLogTab': 'Audit log',
+  'activity.consultationScope': '{documents} document(s) reviewed · {sources} knowledge source(s)',
+  'activity.noConsultations': 'No consultations yet',
+  'activity.noConsultationsBody':
+    'Start one from Consult now, and it will be listed here once it has a conversation.',
+  'activity.noConsultationsMatch': 'No consultations match that search',
+  'activity.noConsultationsMatchBody': 'Try a shorter search, or clear it to see them all.',
   'activity.auditLog': 'Audit log',
   'activity.title': 'Activity',
   'activity.subtitle':

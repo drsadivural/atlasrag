@@ -100,7 +100,7 @@ test.describe('authenticated pages', () => {
   for (const [name, path] of [
     ['dashboard', '/dashboard'],
     ['consult', '/consult'],
-    ['knowledge base', '/knowledge'],
+    ['knowledge base', '/settings/knowledge'],
     ['reports', '/reports'],
     ['activity', '/activity'],
     ['users', '/users'],
@@ -131,7 +131,7 @@ test.describe('authenticated pages', () => {
   });
 
   test('an open dialog has no violations and traps focus', async ({ page }) => {
-    await page.goto('/knowledge');
+    await page.goto('/settings/knowledge');
     await waitForSettled(page);
 
     const addUrl = page.getByRole('button', { name: /website url/i });

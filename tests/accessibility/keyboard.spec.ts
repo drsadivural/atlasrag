@@ -114,7 +114,7 @@ test.describe('signed out', () => {
 });
 
 test('focus is visible on every interactive element it lands on', async ({ page }) => {
-  await page.goto('/knowledge');
+  await page.goto('/settings/knowledge');
   await waitForSettled(page);
 
   for (let i = 0; i < 15; i += 1) {
