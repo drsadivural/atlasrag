@@ -206,6 +206,23 @@ export const KpiCard = z.object({
 });
 export type KpiCard = z.infer<typeof KpiCard>;
 
+/** One thing in the workspace that somebody has to look at. */
+export const AttentionItem = z.object({
+  id: Id,
+  kind: z.enum([
+    'failed_job',
+    'critical_gap',
+    'unresolved_evidence',
+    'stale_knowledge',
+    'pending_review',
+  ]),
+  title: z.string(),
+  detail: z.string(),
+  severity: z.enum(['critical', 'warning', 'info']),
+  href: z.string(),
+});
+export type AttentionItem = z.infer<typeof AttentionItem>;
+
 export const DashboardResponse = z.object({
   greetingName: z.string(),
   kpis: z.array(KpiCard),
@@ -232,36 +249,33 @@ export const DashboardResponse = z.object({
       ownerAvatarUrl: z.string().nullable(),
     }),
   ),
-  needsAttention: z.array(
-    z.object({
-      id: Id,
-      kind: z.enum([
-        'failed_job',
-        'critical_gap',
-        'unresolved_evidence',
-        'stale_knowledge',
-        'pending_review',
-      ]),
-      title: z.string(),
-      detail: z.string(),
-      severity: z.enum(['critical', 'warning', 'info']),
-      href: z.string(),
-    }),
-  ),
-  knowledgeHealth: z.object({
-    score: z.number().min(0).max(100),
-    ready: z.number().int(),
-    processing: z.number().int(),
-    outdated: z.number().int(),
-    failed: z.number().int(),
-    missingMetadata: z.number().int(),
-    unlinkedContent: z.number().int(),
-    duplicates: z.number().int(),
-    permissionIssues: z.number().int(),
-    formula: z.string(),
-  }),
+  /**
+   * Indexed documents the caller can see.
+   *
+   * All that survives of the health panel the dashboard used to carry: knowledge health
+   * belongs on the Knowledge page, which has its own and computes it from the same
+   * numbers. The dashboard needs one thing from it — whether the workspace has anything
+   * indexed at all — because that is what separates "nothing has happened yet" from
+   * "nothing has happened lately".
+   */
+  readySourceCount: z.number().int().min(0),
 });
 export type DashboardResponse = z.infer<typeof DashboardResponse>;
+
+/**
+ * Everything currently needing attention, for the bell and the page it opens.
+ *
+ * Separate from the dashboard payload because the bell is on every screen and the rest of
+ * that payload — KPIs, series, recent consultations — is not free. `truncated` is here so a
+ * workspace with more open items than the cap is told so rather than shown a number that
+ * silently stops counting.
+ */
+export const AttentionResponse = z.object({
+  items: z.array(AttentionItem),
+  total: z.number().int().min(0),
+  truncated: z.boolean(),
+});
+export type AttentionResponse = z.infer<typeof AttentionResponse>;
 
 /* -------------------------------------------------------------------------- */
 /* Sources / knowledge base                                                   */

@@ -189,6 +189,14 @@ export class MetricsRepository {
       .onConflictDoNothing();
   }
 
+  /**
+   * Everything in the workspace that somebody has to look at.
+   *
+   * `limit` bounds each source of items as well as the result. The sub-queries used to be
+   * pinned at three regardless of what the caller asked for, so a page that wanted the
+   * whole list still got three stale documents and three pending reports — a cap the
+   * caller could not see and could not raise. Asking for more now returns more.
+   */
   async attentionItems(ctx: TenantContext, limit: number) {
     requirePermission(ctx, 'workspace:read');
     const items: Array<{
@@ -252,7 +260,7 @@ export class MetricsRepository {
           sql`${sources.lastSyncedAt} < now() - interval '180 days'`,
         ),
       )
-      .limit(3);
+      .limit(limit);
 
     for (const source of stale) {
       items.push({
@@ -275,7 +283,7 @@ export class MetricsRepository {
           isNull(consultations.deletedAt),
         ),
       )
-      .limit(3);
+      .limit(limit);
 
     for (const consultation of pending) {
       items.push({
@@ -301,7 +309,7 @@ export class MetricsRepository {
       .where(eq(attentionDismissals.workspaceId, ctx.workspaceId));
     const hidden = new Set(dismissed.map((row) => `${row.kind}:${row.itemId}`));
 
-    return items.filter((item) => !hidden.has(`${item.kind}:${item.id}`)).slice(0, limit);
+    return items.filter((item) => !hidden.has(`${item.kind}:${item.id}`));
   }
 
   /** How many sources a given member can actually see, for the Users page. */

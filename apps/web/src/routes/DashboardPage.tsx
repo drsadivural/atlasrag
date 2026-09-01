@@ -1,23 +1,19 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import {
   AlertTriangle,
-  ArrowRight,
   CheckCircle2,
-  ChevronRight,
   Circle,
   Database,
   FileText,
   Info,
   MessageSquare,
-  MinusCircle,
   PieChart,
   ShieldCheck,
   Sparkles,
   TrendingDown,
   TrendingUp,
-  XCircle,
 } from 'lucide-react';
 import {
   AreaChart,
@@ -28,20 +24,16 @@ import {
   CardHeader,
   CardTitle,
   DataTable,
-  Dialog,
   DonutChart,
   EmptyState,
   ErrorState,
-  Gauge,
   LoadingRegion,
   Select,
   Skeleton,
-  Tooltip,
   cn,
   formatRelative,
-  useToast,
 } from '@uxe/ui';
-import type { DashboardResponse, ResolveAttentionResponse } from '@uxe/contracts';
+import type { DashboardResponse } from '@uxe/contracts';
 import { type ApiError, api } from '../lib/api.js';
 import { useI18n } from '../lib/i18n.js';
 import { Ayumi } from '../components/Brand.js';
@@ -81,208 +73,198 @@ export function DashboardPage() {
   const isEmpty =
     data.activity.total === 0 &&
     data.recentConsultations.length === 0 &&
-    data.knowledgeHealth.ready === 0;
+    data.readySourceCount === 0;
 
   return (
     <div className="mx-auto w-full max-w-[1600px] p-4 sm:p-6">
       <h1 className="sr-only">{t('nav.dashboard')}</h1>
 
-      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="flex min-w-0 flex-col gap-5">
-          <GreetingBanner name={data.greetingName} onStart={() => navigate('/consult')} />
+      <div className="flex min-w-0 flex-col gap-5">
+        <GreetingBanner name={data.greetingName} onStart={() => navigate('/consult')} />
 
-          {isEmpty ? (
-            <Card>
-              <EmptyState
-                icon={<Sparkles className="h-7 w-7" aria-hidden />}
-                title={t('dashboard.emptyTitle')}
-                description={t('dashboard.emptyBody')}
-                action={
-                  <Button variant="primary" onClick={() => navigate('/knowledge')}>
-                    {t('dashboard.addSources')}
-                  </Button>
-                }
-                secondaryAction={
-                  <Button variant="secondary" onClick={() => navigate('/consult')}>
-                    {t('dashboard.startConsultation')}
-                  </Button>
-                }
-              />
-            </Card>
-          ) : (
-            <>
-              <section
-                aria-label={t('dashboard.keyMetrics')}
-                className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4"
-              >
-                {data.kpis.map((kpi) => (
-                  <KpiCard key={kpi.key} kpi={kpi} days={days} />
-                ))}
-              </section>
+        {isEmpty ? (
+          <Card>
+            <EmptyState
+              icon={<Sparkles className="h-7 w-7" aria-hidden />}
+              title={t('dashboard.emptyTitle')}
+              description={t('dashboard.emptyBody')}
+              action={
+                <Button variant="primary" onClick={() => navigate('/knowledge')}>
+                  {t('dashboard.addSources')}
+                </Button>
+              }
+              secondaryAction={
+                <Button variant="secondary" onClick={() => navigate('/consult')}>
+                  {t('dashboard.startConsultation')}
+                </Button>
+              }
+            />
+          </Card>
+        ) : (
+          <>
+            <section
+              aria-label={t('dashboard.keyMetrics')}
+              className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4"
+            >
+              {data.kpis.map((kpi) => (
+                <KpiCard key={kpi.key} kpi={kpi} days={days} />
+              ))}
+            </section>
 
-              <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
-                <Card className="flex flex-col">
-                  <CardHeader>
-                    <CardTitle>{t('dashboard.activity')}</CardTitle>
-                    <div className="flex items-center gap-2">
-                      <Button variant="ghost" size="xs" onClick={() => setShowTable((v) => !v)}>
-                        {showTable ? t('dashboard.hideTable') : t('dashboard.showTable')}
-                      </Button>
-                      <Select
-                        value={String(days)}
-                        onValueChange={(value) => setDays(Number(value))}
-                        ariaLabel={t('dashboard.dateRange')}
-                        size="sm"
-                        options={[
-                          { value: '7', label: t('dashboard.last7') },
-                          { value: '30', label: t('dashboard.last30') },
-                          { value: '90', label: t('dashboard.last90') },
-                        ]}
-                      />
-                    </div>
-                  </CardHeader>
-                  <div className="flex min-h-0 flex-1 flex-col justify-center">
-                    <AreaChart
-                      points={data.activity.points.map((point) => ({
-                        label: new Intl.DateTimeFormat(locale, {
-                          month: 'short',
-                          day: 'numeric',
-                        }).format(new Date(point.date)),
-                        value: point.consultations,
-                      }))}
-                      ariaLabel={`${t('dashboard.activity')}, last ${days} days`}
-                      valueLabel={t('dashboard.consultations')}
-                      showTable={showTable}
+            <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
+              <Card className="flex flex-col">
+                <CardHeader>
+                  <CardTitle>{t('dashboard.activity')}</CardTitle>
+                  <div className="flex items-center gap-2">
+                    <Button variant="ghost" size="xs" onClick={() => setShowTable((v) => !v)}>
+                      {showTable ? t('dashboard.hideTable') : t('dashboard.showTable')}
+                    </Button>
+                    <Select
+                      value={String(days)}
+                      onValueChange={(value) => setDays(Number(value))}
+                      ariaLabel={t('dashboard.dateRange')}
+                      size="sm"
+                      options={[
+                        { value: '7', label: t('dashboard.last7') },
+                        { value: '30', label: t('dashboard.last30') },
+                        { value: '90', label: t('dashboard.last90') },
+                      ]}
                     />
                   </div>
-                </Card>
-
-                <Card className="flex flex-col">
-                  <CardHeader>
-                    <CardTitle>{t('dashboard.complianceOutcomes')}</CardTitle>
-                  </CardHeader>
-                  <div className="flex min-h-0 flex-1 items-center">
-                    <ComplianceDonut outcomes={data.complianceOutcomes} />
-                  </div>
-                </Card>
-              </div>
-
-              <Card flush>
-                <CardHeader className="mb-0 p-5 pb-3">
-                  <CardTitle>{t('dashboard.recentConsultations')}</CardTitle>
-                  <Link
-                    to="/consult"
-                    className="text-[13px] font-semibold text-[var(--uxe-cobalt)] hover:underline"
-                  >
-                    {t('dashboard.viewAllConsultations')}
-                  </Link>
                 </CardHeader>
-                <div className="px-3 pb-3 sm:px-5 sm:pb-5">
-                  <DataTable
-                    caption={t('dashboard.recentConsultations')}
-                    rows={data.recentConsultations}
-                    rowKey={(row) => row.id}
-                    onRowClick={(row) => navigate(`/consult/${row.id}`)}
-                    empty={
-                      <EmptyState
-                        icon={<MessageSquare className="h-6 w-6" aria-hidden />}
-                        title={t('dashboard.noConsultations')}
-                        description={t('dashboard.noConsultationsHint')}
-                        action={
-                          <Button variant="primary" size="sm" onClick={() => navigate('/consult')}>
-                            {t('dashboard.startConsultation')}
-                          </Button>
-                        }
-                      />
-                    }
-                    columns={[
-                      {
-                        key: 'title',
-                        header: t('table.consultation'),
-                        primary: true,
-                        render: (row) => (
-                          <span className="flex items-center gap-2.5">
-                            <span
-                              aria-hidden
-                              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--uxe-radius-control)] bg-[var(--uxe-surface-selected)] text-[var(--uxe-cobalt)]"
-                            >
-                              <FileText className="h-4 w-4" />
-                            </span>
-                            <span className="truncate font-medium">{row.title}</span>
-                          </span>
-                        ),
-                      },
-                      {
-                        key: 'status',
-                        header: t('table.status'),
-                        render: (row) => <StatusBadge status={row.status} />,
-                      },
-                      {
-                        key: 'compliance',
-                        header: t('table.compliance'),
-                        align: 'right',
-                        render: (row) =>
-                          row.complianceScore === null ? (
-                            <span className="text-[var(--uxe-text-tertiary)]">—</span>
-                          ) : (
-                            <span
-                              className={cn(
-                                'font-semibold tabular-nums',
-                                row.complianceScore >= 90
-                                  ? 'text-[var(--uxe-success)]'
-                                  : row.complianceScore >= 70
-                                    ? 'text-[var(--uxe-warning)]'
-                                    : 'text-[var(--uxe-danger)]',
-                              )}
-                            >
-                              {Math.round(row.complianceScore)}%
-                            </span>
-                          ),
-                      },
-                      {
-                        key: 'sources',
-                        header: t('table.sources'),
-                        align: 'right',
-                        render: (row) => (
-                          <span className="text-[var(--uxe-cobalt)] tabular-nums">
-                            {formatNumber(row.sourceCount)}
-                          </span>
-                        ),
-                      },
-                      {
-                        key: 'updated',
-                        header: t('table.updated'),
-                        render: (row) => (
-                          <span className="whitespace-nowrap text-[var(--uxe-text-secondary)]">
-                            {formatRelative(row.updatedAt, locale)}
-                          </span>
-                        ),
-                      },
-                      {
-                        key: 'owner',
-                        header: t('table.owner'),
-                        render: (row) => (
-                          <span className="flex items-center gap-2">
-                            <Avatar name={row.ownerName} src={row.ownerAvatarUrl} size={24} />
-                            <span className="truncate">{row.ownerName}</span>
-                          </span>
-                        ),
-                      },
-                    ]}
+                <div className="flex min-h-0 flex-1 flex-col justify-center">
+                  <AreaChart
+                    points={data.activity.points.map((point) => ({
+                      label: new Intl.DateTimeFormat(locale, {
+                        month: 'short',
+                        day: 'numeric',
+                      }).format(new Date(point.date)),
+                      value: point.consultations,
+                    }))}
+                    ariaLabel={`${t('dashboard.activity')}, last ${days} days`}
+                    valueLabel={t('dashboard.consultations')}
+                    showTable={showTable}
                   />
                 </div>
               </Card>
-            </>
-          )}
-        </div>
 
-        <aside
-          className="flex min-w-0 flex-col gap-5"
-          aria-label={t('dashboard.attentionAndHealth')}
-        >
-          <NeedsAttentionCard items={data.needsAttention} />
-          <KnowledgeHealthCard health={data.knowledgeHealth} />
-        </aside>
+              <Card className="flex flex-col">
+                <CardHeader>
+                  <CardTitle>{t('dashboard.complianceOutcomes')}</CardTitle>
+                </CardHeader>
+                <div className="flex min-h-0 flex-1 items-center">
+                  <ComplianceDonut outcomes={data.complianceOutcomes} />
+                </div>
+              </Card>
+            </div>
+
+            <Card flush>
+              <CardHeader className="mb-0 p-5 pb-3">
+                <CardTitle>{t('dashboard.recentConsultations')}</CardTitle>
+                <Link
+                  to="/consult"
+                  className="text-[13px] font-semibold text-[var(--uxe-cobalt)] hover:underline"
+                >
+                  {t('dashboard.viewAllConsultations')}
+                </Link>
+              </CardHeader>
+              <div className="px-3 pb-3 sm:px-5 sm:pb-5">
+                <DataTable
+                  caption={t('dashboard.recentConsultations')}
+                  rows={data.recentConsultations}
+                  rowKey={(row) => row.id}
+                  onRowClick={(row) => navigate(`/consult/${row.id}`)}
+                  empty={
+                    <EmptyState
+                      icon={<MessageSquare className="h-6 w-6" aria-hidden />}
+                      title={t('dashboard.noConsultations')}
+                      description={t('dashboard.noConsultationsHint')}
+                      action={
+                        <Button variant="primary" size="sm" onClick={() => navigate('/consult')}>
+                          {t('dashboard.startConsultation')}
+                        </Button>
+                      }
+                    />
+                  }
+                  columns={[
+                    {
+                      key: 'title',
+                      header: t('table.consultation'),
+                      primary: true,
+                      render: (row) => (
+                        <span className="flex items-center gap-2.5">
+                          <span
+                            aria-hidden
+                            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--uxe-radius-control)] bg-[var(--uxe-surface-selected)] text-[var(--uxe-cobalt)]"
+                          >
+                            <FileText className="h-4 w-4" />
+                          </span>
+                          <span className="truncate font-medium">{row.title}</span>
+                        </span>
+                      ),
+                    },
+                    {
+                      key: 'status',
+                      header: t('table.status'),
+                      render: (row) => <StatusBadge status={row.status} />,
+                    },
+                    {
+                      key: 'compliance',
+                      header: t('table.compliance'),
+                      align: 'right',
+                      render: (row) =>
+                        row.complianceScore === null ? (
+                          <span className="text-[var(--uxe-text-tertiary)]">—</span>
+                        ) : (
+                          <span
+                            className={cn(
+                              'font-semibold tabular-nums',
+                              row.complianceScore >= 90
+                                ? 'text-[var(--uxe-success)]'
+                                : row.complianceScore >= 70
+                                  ? 'text-[var(--uxe-warning)]'
+                                  : 'text-[var(--uxe-danger)]',
+                            )}
+                          >
+                            {Math.round(row.complianceScore)}%
+                          </span>
+                        ),
+                    },
+                    {
+                      key: 'sources',
+                      header: t('table.sources'),
+                      align: 'right',
+                      render: (row) => (
+                        <span className="text-[var(--uxe-cobalt)] tabular-nums">
+                          {formatNumber(row.sourceCount)}
+                        </span>
+                      ),
+                    },
+                    {
+                      key: 'updated',
+                      header: t('table.updated'),
+                      render: (row) => (
+                        <span className="whitespace-nowrap text-[var(--uxe-text-secondary)]">
+                          {formatRelative(row.updatedAt, locale)}
+                        </span>
+                      ),
+                    },
+                    {
+                      key: 'owner',
+                      header: t('table.owner'),
+                      render: (row) => (
+                        <span className="flex items-center gap-2">
+                          <Avatar name={row.ownerName} src={row.ownerAvatarUrl} size={24} />
+                          <span className="truncate">{row.ownerName}</span>
+                        </span>
+                      ),
+                    },
+                  ]}
+                />
+              </div>
+            </Card>
+          </>
+        )}
       </div>
     </div>
   );
@@ -471,279 +453,6 @@ function ComplianceDonut({ outcomes }: { outcomes: DashboardResponse['compliance
   );
 }
 
-const ATTENTION_ICONS = {
-  failed_job: XCircle,
-  critical_gap: AlertTriangle,
-  unresolved_evidence: AlertTriangle,
-  stale_knowledge: Info,
-  pending_review: CheckCircle2,
-} as const;
-
-const SEVERITY_STYLES = {
-  critical: 'bg-[var(--uxe-danger-bg)] text-[var(--uxe-danger-text)]',
-  warning: 'bg-[var(--uxe-warning-bg)] text-[var(--uxe-warning-text)]',
-  info: 'bg-[var(--uxe-info-bg)] text-[var(--uxe-info-text)]',
-} as const;
-
-type AttentionItem = DashboardResponse['needsAttention'][number];
-
-/**
- * What a person can actually do about each thing raised here.
- *
- * Three have a fix the product carries out; two do not. A non-compliant finding and a
- * requirement short of evidence are statements about a real building, and no button on a
- * dashboard makes either untrue — so the action for those says what it is, records who
- * said it, and leaves the finding exactly where it is in the review.
- */
-const ATTENTION_FIX: Record<AttentionItem['kind'], { label: string; explain: string }> = {
-  failed_job: {
-    label: 'Run it again',
-    explain: 'Queues the job again. It leaves this list once it finishes.',
-  },
-  stale_knowledge: {
-    label: 'Re-index this document',
-    explain: 'Extracts and indexes it again from the stored file, refreshing its timestamps.',
-  },
-  pending_review: {
-    label: 'Mark as read',
-    explain: 'The report stays in Reports; it stops being flagged as waiting for somebody.',
-  },
-  critical_gap: {
-    label: 'Mark as handled',
-    explain:
-      'The finding stays in its review with its evidence — nothing here makes it compliant. This only records that somebody has seen it, so it stops being raised.',
-  },
-  unresolved_evidence: {
-    label: 'Mark as handled',
-    explain:
-      'The requirement still needs evidence and stays in its review. This only records that somebody has seen it, so it stops being raised.',
-  },
-};
-
-function NeedsAttentionCard({ items }: { items: DashboardResponse['needsAttention'] }) {
-  const { t } = useI18n();
-  const [open, setOpen] = useState<AttentionItem | null>(null);
-
-  return (
-    <Card flush>
-      <CardHeader className="mb-0 p-5 pb-3">
-        <CardTitle>{t('dashboard.needsAttention')}</CardTitle>
-        {items.length > 0 && (
-          <Badge tone="danger" size="sm">
-            {items.length}
-          </Badge>
-        )}
-      </CardHeader>
-
-      {items.length === 0 ? (
-        <div className="px-5 pb-6">
-          <div className="flex items-center gap-3 rounded-[var(--uxe-radius-card)] bg-[var(--uxe-success-bg)] p-4">
-            <CheckCircle2 className="h-5 w-5 shrink-0 text-[var(--uxe-success)]" aria-hidden />
-            <p className="text-[13px] font-medium text-[var(--uxe-success)]">
-              {t('dashboard.nothingNeedsAttention')}
-            </p>
-          </div>
-        </div>
-      ) : (
-        <ul className="flex flex-col">
-          {items.map((item) => {
-            const Icon = ATTENTION_ICONS[item.kind];
-            return (
-              <li
-                key={`${item.kind}-${item.id}`}
-                className="border-t border-[var(--uxe-border)] first:border-t-0"
-              >
-                <button
-                  type="button"
-                  onClick={() => setOpen(item)}
-                  className="flex w-full items-start gap-3 px-5 py-3.5 text-start transition-colors hover:bg-[var(--uxe-surface-hover)] focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--uxe-cobalt)]"
-                >
-                  <span
-                    aria-hidden
-                    className={cn(
-                      'flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--uxe-radius-control)]',
-                      SEVERITY_STYLES[item.severity],
-                    )}
-                  >
-                    <Icon className="h-5 w-5" />
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[14px] font-semibold text-[var(--uxe-text)]">
-                      {item.title}
-                    </span>
-                    <span
-                      className={cn(
-                        'mt-0.5 block text-[13px]',
-                        item.severity === 'critical'
-                          ? 'text-[var(--uxe-danger)]'
-                          : item.severity === 'warning'
-                            ? 'text-[var(--uxe-warning)]'
-                            : 'text-[var(--uxe-text-secondary)]',
-                      )}
-                    >
-                      {item.detail}
-                    </span>
-                  </span>
-                  <ChevronRight
-                    className="mt-2 h-4 w-4 shrink-0 text-[var(--uxe-text-tertiary)]"
-                    aria-hidden
-                  />
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-
-      <AttentionDialog item={open} onOpenChange={(next) => !next && setOpen(null)} />
-    </Card>
-  );
-}
-
-function AttentionDialog({
-  item,
-  onOpenChange,
-}: {
-  item: AttentionItem | null;
-  onOpenChange: (open: boolean) => void;
-}) {
-  const { t } = useI18n();
-  const queryClient = useQueryClient();
-  const { push } = useToast();
-
-  const resolve = useMutation({
-    mutationFn: () =>
-      api.post<ResolveAttentionResponse>(`/dashboard/attention/${item?.id ?? ''}/resolve`, {
-        kind: item?.kind,
-      }),
-    onSuccess: (result) => {
-      push({
-        tone: 'success',
-        title: result.outcome === 'fixed' ? 'Done' : 'Marked as handled',
-        description: result.detail,
-      });
-      // The item goes because the dashboard is re-read, not because the row was hidden
-      // locally — if the condition is somehow still there, it should still be shown.
-      void queryClient.invalidateQueries({ queryKey: ['dashboard'] });
-      onOpenChange(false);
-    },
-    onError: (error: ApiError) =>
-      push({ tone: 'error', title: 'Could not do that', description: error.message }),
-  });
-
-  const fix = item ? ATTENTION_FIX[item.kind] : null;
-
-  return (
-    <Dialog
-      open={item !== null}
-      onOpenChange={onOpenChange}
-      title={item?.title ?? ''}
-      description={item?.detail}
-      size="sm"
-      footer={
-        <>
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>
-            {t('common.cancel')}
-          </Button>
-          {item && (
-            <Button variant="secondary" asChild>
-              <Link to={item.href}>{t('dashboard.openIt')}</Link>
-            </Button>
-          )}
-          <Button variant="primary" loading={resolve.isPending} onClick={() => resolve.mutate()}>
-            {fix?.label ?? 'Fix the issue'}
-          </Button>
-        </>
-      }
-    >
-      <p className="text-[14px] leading-relaxed text-[var(--uxe-text)]">{fix?.explain}</p>
-    </Dialog>
-  );
-}
-
-function KnowledgeHealthCard({ health }: { health: DashboardResponse['knowledgeHealth'] }) {
-  const { t, formatNumber } = useI18n();
-
-  const rows = [
-    {
-      label: 'Sources ready',
-      value: health.ready,
-      icon: CheckCircle2,
-      tone: 'text-[var(--uxe-success)]',
-    },
-    { label: 'Processing', value: health.processing, icon: Circle, tone: 'text-[var(--uxe-info)]' },
-    {
-      label: 'Outdated sources',
-      value: health.outdated,
-      icon: AlertTriangle,
-      tone: 'text-[var(--uxe-warning)]',
-    },
-    { label: 'Failed', value: health.failed, icon: XCircle, tone: 'text-[var(--uxe-danger)]' },
-    {
-      label: 'Missing metadata',
-      value: health.missingMetadata,
-      icon: Info,
-      tone: 'text-[var(--uxe-text-secondary)]',
-    },
-    {
-      label: 'Unlinked content',
-      value: health.unlinkedContent,
-      icon: MinusCircle,
-      tone: 'text-[var(--uxe-text-secondary)]',
-    },
-  ];
-
-  const tone = health.score >= 90 ? 'success' : health.score >= 70 ? 'brand' : 'warning';
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{t('dashboard.knowledgeHealth')}</CardTitle>
-        {/* The formula is exposed rather than left as an unexplained number. */}
-        <Tooltip
-          content={
-            <span className="font-[family-name:var(--uxe-font-mono)] text-[11px]">
-              {health.formula}
-            </span>
-          }
-        >
-          <button
-            type="button"
-            aria-label={t('dashboard.healthFormula')}
-            className="rounded p-1 text-[var(--uxe-text-tertiary)] hover:text-[var(--uxe-text)]"
-          >
-            <Info className="h-4 w-4" aria-hidden />
-          </button>
-        </Tooltip>
-      </CardHeader>
-
-      <div className="flex items-center gap-5">
-        <Gauge value={health.score} label={t('dashboard.knowledgeHealth')} tone={tone} size={104} />
-        <ul className="min-w-0 flex-1 space-y-2">
-          {rows.map((row) => (
-            <li key={row.label} className="flex items-center justify-between gap-2 text-[13px]">
-              <span className="flex min-w-0 items-center gap-2">
-                <row.icon className={cn('h-4 w-4 shrink-0', row.tone)} aria-hidden />
-                <span className="truncate text-[var(--uxe-text-secondary)]">{row.label}</span>
-              </span>
-              <span className="shrink-0 font-semibold text-[var(--uxe-text)] tabular-nums">
-                {formatNumber(row.value)}
-              </span>
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      <Button asChild variant="ghost" size="sm" className="mt-4 w-full justify-between">
-        <Link to="/knowledge">
-          {t('dashboard.goToKnowledgeBase')}
-          <ArrowRight className="h-4 w-4" aria-hidden />
-        </Link>
-      </Button>
-    </Card>
-  );
-}
-
 export function StatusBadge({ status }: { status: string }) {
   const { t } = useI18n();
   const map: Record<
@@ -787,24 +496,19 @@ function DashboardSkeleton() {
   return (
     <LoadingRegion label={t('dashboard.loading')}>
       <div className="mx-auto w-full max-w-[1600px] p-4 sm:p-6">
-        <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
-          <div className="flex flex-col gap-5">
-            <Skeleton className="h-[124px] w-full rounded-[var(--uxe-radius-card)]" />
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              {[0, 1, 2, 3].map((i) => (
-                <Skeleton key={i} className="h-[132px] rounded-[var(--uxe-radius-card)]" />
-              ))}
-            </div>
-            <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
-              <Skeleton className="h-[280px] rounded-[var(--uxe-radius-card)]" />
-              <Skeleton className="h-[280px] rounded-[var(--uxe-radius-card)]" />
-            </div>
-            <Skeleton className="h-[260px] rounded-[var(--uxe-radius-card)]" />
+        {/* The same shape the loaded page has, so nothing jumps when it arrives. */}
+        <div className="flex flex-col gap-5">
+          <Skeleton className="h-[124px] w-full rounded-[var(--uxe-radius-card)]" />
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {[0, 1, 2, 3].map((i) => (
+              <Skeleton key={i} className="h-[132px] rounded-[var(--uxe-radius-card)]" />
+            ))}
           </div>
-          <div className="flex flex-col gap-5">
-            <Skeleton className="h-[320px] rounded-[var(--uxe-radius-card)]" />
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
+            <Skeleton className="h-[280px] rounded-[var(--uxe-radius-card)]" />
             <Skeleton className="h-[280px] rounded-[var(--uxe-radius-card)]" />
           </div>
+          <Skeleton className="h-[260px] rounded-[var(--uxe-radius-card)]" />
         </div>
       </div>
     </LoadingRegion>

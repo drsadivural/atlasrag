@@ -26,6 +26,7 @@ import { useSession } from '../lib/session.js';
 import { useTheme } from '../lib/theme.js';
 import { useI18n } from '../lib/i18n.js';
 import { BrandLockup, BrandMark } from './Brand.js';
+import { useAttention } from './NeedsAttention.js';
 
 interface NavEntry {
   to: string;
@@ -388,13 +389,7 @@ function TopBar({ onOpenMenu }: { onOpenMenu: () => void }) {
       </form>
 
       <div className="ms-auto flex items-center gap-2">
-        <NavLink
-          to="/activity"
-          className="relative rounded-[var(--uxe-radius-control)] p-2 text-[var(--uxe-text-secondary)] hover:bg-[var(--uxe-surface-hover)]"
-          aria-label={t('common.notifications')}
-        >
-          <Bell className="h-5 w-5" aria-hidden />
-        </NavLink>
+        <NotificationBell />
 
         <DropdownMenu
           label={t('common.profile')}
@@ -432,6 +427,47 @@ function TopBar({ onOpenMenu }: { onOpenMenu: () => void }) {
 function roleLabel(role: string | undefined): string {
   if (!role) return '';
   return role.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/**
+ * The bell, and the count behind it.
+ *
+ * There is no separate notification store: what a person needs to be told about is exactly
+ * what needs attention, and that list already exists. The badge is its length and the bell
+ * opens the page that shows it in full — so the number and the list are the same fact read
+ * twice, and cannot drift apart.
+ *
+ * A failed read leaves the bell unbadged rather than showing a stale or invented number.
+ * Under-reporting is recoverable; a red "3" that opens an empty page is not.
+ */
+function NotificationBell() {
+  const { t } = useI18n();
+  const { data } = useAttention();
+  // Every optional link matters: this renders on every screen, so a response that is not
+  // the shape expected must leave the bell unbadged, not take the whole shell down with it.
+  const count = data?.items?.length ?? 0;
+
+  return (
+    <NavLink
+      to="/activity"
+      className="relative rounded-[var(--uxe-radius-control)] p-2 text-[var(--uxe-text-secondary)] hover:bg-[var(--uxe-surface-hover)]"
+      aria-label={
+        count > 0
+          ? t('attention.bellLabel', { count: String(count) })
+          : t('attention.bellLabelClear')
+      }
+    >
+      <Bell className="h-5 w-5" aria-hidden />
+      {count > 0 && (
+        <span
+          aria-hidden
+          className="absolute end-0.5 top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--uxe-danger)] px-1 text-[10px] leading-none font-bold text-[var(--uxe-surface)] tabular-nums"
+        >
+          {count > 9 ? '9+' : count}
+        </span>
+      )}
+    </NavLink>
+  );
 }
 
 /* -------------------------------------------------------------------------- */

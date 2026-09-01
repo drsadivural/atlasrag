@@ -63,10 +63,20 @@ function sessionFor(role: Role): SessionResponse {
 
 let fetchMock: ReturnType<typeof vi.fn>;
 
-function renderShell(role: Role = 'consultant', route = '/dashboard') {
+function renderShell(
+  role: Role = 'consultant',
+  route = '/dashboard',
+  attention: unknown = { items: [], total: 0, truncated: false },
+) {
   fetchMock = vi.fn(async (input: RequestInfo | URL) => {
     if (String(input).includes('/auth/session')) {
       return new Response(JSON.stringify(sessionFor(role)), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }
+    if (String(input).includes('/dashboard/attention')) {
+      return new Response(JSON.stringify(attention), {
         status: 200,
         headers: { 'content-type': 'application/json' },
       });
@@ -259,5 +269,61 @@ describe('workspace and account', () => {
   it('renders nothing at all until the session is known, rather than an empty chrome', () => {
     const { container } = renderShell();
     expect(container.textContent).not.toContain('Dashboard');
+  });
+});
+
+/*
+ * The bell is the only notification surface in the product, and it sits on every screen.
+ * That places two requirements on it that nothing else here has: the number it shows must
+ * be the number of things actually waiting, and it must never be able to take the page
+ * down with it.
+ */
+describe('the notification bell', () => {
+  const item = (id: string) => ({
+    id,
+    kind: 'failed_job' as const,
+    title: 'source ingest failed',
+    detail: 'The job could not be completed.',
+    severity: 'critical' as const,
+    href: '/activity',
+  });
+
+  it('carries no badge when nothing needs attention', async () => {
+    renderShell('owner');
+    const bell = await screen.findByRole('link', {
+      name: 'Notifications — nothing needs attention',
+    });
+    expect(bell).toHaveAttribute('href', '/activity');
+    expect(bell).toHaveTextContent('');
+  });
+
+  it('shows how many things are waiting, and says so out loud', async () => {
+    renderShell('owner', '/dashboard', {
+      items: [item('a'), item('b'), item('c')],
+      total: 3,
+      truncated: false,
+    });
+    const bell = await screen.findByRole('link', { name: 'Notifications — 3 need attention' });
+    expect(bell).toHaveTextContent('3');
+  });
+
+  it('caps the badge but not the meaning', async () => {
+    renderShell('owner', '/dashboard', {
+      items: Array.from({ length: 14 }, (_, i) => item(`i${i}`)),
+      total: 14,
+      truncated: false,
+    });
+    // The digit is abbreviated to keep the badge round; the label is not.
+    const bell = await screen.findByRole('link', { name: 'Notifications — 14 need attention' });
+    expect(bell).toHaveTextContent('9+');
+  });
+
+  it('stays standing when the response is not the shape it expects', async () => {
+    // It renders on every screen, so a bad payload must cost the badge, not the app.
+    renderShell('owner', '/dashboard', { unexpected: true });
+    expect(
+      await screen.findByRole('link', { name: 'Notifications — nothing needs attention' }),
+    ).toBeInTheDocument();
+    expect(await screen.findByRole('navigation', { name: 'Main navigation' })).toBeInTheDocument();
   });
 });

@@ -128,6 +128,29 @@ export class SourceRepository {
     return { items, total: Number(totalRow[0]?.value ?? 0) };
   }
 
+  /**
+   * Indexed documents this caller can see — one count, one query.
+   *
+   * The dashboard used to get this from `healthMetrics`, which runs four queries including
+   * a group-by duplicate scan, to read a single field. Health belongs to the Knowledge
+   * page, which uses all of it; the dashboard only needs to know whether the workspace has
+   * anything indexed at all.
+   */
+  async readyCount(ctx: TenantContext): Promise<number> {
+    requirePermission(ctx, 'source:read');
+    const [row] = await this.db
+      .select({ value: count() })
+      .from(sources)
+      .where(
+        and(
+          visibleSourcePredicate(ctx),
+          eq(sources.promotedToKnowledge, true),
+          eq(sources.status, 'ready'),
+        ),
+      );
+    return Number(row?.value ?? 0);
+  }
+
   /** Status counts for the filter chips, computed under the same visibility predicate. */
   async statusCounts(ctx: TenantContext) {
     requirePermission(ctx, 'source:read');

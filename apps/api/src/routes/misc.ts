@@ -11,6 +11,7 @@ import {
   UpsertModelConfigRequest,
   formatLocator,
   type ArtifactSummary,
+  type AttentionResponse,
   type AuditEvent,
   type Citation,
   type CitationResolution,
@@ -22,7 +23,7 @@ import {
   type Role,
   type WorkspaceUser,
 } from '@uxe/contracts';
-import { computeKnowledgeHealth, KNOWLEDGE_HEALTH_FORMULA, findExcerpt } from '@uxe/rag';
+import { findExcerpt } from '@uxe/rag';
 import { decryptSecret, encryptSecret, randomToken, sha256Hex } from '@uxe/auth';
 import type { TenantContext } from '@uxe/db';
 import type { AppBindings, AppDeps } from '../context.js';
@@ -42,6 +43,9 @@ import {
 /* Dashboard                                                                  */
 /* -------------------------------------------------------------------------- */
 
+/** Most items the bell will show at once. See `GET /attention`. */
+const ATTENTION_LIMIT = 50;
+
 export function dashboardRoutes(deps: AppDeps) {
   const app = new Hono<AppBindings>();
 
@@ -55,17 +59,15 @@ export function dashboardRoutes(deps: AppDeps) {
     const since = new Date(now.getTime() - days * 86_400_000);
     const priorSince = new Date(since.getTime() - days * 86_400_000);
 
-    const [current, prior, health, failedJobs, recent] = await Promise.all([
+    const [current, prior, readySourceCount, recent] = await Promise.all([
       deps.repos.metrics.summary(tenant, since, now),
       deps.repos.metrics.summary(tenant, priorSince, since),
-      deps.repos.sources.healthMetrics(tenant),
-      deps.repos.jobs.listFailed(tenant, 5),
+      deps.repos.sources.readyCount(tenant),
       deps.repos.consultations.list(tenant, { page: 1, pageSize: 5, status: 'all' }),
     ]);
 
     const activity = await deps.repos.metrics.activitySeries(tenant, since, now);
     const outcomes = await deps.repos.metrics.complianceOutcomes(tenant, since, now);
-    const attention = await deps.repos.metrics.attentionItems(tenant, 8);
 
     const owners = new Map<string, { name: string; avatarUrl: string | null }>();
     for (const item of recent.items) {
@@ -130,31 +132,50 @@ export function dashboardRoutes(deps: AppDeps) {
         ownerName: owners.get(item.ownerUserId)?.name ?? 'Unknown',
         ownerAvatarUrl: owners.get(item.ownerUserId)?.avatarUrl ?? null,
       })),
-      needsAttention: [
-        ...failedJobs.map((job) => ({
-          id: job.id,
-          kind: 'failed_job' as const,
-          title: `${job.kind.replace(/_/g, ' ')} failed`,
-          detail: String(job.error?.message ?? 'The job could not be completed.'),
-          severity: 'critical' as const,
-          href: `/activity?job=${job.id}`,
-        })),
-        ...attention,
-      ].slice(0, 8),
-      knowledgeHealth: {
-        score: computeKnowledgeHealth(health),
-        ready: health.ready,
-        processing: health.processing,
-        outdated: health.outdated,
-        failed: health.failed,
-        missingMetadata: health.missingMetadata,
-        unlinkedContent: health.unlinkedContent,
-        duplicates: health.duplicates,
-        permissionIssues: health.permissionIssues,
-        formula: KNOWLEDGE_HEALTH_FORMULA,
-      },
+      readySourceCount,
     };
 
+    return c.json(response);
+  });
+
+  /**
+   * Everything currently needing attention.
+   *
+   * Its own endpoint because the bell is on every screen and the dashboard payload is not
+   * free — KPIs, two time series and the five most recent consultations, to render a
+   * number. This is the list itself, so the badge and the page it opens are reading the
+   * same thing and cannot disagree.
+   *
+   * Bounded at fifty, and says when it hit the bound. A count that silently stops at its
+   * cap is worse than no count: it reads as "fifty problems" to a workspace that has two
+   * hundred.
+   */
+  app.get('/attention', requirePermission('workspace:read'), async (c) => {
+    const tenant = c.get('tenant');
+    if (!tenant) throw ApiError.unauthenticated();
+
+    const [failedJobs, attention] = await Promise.all([
+      deps.repos.jobs.listFailed(tenant, ATTENTION_LIMIT),
+      deps.repos.metrics.attentionItems(tenant, ATTENTION_LIMIT),
+    ]);
+
+    const items = [
+      ...failedJobs.map((job) => ({
+        id: job.id,
+        kind: 'failed_job' as const,
+        title: `${job.kind.replace(/_/g, ' ')} failed`,
+        detail: String(job.error?.message ?? 'The job could not be completed.'),
+        severity: 'critical' as const,
+        href: `/activity?job=${job.id}`,
+      })),
+      ...attention,
+    ];
+
+    const response: AttentionResponse = {
+      items: items.slice(0, ATTENTION_LIMIT),
+      total: items.length,
+      truncated: items.length > ATTENTION_LIMIT,
+    };
     return c.json(response);
   });
 

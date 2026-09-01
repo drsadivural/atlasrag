@@ -375,6 +375,35 @@ describe('workspace settings', () => {
     expect(attempt.status).toBe(403);
   }, 120_000);
 
+  it('serves the attention list the bell counts, without the dashboard payload', async () => {
+    /*
+     * The bell renders on every screen, so what it reads must be the list itself and
+     * nothing else. Reading the dashboard to render a number would recompute two time
+     * series and the five most recent consultations on every page load.
+     */
+    const response = await owner.client.get<{
+      items: Array<{ id: string; kind: string; severity: string; href: string }>;
+      total: number;
+      truncated: boolean;
+    }>('/dashboard/attention');
+
+    expect(response.status).toBe(200);
+    expect(Array.isArray(response.body.items)).toBe(true);
+    expect(response.body.total).toBe(response.body.items.length);
+    expect(response.body.truncated).toBe(false);
+    // Nothing from the dashboard's own payload leaks in; they are separate reads.
+    expect(response.body).not.toHaveProperty('kpis');
+    expect(response.body).not.toHaveProperty('knowledgeHealth');
+  });
+
+  it('shows the attention list to anyone who may read the workspace', async () => {
+    // Seeing what is outstanding is not the same as being allowed to act on it — the
+    // resolve endpoint checks separately, as the two tests below show.
+    const member = await addMember(harness, owner, 'read_only');
+    const response = await member.client.get('/dashboard/attention');
+    expect(response.status).toBe(200);
+  }, 120_000);
+
   it('acknowledges a finding without pretending it was fixed', async () => {
     /*
      * The distinction the whole endpoint exists to keep. A non-compliant finding is a

@@ -22,6 +22,7 @@ import { type ApiError, api } from '../lib/api.js';
 import { useI18n } from '../lib/i18n.js';
 import { useSession } from '../lib/session.js';
 import { PageHeader } from '../components/PageHeader.js';
+import { NeedsAttention } from '../components/NeedsAttention.js';
 
 const CATEGORIES = [
   'all',
@@ -54,7 +55,18 @@ export function ActivityPage() {
     setSearchParams(next, { replace: true });
   };
 
+  /*
+   * The audit log is for people who may read it; what needs attention is for everybody.
+   *
+   * The bell points every role at this page, and a consultant holds no audit permission —
+   * so asking for the log regardless would greet them with a red error about a record they
+   * were never entitled to see, next to the list they actually came for. The page shows
+   * each half to whoever may have it.
+   */
+  const mayReadAudit = can('audit:read');
+
   const query = useQuery<Paginated<AuditEvent>, ApiError>({
+    enabled: mayReadAudit,
     queryKey: ['audit', { category, result, q, page }],
     queryFn: () =>
       api.get<Paginated<AuditEvent>>(
@@ -87,146 +99,164 @@ export function ActivityPage() {
         }
       />
 
-      <div className="mt-5 flex flex-wrap items-center gap-2">
-        <div
-          role="group"
-          aria-label={t('activity.filterCategory')}
-          className="flex min-w-0 flex-1 flex-wrap gap-2"
-        >
-          {CATEGORIES.map((value) => (
-            <FilterChip
-              key={value}
-              active={category === value}
-              onClick={() => setParam('category', value)}
-              label={value === 'all' ? t('common.all') : value.replace(/_/g, ' ')}
-            />
-          ))}
-        </div>
-        <Input
-          value={q}
-          onChange={(event) => setParam('q', event.target.value)}
-          placeholder={t('common.search')}
-          aria-label={t('activity.search')}
-          className="h-9 w-full text-[13px] sm:w-64"
-        />
+      {/*
+        What the bell points at, first on the page.
+        The audit log below is the record of what happened; this is the shorter, more urgent
+        question of what is still outstanding. Someone arriving here from the bell came for
+        this, so it is not below a table of twenty-five rows and a set of filters.
+      */}
+      <div className="mt-5">
+        <NeedsAttention />
       </div>
 
-      <Card flush className="mt-4 p-3 sm:p-4">
-        {query.isLoading ? (
-          <LoadingRegion label={t('activity.loading')}>
-            <div className="flex flex-col gap-2">
-              {[0, 1, 2, 3, 4].map((i) => (
-                <Skeleton key={i} className="h-12 w-full" />
+      {mayReadAudit && (
+        <>
+          <h2 className="mt-6 text-[15px] font-semibold text-[var(--uxe-text)]">
+            {t('activity.auditLog')}
+          </h2>
+
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <div
+              role="group"
+              aria-label={t('activity.filterCategory')}
+              className="flex min-w-0 flex-1 flex-wrap gap-2"
+            >
+              {CATEGORIES.map((value) => (
+                <FilterChip
+                  key={value}
+                  active={category === value}
+                  onClick={() => setParam('category', value)}
+                  label={value === 'all' ? t('common.all') : value.replace(/_/g, ' ')}
+                />
               ))}
             </div>
-          </LoadingRegion>
-        ) : query.error && !query.data ? (
-          <ErrorState
-            labels={{ retry: t('common.retry'), reference: t('common.reference') }}
-            message={query.error.message}
-            traceId={query.error.traceId}
-            onRetry={() => void query.refetch()}
-          />
-        ) : (
-          <>
-            <DataTable
-              caption={t('activity.tableCaption')}
-              rows={query.data?.items ?? []}
-              rowKey={(row) => row.id}
-              empty={
-                <EmptyState
-                  icon={<Activity className="h-6 w-6" aria-hidden />}
-                  title={t('activity.emptyTitle')}
-                  description={t('activity.emptyBody')}
-                />
-              }
-              columns={[
-                {
-                  key: 'summary',
-                  header: t('table.event'),
-                  primary: true,
-                  render: (row) => (
-                    <span className="flex min-w-0 items-start gap-2.5">
-                      <span aria-hidden className="mt-0.5">
-                        {row.result === 'success' ? (
-                          <CheckCircle2 className="h-4 w-4 text-[var(--uxe-success)]" />
-                        ) : row.result === 'denied' ? (
-                          <ShieldAlert className="h-4 w-4 text-[var(--uxe-warning)]" />
-                        ) : (
-                          <XCircle className="h-4 w-4 text-[var(--uxe-danger)]" />
-                        )}
-                      </span>
-                      <span className="min-w-0">
-                        <span className="block text-[14px] text-[var(--uxe-text)]">
-                          {row.summary}
-                        </span>
-                        <span className="block font-[family-name:var(--uxe-font-mono)] text-[11px] text-[var(--uxe-text-tertiary)]">
-                          {row.action}
-                        </span>
-                      </span>
-                    </span>
-                  ),
-                },
-                {
-                  key: 'actor',
-                  header: t('activity.actor'),
-                  render: (row) => (
-                    <span className="flex items-center gap-2">
-                      <Avatar name={row.actorName} size={22} />
-                      <span className="truncate">{row.actorName}</span>
-                    </span>
-                  ),
-                },
-                {
-                  key: 'category',
-                  header: t('table.category'),
-                  render: (row) => (
-                    <Badge tone="neutral" size="sm">
-                      {row.category}
-                    </Badge>
-                  ),
-                },
-                {
-                  key: 'when',
-                  header: t('activity.when'),
-                  render: (row) => (
-                    <span className="whitespace-nowrap text-[var(--uxe-text-secondary)]">
-                      {formatDateTime(row.at)}
-                    </span>
-                  ),
-                },
-                {
-                  key: 'trace',
-                  header: t('activity.trace'),
-                  hideOnMobile: true,
-                  render: (row) => (
-                    <Tooltip
-                      content={`Trace ${row.traceId}${row.ipAddress ? ` · ${row.ipAddress}` : ''}`}
-                    >
-                      <button
-                        type="button"
-                        className="cursor-help font-[family-name:var(--uxe-font-mono)] text-[11px] text-[var(--uxe-text-tertiary)]"
-                      >
-                        {row.traceId.slice(0, 8)}
-                      </button>
-                    </Tooltip>
-                  ),
-                },
-              ]}
+            <Input
+              value={q}
+              onChange={(event) => setParam('q', event.target.value)}
+              placeholder={t('common.search')}
+              aria-label={t('activity.search')}
+              className="h-9 w-full text-[13px] sm:w-64"
             />
+          </div>
 
-            {query.data && (
-              <Pagination
-                page={query.data.page}
-                pageSize={query.data.pageSize}
-                total={query.data.total}
-                totalPages={query.data.totalPages}
-                onPageChange={(next) => setParam('page', String(next))}
+          <Card flush className="mt-4 p-3 sm:p-4">
+            {query.isLoading ? (
+              <LoadingRegion label={t('activity.loading')}>
+                <div className="flex flex-col gap-2">
+                  {[0, 1, 2, 3, 4].map((i) => (
+                    <Skeleton key={i} className="h-12 w-full" />
+                  ))}
+                </div>
+              </LoadingRegion>
+            ) : query.error && !query.data ? (
+              <ErrorState
+                labels={{ retry: t('common.retry'), reference: t('common.reference') }}
+                message={query.error.message}
+                traceId={query.error.traceId}
+                onRetry={() => void query.refetch()}
               />
+            ) : (
+              <>
+                <DataTable
+                  caption={t('activity.tableCaption')}
+                  rows={query.data?.items ?? []}
+                  rowKey={(row) => row.id}
+                  empty={
+                    <EmptyState
+                      icon={<Activity className="h-6 w-6" aria-hidden />}
+                      title={t('activity.emptyTitle')}
+                      description={t('activity.emptyBody')}
+                    />
+                  }
+                  columns={[
+                    {
+                      key: 'summary',
+                      header: t('table.event'),
+                      primary: true,
+                      render: (row) => (
+                        <span className="flex min-w-0 items-start gap-2.5">
+                          <span aria-hidden className="mt-0.5">
+                            {row.result === 'success' ? (
+                              <CheckCircle2 className="h-4 w-4 text-[var(--uxe-success)]" />
+                            ) : row.result === 'denied' ? (
+                              <ShieldAlert className="h-4 w-4 text-[var(--uxe-warning)]" />
+                            ) : (
+                              <XCircle className="h-4 w-4 text-[var(--uxe-danger)]" />
+                            )}
+                          </span>
+                          <span className="min-w-0">
+                            <span className="block text-[14px] text-[var(--uxe-text)]">
+                              {row.summary}
+                            </span>
+                            <span className="block font-[family-name:var(--uxe-font-mono)] text-[11px] text-[var(--uxe-text-tertiary)]">
+                              {row.action}
+                            </span>
+                          </span>
+                        </span>
+                      ),
+                    },
+                    {
+                      key: 'actor',
+                      header: t('activity.actor'),
+                      render: (row) => (
+                        <span className="flex items-center gap-2">
+                          <Avatar name={row.actorName} size={22} />
+                          <span className="truncate">{row.actorName}</span>
+                        </span>
+                      ),
+                    },
+                    {
+                      key: 'category',
+                      header: t('table.category'),
+                      render: (row) => (
+                        <Badge tone="neutral" size="sm">
+                          {row.category}
+                        </Badge>
+                      ),
+                    },
+                    {
+                      key: 'when',
+                      header: t('activity.when'),
+                      render: (row) => (
+                        <span className="whitespace-nowrap text-[var(--uxe-text-secondary)]">
+                          {formatDateTime(row.at)}
+                        </span>
+                      ),
+                    },
+                    {
+                      key: 'trace',
+                      header: t('activity.trace'),
+                      hideOnMobile: true,
+                      render: (row) => (
+                        <Tooltip
+                          content={`Trace ${row.traceId}${row.ipAddress ? ` · ${row.ipAddress}` : ''}`}
+                        >
+                          <button
+                            type="button"
+                            className="cursor-help font-[family-name:var(--uxe-font-mono)] text-[11px] text-[var(--uxe-text-tertiary)]"
+                          >
+                            {row.traceId.slice(0, 8)}
+                          </button>
+                        </Tooltip>
+                      ),
+                    },
+                  ]}
+                />
+
+                {query.data && (
+                  <Pagination
+                    page={query.data.page}
+                    pageSize={query.data.pageSize}
+                    total={query.data.total}
+                    totalPages={query.data.totalPages}
+                    onPageChange={(next) => setParam('page', String(next))}
+                  />
+                )}
+              </>
             )}
-          </>
-        )}
-      </Card>
+          </Card>
+        </>
+      )}
     </div>
   );
 }
