@@ -50,8 +50,8 @@ test('the answer-style control is operable with the arrow keys', async ({ page }
   await page.goto('/consult');
   await waitForSettled(page);
 
-  // The control lives in the Evidence & Output panel of an open consultation, which is a
-  // drawer below 1280px. Opening it here keeps the test from skipping itself.
+  // The control lives in the consultation settings panel, behind the gear. Opening it
+  // here keeps the test from skipping itself.
   await openConsultation(page, /UAE Fire Code Review/);
   await openEvidencePanel(page);
 

@@ -201,15 +201,21 @@ export function ConsultPage() {
             <Plus className="h-4 w-4" aria-hidden />
             {t('consult.newConsultation')}
           </Button>
+          {/*
+            One gear, at every width.
+            Answer style, evidence detail, the output format and the response controls are
+            all settings for this conversation — decided once and rarely touched again. As a
+            permanent rail they took a fifth of the screen away from the conversation
+            itself; behind an icon they are one click away and nothing is lost.
+          */}
           {consultation && (
             <Button
               variant="secondary"
-              size="sm"
-              className="xl:hidden"
+              size="icon-sm"
               onClick={() => setRailOpen(true)}
+              aria-label={t('consult.consultationSettings')}
             >
               <Settings2 className="h-4 w-4" aria-hidden />
-              {t('consult.evidenceOutput')}
             </Button>
           )}
         </div>
@@ -275,6 +281,12 @@ export function ConsultPage() {
           onAnswerStyleChange={setAnswerStyle}
           open={railOpen}
           onOpenChange={setRailOpen}
+          // The picker is a dialog; leaving the panel open behind it would stack two
+          // layers and trap focus in the wrong one.
+          onManageSources={() => {
+            setRailOpen(false);
+            setSourceDialogOpen(true);
+          }}
         />
       )}
 
@@ -364,39 +376,6 @@ function ConsultationWorkspace({
           }}
           className="w-full truncate rounded-[var(--uxe-radius-control)] bg-transparent text-[22px] font-bold text-[var(--uxe-text)] outline-none focus-visible:bg-[var(--uxe-surface-hover)] focus-visible:px-2 sm:text-[26px]"
         />
-
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          {consultation.sources.slice(0, 3).map((source) => (
-            <span
-              key={source.sourceId}
-              className="inline-flex max-w-[220px] items-center gap-2 rounded-[var(--uxe-radius-control)] border border-[var(--uxe-border)] bg-[var(--uxe-surface)] px-2.5 py-1.5 text-[13px]"
-            >
-              <FileText
-                className={cn(
-                  'h-3.5 w-3.5 shrink-0',
-                  source.role === 'governing'
-                    ? 'text-[var(--uxe-cobalt)]'
-                    : 'text-[var(--uxe-teal)]',
-                )}
-                aria-hidden
-              />
-              <span className="truncate font-medium text-[var(--uxe-text)]">{source.title}</span>
-              {source.pages !== null && (
-                <span className="shrink-0 text-[var(--uxe-text-secondary)]">· {source.pages}p</span>
-              )}
-            </span>
-          ))}
-          {consultation.sources.length > 3 && (
-            <span className="rounded-[var(--uxe-radius-control)] border border-[var(--uxe-border)] px-2.5 py-1.5 text-[13px] text-[var(--uxe-text-secondary)]">
-              +{consultation.sources.length - 3}{' '}
-              {t('consult.documents', { count: consultation.sources.length - 3 })}
-            </span>
-          )}
-          <Button variant="secondary" size="sm" onClick={onManageSources}>
-            <Settings2 className="h-3.5 w-3.5" aria-hidden />
-            {t('consult.manageSources')}
-          </Button>
-        </div>
       </div>
 
       <div className="shrink-0 border-b border-[var(--uxe-border)] bg-[var(--uxe-surface)] px-4 py-3 sm:px-6">
@@ -454,7 +433,8 @@ function ConsultationWorkspace({
             description={
               consultation.sources.length === 0
                 ? t('consult.noSourcesBody')
-                : 'Ayumi answers only from the sources selected above, and shows the exact clause behind every claim.'
+                : // "above" was the chips under the title, which are in the settings panel now.
+                  t('consult.groundedInSelected')
             }
             action={
               consultation.sources.length === 0 ? (
@@ -488,7 +468,112 @@ function ConsultationWorkspace({
         busy={busy}
         onStyleChange={onAnswerStyleChange}
       />
+
+      <AnswerActions consultation={consultation} />
     </>
+  );
+}
+
+/**
+ * What to do with the answer, directly under the conversation that produced it.
+ *
+ * These were the bottom three buttons of the settings rail, which meant asking for a
+ * report about an answer required opening a panel of controls that had nothing to do with
+ * it. They belong with the answer: the report is the answer written up, and the evidence
+ * matrix is the answer as a spreadsheet.
+ *
+ * Disabled until there is an answer, and the reason is on the control rather than left to
+ * be guessed at.
+ */
+function AnswerActions({ consultation }: { consultation: ConsultationDetail }) {
+  const { t } = useI18n();
+  const { push } = useToast();
+
+  const latestAnswerMessageId = useMemo(
+    () => [...consultation.messages].reverse().find((m) => m.answer)?.id ?? null,
+    [consultation.messages],
+  );
+
+  /*
+   * Both artifacts the API produces, not only one of them.
+   *
+   * `evidence_matrix` in CSV and XLSX has been generated by the same job as the PDF report
+   * from the beginning. A matrix is what somebody takes into a review meeting: one row per
+   * requirement, its result, its locator and its quotation, in something they can sort.
+   */
+  const generate = useMutation({
+    mutationFn: (request: { kind: 'compliance_report' | 'evidence_matrix'; format: string }) =>
+      api.post(
+        `/consultations/${consultation.id}/reports`,
+        {
+          reviewId: null,
+          messageId: latestAnswerMessageId,
+          format: request.format,
+          kind: request.kind,
+          idempotencyKey: newIdempotencyKey(),
+        },
+        newIdempotencyKey(),
+      ),
+    onSuccess: () =>
+      push({
+        tone: 'success',
+        title: 'Queued',
+        description: 'It appears in Reports when ready.',
+      }),
+    onError: (error: ApiError) =>
+      push({ tone: 'error', title: 'Could not create it', description: error.message }),
+  });
+
+  const ready = latestAnswerMessageId !== null;
+  const whyDisabled = ready ? undefined : t('consult.reportNeedsAnswer');
+
+  return (
+    <div className="shrink-0 border-t border-[var(--uxe-border)] bg-[var(--uxe-surface)] px-4 py-2.5 sm:px-6">
+      <div className="mx-auto flex max-w-4xl flex-wrap items-center gap-2">
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => generate.mutate({ kind: 'compliance_report', format: 'pdf' })}
+          loading={generate.isPending && generate.variables?.kind === 'compliance_report'}
+          disabled={!ready}
+          title={whyDisabled}
+        >
+          <FileText className="h-4 w-4" aria-hidden />
+          {t('consult.createReport')}
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => generate.mutate({ kind: 'evidence_matrix', format: 'csv' })}
+          loading={
+            generate.isPending &&
+            generate.variables?.kind === 'evidence_matrix' &&
+            generate.variables.format === 'csv'
+          }
+          disabled={!ready}
+          title={whyDisabled}
+        >
+          <Table2 className="h-4 w-4" aria-hidden />
+          {t('evidence.downloadCsv')}
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => generate.mutate({ kind: 'evidence_matrix', format: 'xlsx' })}
+          loading={
+            generate.isPending &&
+            generate.variables?.kind === 'evidence_matrix' &&
+            generate.variables.format === 'xlsx'
+          }
+          disabled={!ready}
+          title={whyDisabled}
+        >
+          <Table2 className="h-4 w-4" aria-hidden />
+          {t('evidence.downloadXlsx')}
+        </Button>
+        {!ready && <p className="text-[12px] text-[var(--uxe-text-secondary)]">{whyDisabled}</p>}
+      </div>
+    </div>
   );
 }
 
@@ -1025,12 +1110,14 @@ function EvidencePanel({
   onAnswerStyleChange,
   open,
   onOpenChange,
+  onManageSources,
 }: {
   consultation: ConsultationDetail;
   answerStyle: AnswerStyle;
   onAnswerStyleChange: (style: AnswerStyle) => void;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onManageSources: () => void;
 }) {
   const { t } = useI18n();
   const queryClient = useQueryClient();
@@ -1090,38 +1177,6 @@ function EvidencePanel({
       push({ tone: 'error', title: 'Could not save', description: error.message }),
   });
 
-  /*
-   * Both artifacts the API produces, not only one of them.
-   *
-   * `evidence_matrix` in CSV and XLSX has been generated by the same job as the PDF report
-   * from the beginning, and nothing in the product asked for it — a supported output with
-   * no way to request it, and two translated labels sitting unused beside the one that
-   * worked. A matrix is what somebody takes into a review meeting: one row per
-   * requirement, its result, its locator and its quotation, in something they can sort.
-   */
-  const generate = useMutation({
-    mutationFn: (request: { kind: 'compliance_report' | 'evidence_matrix'; format: string }) =>
-      api.post(
-        `/consultations/${consultation.id}/reports`,
-        {
-          reviewId: null,
-          messageId: [...consultation.messages].reverse().find((m) => m.answer)?.id ?? null,
-          format: request.format,
-          kind: request.kind,
-          idempotencyKey: newIdempotencyKey(),
-        },
-        newIdempotencyKey(),
-      ),
-    onSuccess: () =>
-      push({
-        tone: 'success',
-        title: 'Queued',
-        description: 'It appears in Reports when ready.',
-      }),
-    onError: (error: ApiError) =>
-      push({ tone: 'error', title: 'Could not create it', description: error.message }),
-  });
-
   const projectSource = consultation.sources.find((s) => s.role === 'project');
 
   // A correction plan is built by a job, so the panel polls from the moment one is
@@ -1175,6 +1230,49 @@ function EvidencePanel({
 
   const content = (
     <div className="flex flex-col gap-5">
+      {/*
+        What this conversation is grounded in, and the way to change it.
+        The chips used to sit under the title, where they were a permanent restatement of
+        something that changes about once per consultation. Here they are next to the
+        button that edits them, which is where somebody looks when they want to.
+      */}
+      <section className="rounded-[var(--uxe-radius-card)] border border-[var(--uxe-border)] p-3.5">
+        <h3 className="text-[14px] font-semibold text-[var(--uxe-text)]">
+          {t('consult.sourcesInScope')}
+        </h3>
+        {consultation.sources.length === 0 ? (
+          <p className="mt-1.5 text-[13px] text-[var(--uxe-text-secondary)]">
+            {t('consult.noSources')}
+          </p>
+        ) : (
+          <ul className="mt-2 flex flex-col gap-1.5">
+            {consultation.sources.map((source) => (
+              <li key={source.sourceId} className="flex items-center gap-2 text-[13px]">
+                <FileText
+                  className={cn(
+                    'h-3.5 w-3.5 shrink-0',
+                    source.role === 'governing'
+                      ? 'text-[var(--uxe-cobalt)]'
+                      : 'text-[var(--uxe-teal)]',
+                  )}
+                  aria-hidden
+                />
+                <span className="truncate text-[var(--uxe-text)]">{source.title}</span>
+                {source.pages !== null && (
+                  <span className="shrink-0 text-[var(--uxe-text-secondary)]">
+                    · {source.pages}p
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+        <Button variant="secondary" size="sm" full className="mt-2.5" onClick={onManageSources}>
+          <Settings2 className="h-3.5 w-3.5" aria-hidden />
+          {t('consult.manageSources')}
+        </Button>
+      </section>
+
       <section>
         <h3 className="text-[14px] font-semibold text-[var(--uxe-text)]">
           {t('consult.answerStyle')}
@@ -1380,69 +1478,20 @@ function EvidencePanel({
           }
         />
       </section>
-
-      <Button
-        variant="secondary"
-        full
-        onClick={() => generate.mutate({ kind: 'compliance_report', format: 'pdf' })}
-        loading={generate.isPending && generate.variables?.kind === 'compliance_report'}
-        disabled={!latestAnswer}
-      >
-        <FileText className="h-4 w-4" aria-hidden />
-        {t('consult.createReport')}
-      </Button>
-
-      <div className="flex flex-wrap gap-2">
-        <Button
-          variant="ghost"
-          size="sm"
-          className="flex-1"
-          onClick={() => generate.mutate({ kind: 'evidence_matrix', format: 'csv' })}
-          loading={
-            generate.isPending &&
-            generate.variables?.kind === 'evidence_matrix' &&
-            generate.variables.format === 'csv'
-          }
-          disabled={!latestAnswer}
-        >
-          <Table2 className="h-4 w-4" aria-hidden />
-          {t('evidence.downloadCsv')}
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="flex-1"
-          onClick={() => generate.mutate({ kind: 'evidence_matrix', format: 'xlsx' })}
-          loading={
-            generate.isPending &&
-            generate.variables?.kind === 'evidence_matrix' &&
-            generate.variables.format === 'xlsx'
-          }
-          disabled={!latestAnswer}
-        >
-          <Table2 className="h-4 w-4" aria-hidden />
-          {t('evidence.downloadXlsx')}
-        </Button>
-      </div>
     </div>
   );
 
   return (
     <>
-      <aside
-        className="hidden w-[var(--uxe-rail-width)] shrink-0 overflow-y-auto border-s border-[var(--uxe-border)] bg-[var(--uxe-surface)] p-4 xl:block"
-        aria-label={t('consult.evidenceOutput')}
-      >
-        <h2 className="mb-4 text-[16px] font-semibold text-[var(--uxe-text)]">
-          {t('consult.evidenceOutput')}
-        </h2>
-        {content}
-      </aside>
-
+      {/*
+        The panel is only ever a slide-over now, at every width.
+        It used to also be a permanent rail on desktop, which meant the same controls were
+        rendered twice and the conversation gave up 360px to settings that are set once.
+      */}
       <SlideOver
         open={open}
         onOpenChange={onOpenChange}
-        title={t('consult.evidenceOutput')}
+        title={t('consult.consultationSettings')}
         width="md"
       >
         {content}

@@ -80,15 +80,21 @@ export async function openConsultation(page: Page, name: RegExp): Promise<void> 
   await waitForSettled(page);
 }
 
-/** Opens the Evidence & Output panel, which is a drawer below 1280px. */
+/**
+ * Opens the consultation settings panel.
+ *
+ * It used to be a permanent rail on desktop and a drawer below 1280px, so the helper had
+ * to guess which. It is one slide-over behind a gear at every width now, which is both
+ * simpler to drive and the same thing every user sees.
+ */
 export async function openEvidencePanel(page: Page): Promise<void> {
-  const heading = page.getByRole('heading', { name: /evidence & output/i }).first();
-  if (await heading.isVisible().catch(() => false)) return;
+  const panel = page.getByRole('dialog', { name: /consultation settings/i });
+  if (await panel.isVisible().catch(() => false)) return;
 
-  const toggle = page.getByRole('button', { name: /evidence|output/i }).first();
-  if (await toggle.isVisible().catch(() => false)) {
-    await toggle.click();
-    await page.waitForTimeout(600);
+  const gear = page.getByRole('button', { name: /consultation settings/i }).first();
+  if (await gear.isVisible().catch(() => false)) {
+    await gear.click();
+    await panel.waitFor({ state: 'visible', timeout: 10_000 }).catch(() => {});
   }
 }
 
