@@ -332,11 +332,11 @@ export function evaluateRequirement(
     return {
       result: 'needs_evidence',
       risk: requirement.modality === 'prohibited' ? 'high' : 'medium',
-      finding: `Nothing on the reviewed sheets addresses ${requirement.reference}. The obligation is therefore unproven, not disproven — it cannot be verified from the drawing.`,
+      finding: `${requirement.reference} requires ${obligationInPlainWords(requirement)}. Nothing on the reviewed sheets covers this.`,
       confidence: 0.4,
       missingEvidence: requirement.keyTerms.slice(0, 6),
       conflicts: [],
-      recommendedAction: `Provide the document or section that demonstrates how ${requirement.reference} is satisfied.`,
+      recommendedAction: `Show on the drawing that ${obligationInPlainWords(requirement)} (${requirement.reference}), or supply the document that does.`,
       supportingEvidenceIndexes: [],
     };
   }
@@ -362,7 +362,7 @@ export function evaluateRequirement(
   if (disputed.length > 0) {
     const hit = disputed[0] as AnchoredComparison;
     const other = hit.disputed as AnchoredComparison;
-    const description = `${requirement.reference} requires ${formatQuantity(hit.required.unit, hit.required.value)}${describeAnchor(hit.sharedSubject)}, but the submission states both ${hit.observed.raw} and ${other.observed.raw} for it.`;
+    const description = `${requirement.reference} requires ${formatQuantity(hit.required.unit, hit.required.value)}. The drawing states both ${hit.observed.raw} and ${other.observed.raw}.`;
     return {
       result: 'needs_evidence',
       risk: 'medium',
@@ -379,7 +379,7 @@ export function evaluateRequirement(
 
   if (breaches.length > 0) {
     const conflicts = breaches.map((c) => ({
-      description: `${requirement.reference} specifies ${formatQuantity(c.required.unit, c.required.value)} but the project document states ${c.observed.raw}${describeAnchor(c.sharedSubject)}.`,
+      description: `${requirement.reference} requires ${formatQuantity(c.required.unit, c.required.value)}. The drawing states ${c.observed.raw}.`,
       evidenceIndexes: [c.evidenceIndex],
     }));
     return {
@@ -400,11 +400,19 @@ export function evaluateRequirement(
     // A numeric obligation met by a stated project value is demonstrable compliance, and
     // is stronger evidence than term overlap.
     const hit = meets[0] as AnchoredComparison;
-    const item = evidence[hit.evidenceIndex];
+    /*
+     * The finding says what was found; the citation carries the quotation.
+     *
+     * It used to end with `Supporting text: "..."`, which put a quoted passage inside a
+     * sentence that is also shown where no evidence is meant to appear — a report asked
+     * for without its evidence still carried quotations, smuggled through the one field
+     * that was never filtered. The excerpt travels with the citation, which is what gets
+     * dropped when evidence is excluded.
+     */
     return {
       result: 'compliant',
       risk: 'none',
-      finding: `${requirement.reference} requires ${formatQuantity(hit.required.unit, hit.required.value)} and the project document states ${hit.observed.raw}${describeAnchor(hit.sharedSubject)}, which satisfies it.${item ? ` Supporting text: "${truncate(item.excerpt, 150)}"` : ''}`,
+      finding: `${requirement.reference} requires ${formatQuantity(hit.required.unit, hit.required.value)}. The drawing states ${hit.observed.raw}, which meets it.`,
       confidence: 0.88,
       missingEvidence: [],
       conflicts: [],
@@ -421,7 +429,9 @@ export function evaluateRequirement(
     return {
       result: 'non_compliant',
       risk: 'high',
-      finding: `The project document states a position that conflicts with ${requirement.reference}: "${truncate(negating.excerpt, 180)}"`,
+      // Same rule as the compliant branch: no quotation inside the finding sentence. The
+      // conflicting passage is the citation attached to this finding.
+      finding: `The drawing states the opposite of what ${requirement.reference} requires: ${obligationInPlainWords(requirement)}.`,
       confidence: 0.72,
       missingEvidence: [],
       conflicts: [
@@ -480,15 +490,14 @@ export function evaluateRequirement(
    */
   const numeric = requirement.measurements[0];
   if (numeric && comparisons.length === 0) {
-    const subject = requirement.keyTerms.slice(0, 3).join(', ');
     return {
       result: 'needs_evidence',
       risk: requirement.modality === 'prohibited' ? 'high' : 'medium',
-      finding: `${requirement.reference} sets a figure of ${formatQuantity(numeric.unit, numeric.value)}${subject ? ` for ${subject}` : ''}. No value annotated to that subject appears on the reviewed sheets, so this cannot be verified from the drawing.`,
+      finding: `${requirement.reference} requires ${obligationInPlainWords(requirement)}. The drawing gives no figure for it.`,
       confidence: 0.4 + coverage * 0.2,
       missingEvidence: uncoveredTerms(requirement, best),
       conflicts: [],
-      recommendedAction: `Annotate the ${formatQuantity(numeric.unit, numeric.value)} required by ${requirement.reference} on the relevant sheet, or supply the calculation that demonstrates it.`,
+      recommendedAction: `Mark the ${formatQuantity(numeric.unit, numeric.value)} required by ${requirement.reference} on the drawing.`,
       supportingEvidenceIndexes: supporting,
     };
   }
@@ -497,7 +506,7 @@ export function evaluateRequirement(
     return {
       result: 'compliant',
       risk: 'none',
-      finding: `The project documents address ${requirement.reference}. Supporting text: "${truncate(top.excerpt, 180)}"`,
+      finding: `The drawing shows ${obligationInPlainWords(requirement)}, as ${requirement.reference} requires.`,
       confidence: Math.min(0.95, 0.55 + coverage * 0.4),
       missingEvidence: [],
       conflicts: [],
@@ -524,16 +533,73 @@ export function evaluateRequirement(
   return {
     result: 'needs_evidence',
     risk: requirement.modality === 'prohibited' ? 'high' : 'medium',
-    finding:
-      uncovered.length > 0
-        ? `The passages located for ${requirement.reference} do not show: ${uncovered.join(', ')}.`
-        : `The submission mentions the subject of ${requirement.reference}, but the passage found is not specific enough to demonstrate compliance.`,
+    finding: `${requirement.reference} requires ${obligationInPlainWords(requirement)}. The drawing does not show it.`,
     confidence: 0.4 + coverage * 0.25,
     missingEvidence: uncovered,
     conflicts: [],
-    recommendedAction: `Show ${uncovered.length > 0 ? uncovered.join(', ') : requirement.reference} on the drawing, or supply the document that evidences it.`,
+    recommendedAction: `Show on the drawing that ${obligationInPlainWords(requirement)} (${requirement.reference}).`,
     supportingEvidenceIndexes: supporting,
   };
+}
+
+/**
+ * The obligation as the clause states it, short enough to read at a glance.
+ *
+ * What used to be here was the matcher's own leftovers — "do not evidence: area, included,
+ * civil, construction, defence, horizontal" and, worse, stemmed fragments like "featur".
+ * That is the internals of a term-overlap score printed at a reader who wants to know what
+ * to draw. It also reached the recommended actions verbatim, so the instruction a person
+ * was given read "Supply the section that demonstrates window, outward, see, top".
+ *
+ * The clause's own first sentence says what is required, in the words of the code the
+ * reader is being held to. Trimmed of the modal preamble because "shall be provided" is
+ * true of every clause and carries nothing.
+ */
+function obligationInPlainWords(requirement: RequirementDraft): string {
+  /*
+   * The first sentence is usually the obligation, but not always.
+   *
+   * Clause bodies in a real code begin with list markers — "a.", "iii." — and splitting on
+   * full stops turns those into sentences of their own. Taking the first one blindly
+   * produced findings that read "2.16.6.3 requires a.", which is worse than the token
+   * lists it replaced. So the first sentence with something in it is used, and the
+   * clause's own title stands in when none of them has.
+   */
+  const candidate =
+    splitSentences(requirement.obligationText).find((sentence) => isSubstantive(sentence)) ??
+    (isSubstantive(requirement.title) ? requirement.title : requirement.obligationText);
+
+  const trimmed = normalizeWhitespace(candidate)
+    // Drop the list marker a sentence may still carry, then the modal preamble: "shall be
+    // provided" is true of every clause in the book and tells a reader nothing.
+    .replace(/^(?:[a-z]|[ivx]{1,4}|\d{1,2})[.)]\s+/i, '')
+    .replace(/\s*\b(?:shall|must)\s+(not\s+)?(?:be\s+)?/i, (_m, negated: string | undefined) =>
+      negated === undefined ? ' ' : ' not ',
+    )
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/[.;:,]+$/, '');
+
+  // Short enough to read in the row it sits in. A reader who wants the full wording opens
+  // the clause, which every finding cites.
+  const short = trimmed.length > 110 ? `${cutOnWord(trimmed, 110)}...` : trimmed;
+  return short.charAt(0).toLowerCase() + short.slice(1);
+}
+
+/** Enough words to mean something, rather than a numbering artefact. */
+function isSubstantive(text: string): boolean {
+  const words = normalizeWhitespace(text)
+    .replace(/^(?:[a-z]|[ivx]{1,4}|\d{1,2})[.)]\s*/i, '')
+    .split(' ')
+    .filter((word) => /\p{L}{3}/u.test(word));
+  return words.length >= 3;
+}
+
+/** Truncates on a word boundary, so a clause never ends mid-word. */
+function cutOnWord(text: string, max: number): string {
+  const clipped = text.slice(0, max);
+  const lastSpace = clipped.lastIndexOf(' ');
+  return (lastSpace > max * 0.6 ? clipped.slice(0, lastSpace) : clipped).trimEnd();
 }
 
 /**
@@ -671,11 +737,6 @@ export function anchoredComparisons(
   });
 }
 
-/** Renders the subject words that justify a numeric comparison, for the finding text. */
-function describeAnchor(sharedSubject: string[]): string {
-  return sharedSubject.length > 0 ? ` for ${sharedSubject.join(', ')}` : '';
-}
-
 function uncoveredTerms(requirement: RequirementDraft, evidence: RequirementEvidence[]): string[] {
   const covered = new Set<string>();
   for (const item of evidence) {
@@ -727,22 +788,23 @@ function negatesObligation(requirement: RequirementDraft, passage: string): bool
   return (requirementRequires && passageProhibits) || (requirementProhibits && passageRequires);
 }
 
+/** "45.00" -> "45", "1.20" -> "1.2". */
+function trimZeros(value: string): string {
+  return value.includes('.') ? value.replace(/\.?0+$/, '') : value;
+}
+
 function formatQuantity(unit: string, value: number): string {
   const labels: Record<string, (v: number) => string> = {
-    length_m: (v) => (v < 1 ? `${(v * 1000).toFixed(0)} mm` : `${v.toFixed(2)} m`),
+    // Trailing zeros are noise: a 45 m limit is written "45 m", not "45.00 m".
+    length_m: (v) => (v < 1 ? `${(v * 1000).toFixed(0)} mm` : `${trimZeros(v.toFixed(2))} m`),
     time_s: (v) => (v >= 60 ? `${(v / 60).toFixed(0)} min` : `${v.toFixed(0)} s`),
-    mass_kg: (v) => `${v.toFixed(2)} kg`,
+    mass_kg: (v) => `${trimZeros(v.toFixed(2))} kg`,
     percent: (v) => `${v.toFixed(0)}%`,
     illuminance_lx: (v) => `${v.toFixed(0)} lux`,
     pressure_pa: (v) => `${(v / 1000).toFixed(1)} kPa`,
     people: (v) => `${v.toFixed(0)} persons`,
   };
   return labels[unit]?.(value) ?? `${value} ${unit}`;
-}
-
-function truncate(text: string, max: number): string {
-  const clean = normalizeWhitespace(text);
-  return clean.length <= max ? clean : `${clean.slice(0, max).trimEnd()}...`;
 }
 
 /** Rolls the individual verdicts up into the review-level risk level. */

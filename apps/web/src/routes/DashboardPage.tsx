@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -30,6 +30,7 @@ import {
   LoadingRegion,
   Select,
   Skeleton,
+  useToast,
   cn,
   formatRelative,
 } from '@uxe/ui';
@@ -43,8 +44,24 @@ import { PageHeader } from '../components/PageHeader.js';
 export function DashboardPage() {
   const { t, locale, formatNumber } = useI18n();
   const navigate = useNavigate();
+  const { push } = useToast();
   const [days, setDays] = useState(30);
   const [showTable, setShowTable] = useState(false);
+
+  /*
+   * "Start consultation" starts one.
+   *
+   * It used to navigate to /consult, which has nothing open, so the button labelled start
+   * landed on a page inviting you to start — two clicks and an identical screen for what
+   * reads as a single action. It creates the consultation and opens it.
+   */
+  const start = useMutation({
+    mutationFn: () =>
+      api.post<{ id: string }>('/consultations', { title: 'New consultation', taskMode: 'ask' }),
+    onSuccess: (created) => navigate(`/consult/${created.id}`),
+    onError: (error: ApiError) =>
+      push({ tone: 'error', title: 'Could not start a consultation', description: error.message }),
+  });
 
   const query = useQuery<DashboardResponse, ApiError>({
     queryKey: ['dashboard', days],
@@ -80,7 +97,11 @@ export function DashboardPage() {
       <h1 className="sr-only">{t('nav.dashboard')}</h1>
 
       <div className="flex min-w-0 flex-col gap-5">
-        <GreetingBanner name={data.greetingName} onStart={() => navigate('/consult')} />
+        <GreetingBanner
+          name={data.greetingName}
+          onStart={() => start.mutate()}
+          starting={start.isPending}
+        />
 
         {isEmpty ? (
           <Card>
@@ -94,7 +115,11 @@ export function DashboardPage() {
                 </Button>
               }
               secondaryAction={
-                <Button variant="secondary" onClick={() => navigate('/consult')}>
+                <Button
+                  variant="secondary"
+                  onClick={() => start.mutate()}
+                  loading={start.isPending}
+                >
                   {t('dashboard.startConsultation')}
                 </Button>
               }
@@ -180,7 +205,12 @@ export function DashboardPage() {
                       title={t('dashboard.noConsultations')}
                       description={t('dashboard.noConsultationsHint')}
                       action={
-                        <Button variant="primary" size="sm" onClick={() => navigate('/consult')}>
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          onClick={() => start.mutate()}
+                          loading={start.isPending}
+                        >
                           {t('dashboard.startConsultation')}
                         </Button>
                       }
@@ -274,7 +304,15 @@ export function DashboardPage() {
 /* Pieces                                                                     */
 /* -------------------------------------------------------------------------- */
 
-function GreetingBanner({ name, onStart }: { name: string; onStart: () => void }) {
+function GreetingBanner({
+  name,
+  onStart,
+  starting,
+}: {
+  name: string;
+  onStart: () => void;
+  starting: boolean;
+}) {
   const { t } = useI18n();
   const hour = new Date().getHours();
   const key =
@@ -307,6 +345,7 @@ function GreetingBanner({ name, onStart }: { name: string; onStart: () => void }
           variant="primary"
           size="lg"
           onClick={onStart}
+          loading={starting}
           className="shrink-0 max-sm:h-11 max-sm:px-4"
         >
           <Sparkles className="h-4 w-4" aria-hidden />

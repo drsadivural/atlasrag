@@ -142,32 +142,45 @@ describe('compliance reports', () => {
     expect([bytes[0], bytes[1]]).toEqual([0x50, 0x4b]);
   }, 300_000);
 
-  it('omits the evidence matrix when asked to, and says on the report that it did', async () => {
+  it('drops the citations but keeps the findings when evidence is excluded', async () => {
     /*
-     * The option exists so a decision can be circulated without a hundred pages of
-     * quotations behind it. What it must never produce is a document that looks complete
-     * and is not — so the shorter edition carries a line saying what was left out and how
-     * many findings there were, and the artifact records that it went out that way.
+     * The option exists so a verdict can be circulated without the quotations behind it.
+     * What must survive is every requirement tested and its result — that is the report.
+     * What goes is the block under each one that starts with the document name: source,
+     * version, clause, page and quoted passage.
      */
-    const { artifactId } = await generateReport('markdown', 'compliance_report', {
+    const withEvidence = await generateReport('markdown');
+    const full = new TextDecoder().decode(await downloadArtifact(withEvidence.artifactId));
+
+    const withoutEvidence = await generateReport('markdown', 'compliance_report', {
       includeEvidence: false,
     });
-    const text = new TextDecoder().decode(await downloadArtifact(artifactId));
+    const short = new TextDecoder().decode(await downloadArtifact(withoutEvidence.artifactId));
 
-    expect(text).toMatch(/omits the evidence matrix/i);
-    expect(text).toMatch(/finding\(s\) were assessed/i);
-    // The matrix section is gone; the verdict and the summary survive.
-    expect(text).not.toMatch(/## Evidence matrix/);
-    expect(text).toMatch(/## Summary/);
+    // The findings survive: same requirement column, same number of rows.
+    const rowsIn = (text: string) =>
+      text.split('\n').filter((line) => line.startsWith('| ')).length;
+    expect(rowsIn(short)).toBe(rowsIn(full));
+    expect(short).toMatch(/## Findings/);
+    expect(short).toMatch(/## Summary/);
+
+    // The citation columns do not.
+    expect(full).toMatch(/\| Source \|/);
+    expect(short).not.toMatch(/\| Source \|/);
+    expect(short).not.toMatch(/\| Excerpt \|/);
+
+    // And the document says it went out that way, rather than looking complete.
+    expect(short).toMatch(/without their evidence/i);
+    expect(short).toMatch(/not reproduced here/i);
   }, 300_000);
 
-  it('includes the evidence matrix by default', async () => {
+  it('includes the evidence by default', async () => {
     const { artifactId } = await generateReport('markdown');
     const text = new TextDecoder().decode(await downloadArtifact(artifactId));
 
     expect(text).toMatch(/## Evidence matrix/);
     expect(text).toMatch(/traceable to the source version/i);
-    expect(text).not.toMatch(/omits the evidence matrix/i);
+    expect(text).not.toMatch(/without their evidence/i);
   }, 300_000);
 
   it('produces an evidence matrix export with one row per finding', async () => {

@@ -14,11 +14,11 @@ from typing import Any
 
 from .pdfkit import (
     BOLD,
-    COBALT,
     DANGER,
     Document,
     INK,
     MUTED,
+    NAVY,
     SUCCESS,
     WARNING,
 )
@@ -41,113 +41,190 @@ RESULT_LABELS = {
 def build_pdf(payload: dict[str, Any]) -> bytes:
     """Renders a report PDF.
 
+    Laid out as a document somebody files, not a screen printed to paper: a running head on
+    every page, a table at the top saying what this is and what it concluded, numbered
+    sections, and findings in a table rather than a scroll of stacked paragraphs.
+
     Layout goes through `pdfkit.Document`, which measures every line before drawing it, so
     a long evidence matrix paginates rather than silently truncating.
     """
-    doc = Document()
-    doc.footer_text = "UXE Consulting AI  -  verified answers, exact evidence, corrected documents"
+    title = payload.get("title") or "Compliance report"
+    doc = Document(
+        header_left="UXE Consulting AI - Compliance report",
+        header_right=f"Generated {str(payload.get('generatedAt', ''))[:10]}",
+        footer_text="UXE Consulting AI  -  verified answers, exact evidence",
+    )
 
-    doc.text("UXE CONSULTING AI", size=9.5, color=COBALT, bold=True, gap=4)
-    doc.text(payload.get("title") or "Compliance report", size=22, bold=True, gap=4)
+    doc.text(title, size=19, color=NAVY, bold=True, gap=4)
     if payload.get("subtitle"):
-        doc.text(payload["subtitle"], size=11.5, color=MUTED, gap=8)
-    doc.text(f"Generated {payload.get('generatedAt', '')}", size=8.5, color=MUTED, gap=12)
+        doc.text(
+            f"Compliance review of the submitted documents against the approved knowledge base.  -  {payload['subtitle']}",
+            size=9,
+            color=MUTED,
+            gap=12,
+        )
 
+    # --- What this document is, before anything it concludes ------------------
     decision = payload.get("decision")
     qualifier = payload.get("decisionQualifier")
-    if decision:
-        label = (qualifier or decision).upper()
-        color = DANGER if decision == "no" else SUCCESS if decision == "yes" else MUTED
-        doc.pill(label, color, gap=8)
-
+    verdict = (qualifier or decision or "Not determined").upper()
     coverage = float(payload.get("coverage") or 0) * 100
     confidence = float(payload.get("confidence") or 0) * 100
-    doc.key_values(
-        [
-            ("Evidence coverage", f"{coverage:.0f}%"),
-            ("Confidence", f"{confidence:.0f}%"),
-        ],
-        gap=2,
-    )
-    doc.rule()
+    rows = payload.get("rows") or []
+    counts = _count_results(rows)
 
-    doc.heading("Summary")
-    doc.text(payload.get("summary") or "", size=10, gap=14)
+    doc.meta_table(
+        [
+            ("Verdict", verdict),
+            ("Reviewed", _documents_line(payload.get("documentsReviewed") or [])),
+            (
+                "Result",
+                f"{counts['compliant']} met, {counts['non_compliant']} not met, "
+                f"{counts['needs_evidence']} cannot be verified from the documents supplied."
+                if rows
+                else "The evidence matrix is not included in this edition.",
+            ),
+            ("Confidence", f"Evidence coverage {coverage:.0f}%  -  Confidence {confidence:.0f}%"),
+        ]
+    )
+
+    section = 0
+
+    section += 1
+    doc.section(section, "Summary")
+    doc.text(payload.get("summary") or "", size=9.5, gap=14)
 
     documents = payload.get("documentsReviewed") or []
     if documents:
-        doc.heading("Documents reviewed")
-        for item in documents:
-            pages = f", {item.get('pages')} pages" if item.get("pages") else ""
-            doc.text(
-                f"-  {item.get('title')}  ({item.get('version')}, {item.get('role')}{pages})",
-                size=9.5,
-                gap=3,
-            )
-        doc.space(10)
+        section += 1
+        doc.section(section, "Documents reviewed")
+        doc.table(
+            ["Document", "Version", "Role", "Pages"],
+            [
+                [
+                    str(item.get("title", "")),
+                    str(item.get("version", "")),
+                    "Knowledge base" if item.get("role") == "governing" else "Submitted",
+                    str(item.get("pages") or "-"),
+                ]
+                for item in documents
+            ],
+            widths=[0.52, 0.12, 0.24, 0.12],
+        )
 
     assumptions = payload.get("assumptions") or []
     if assumptions:
-        doc.heading("Assumptions and scope limits")
+        section += 1
+        doc.section(section, "Scope of this review")
         for item in assumptions:
-            doc.text(f"-  {item}", size=9, color=MUTED, gap=3)
-        doc.space(10)
+            doc.text(f"-  {item}", size=9, color=MUTED, gap=4)
+        doc.space(8)
 
-    rows = payload.get("rows") or []
     if rows:
-        doc.rule()
-        doc.heading("Evidence matrix")
+        section += 1
+        doc.section(section, "Findings")
+        doc.text(
+            "One row per requirement tested. The clause and page are where the requirement "
+            "comes from; the quoted text is what the submitted document says.",
+            size=9,
+            color=MUTED,
+            gap=10,
+        )
         for index, row in enumerate(rows, start=1):
-            result = row.get("result", "not_assessed")
-            requirement = f"{index}.  {row.get('requirement', '')}"
-            # Reserve the whole row so a heading never strands at the foot of a page.
-            doc.keep_together(
-                doc.measure(requirement, 11, bold=True)
-                + doc.measure(row.get("finding", ""), 9.5)
-                + doc.measure(row.get("excerpt", ""), 9, indent=14)
-                + 60
-            )
-            doc.text(requirement, size=11, bold=True, gap=3)
-            doc.text(
-                RESULT_LABELS.get(result, result).upper(),
-                size=8.5,
-                color=RESULT_COLORS.get(result, MUTED),
-                bold=True,
-                gap=4,
-            )
-            doc.text(row.get("finding", ""), size=9.5, gap=5)
-
-            page = f"  -  p. {row.get('page')}" if row.get("page") else ""
-            verified = "verified" if row.get("verified") else "UNVERIFIED"
-            doc.text(
-                f"{row.get('source', '-')} ({row.get('version', '-')})  -  {row.get('location') or '-'}{page}  -  [{verified}]",
-                size=8.5,
-                color=MUTED if row.get("verified") else WARNING,
-                gap=4,
-            )
-
-            excerpt = (row.get("excerpt") or "").strip()
-            if excerpt:
-                doc.text(f'"{excerpt}"', size=9, color=MUTED, indent=14, gap=8)
-            doc.rule(gap=10)
+            _draw_finding(doc, index, row)
 
     recommendations = payload.get("recommendations") or []
     if recommendations:
-        doc.heading("Recommended actions")
-        for item in recommendations:
-            priority = str(item.get("priority", "")).upper()
-            color = DANGER if priority == "CRITICAL" else WARNING if priority == "HIGH" else INK
-            doc.text(f"[{priority}]  {item.get('action', '')}", size=9.5, color=color, gap=5)
-        doc.space(10)
+        section += 1
+        doc.section(section, "What to do next")
+        doc.table(
+            ["Priority", "Action"],
+            [
+                [str(item.get("priority", "")).upper(), str(item.get("action", ""))]
+                for item in recommendations
+            ],
+            widths=[0.16, 0.84],
+            emphasis=[0],
+        )
 
     disclosures = payload.get("disclosures") or []
     if disclosures:
-        doc.rule()
-        doc.heading("Disclosures", size=12)
-        for item in disclosures:
-            doc.text(f"-  {item}", size=8.5, color=MUTED, gap=3)
+        doc.callout("How to read this.", "  ".join(str(item) for item in disclosures))
 
     return doc.finish()
+
+
+def _has_evidence(rows: list[dict[str, Any]]) -> bool:
+    """Whether any row carries a citation.
+
+    When evidence is excluded the API sends the rows with their source, locator, page and
+    excerpt blanked. Rendering those as empty columns would leave four dead columns in a
+    spreadsheet and an empty quotation mark in a document, so each builder drops them
+    instead of printing nothing into them.
+    """
+    return any((row.get("source") or "").strip() for row in rows)
+
+
+def _count_results(rows: list[dict[str, Any]]) -> dict[str, int]:
+    counts = {"compliant": 0, "non_compliant": 0, "needs_evidence": 0, "not_assessed": 0}
+    for row in rows:
+        key = row.get("result", "not_assessed")
+        if key in counts:
+            counts[key] += 1
+    return counts
+
+
+def _documents_line(documents: list[dict[str, Any]]) -> str:
+    knowledge = [d.get("title", "") for d in documents if d.get("role") == "governing"]
+    submitted = [d.get("title", "") for d in documents if d.get("role") != "governing"]
+    parts = []
+    if submitted:
+        parts.append(f"Submitted: {', '.join(submitted)}")
+    if knowledge:
+        parts.append(f"Against: {', '.join(knowledge)}")
+    return "  -  ".join(parts) or "-"
+
+
+def _draw_finding(doc: Document, index: int, row: dict[str, Any]) -> None:
+    """One requirement, its verdict, and — when present — where the evidence came from.
+
+    The source line and the quotation are drawn only if the payload carries them. That is
+    what "include evidence" turns off: the requirement and the verdict stay, the citation
+    block starting with the document name goes.
+    """
+    result = row.get("result", "not_assessed")
+    requirement = f"{index}.  {row.get('requirement', '')}"
+    excerpt = (row.get("excerpt") or "").strip()
+    source = str(row.get("source") or "").strip()
+
+    doc.keep_together(
+        doc.measure(requirement, 10.5, bold=True)
+        + doc.measure(str(row.get("finding", "")), 9.5)
+        + (doc.measure(excerpt, 9, indent=14) if excerpt else 0)
+        + 52
+    )
+    doc.text(requirement, size=10.5, bold=True, gap=3)
+    doc.text(
+        RESULT_LABELS.get(result, result).upper(),
+        size=8,
+        color=RESULT_COLORS.get(result, MUTED),
+        bold=True,
+        gap=4,
+    )
+    doc.text(str(row.get("finding", "")), size=9.5, gap=5)
+
+    if source:
+        page = f"  -  p. {row.get('page')}" if row.get("page") else ""
+        verified = "verified" if row.get("verified") else "UNVERIFIED"
+        doc.text(
+            f"{source} ({row.get('version', '-')})  -  {row.get('location') or '-'}{page}  -  [{verified}]",
+            size=8,
+            color=MUTED if row.get("verified") else WARNING,
+            gap=4,
+        )
+    if excerpt:
+        doc.text(f'"{excerpt}"', size=9, color=MUTED, indent=14, gap=8)
+    doc.rule(gap=10)
 
 
 def build_docx(payload: dict[str, Any]) -> bytes:
@@ -200,10 +277,13 @@ def build_docx(payload: dict[str, Any]) -> bytes:
 
     rows = payload.get("rows") or []
     if rows:
-        document.add_heading("Evidence matrix", level=1)
-        table = document.add_table(rows=1, cols=6)
+        with_evidence = _has_evidence(rows)
+        document.add_heading("Findings" if not with_evidence else "Evidence matrix", level=1)
+        headers = ["Requirement", "Result", "Finding"]
+        if with_evidence:
+            headers += ["Source", "Location", "Excerpt"]
+        table = document.add_table(rows=1, cols=len(headers))
         table.style = "Light Grid Accent 1"
-        headers = ["Requirement", "Result", "Finding", "Source", "Location", "Excerpt"]
         for index, header in enumerate(headers):
             cell = table.rows[0].cells[index]
             cell.text = header
@@ -216,11 +296,12 @@ def build_docx(payload: dict[str, Any]) -> bytes:
             cells[0].text = str(row.get("requirement", ""))
             cells[1].text = RESULT_LABELS.get(row.get("result", ""), str(row.get("result", "")))
             cells[2].text = str(row.get("finding", ""))
-            cells[3].text = f"{row.get('source', '')} ({row.get('version', '')})"
-            page = f" p.{row.get('page')}" if row.get("page") else ""
-            verified = "" if row.get("verified") else " [UNVERIFIED]"
-            cells[4].text = f"{row.get('location', '')}{page}{verified}"
-            cells[5].text = str(row.get("excerpt", ""))
+            if with_evidence:
+                cells[3].text = f"{row.get('source', '')} ({row.get('version', '')})"
+                page = f" p.{row.get('page')}" if row.get("page") else ""
+                verified = "" if row.get("verified") else " [UNVERIFIED]"
+                cells[4].text = f"{row.get('location', '')}{page}{verified}"
+                cells[5].text = str(row.get("excerpt", ""))
 
     recommendations = payload.get("recommendations") or []
     if recommendations:
@@ -257,8 +338,18 @@ EVIDENCE_HEADERS = [
 ]
 
 
-def _evidence_row(row: dict[str, Any]) -> list[str]:
-    return [
+# Columns that only exist when the evidence behind a finding is being reproduced.
+_EVIDENCE_COLUMNS = (3, 4, 5, 6, 7, 8, 10)
+
+
+def _headers(with_evidence: bool) -> list[str]:
+    if with_evidence:
+        return EVIDENCE_HEADERS
+    return [h for i, h in enumerate(EVIDENCE_HEADERS) if i not in _EVIDENCE_COLUMNS]
+
+
+def _evidence_row(row: dict[str, Any], with_evidence: bool = True) -> list[str]:
+    cells = [
         str(row.get("requirement", "")),
         RESULT_LABELS.get(row.get("result", ""), str(row.get("result", ""))),
         str(row.get("finding", "")),
@@ -271,14 +362,19 @@ def _evidence_row(row: dict[str, Any]) -> list[str]:
         f"{float(row.get('confidence') or 0) * 100:.0f}%",
         "yes" if row.get("verified") else "no",
     ]
+    if with_evidence:
+        return cells
+    return [c for i, c in enumerate(cells) if i not in _EVIDENCE_COLUMNS]
 
 
 def build_csv(payload: dict[str, Any]) -> bytes:
+    rows = payload.get("rows") or []
+    with_evidence = _has_evidence(rows)
     buffer = io.StringIO()
     writer = csv.writer(buffer, quoting=csv.QUOTE_ALL)
-    writer.writerow(EVIDENCE_HEADERS)
-    for row in payload.get("rows") or []:
-        writer.writerow(_evidence_row(row))
+    writer.writerow(_headers(with_evidence))
+    for row in rows:
+        writer.writerow(_evidence_row(row, with_evidence))
     # BOM so Excel opens UTF-8 correctly on Windows without mangling accented characters.
     return b"\xef\xbb\xbf" + buffer.getvalue().encode("utf-8")
 
@@ -294,16 +390,24 @@ def build_xlsx(payload: dict[str, Any]) -> bytes:
     header_fill = PatternFill("solid", fgColor="3156F5")
     header_font = Font(color="FFFFFF", bold=True)
 
-    sheet.append(EVIDENCE_HEADERS)
+    rows = payload.get("rows") or []
+    with_evidence = _has_evidence(rows)
+
+    sheet.append(_headers(with_evidence))
     for cell in sheet[1]:
         cell.fill = header_fill
         cell.font = header_font
         cell.alignment = Alignment(vertical="center", wrap_text=True)
 
-    for row in payload.get("rows") or []:
-        sheet.append(_evidence_row(row))
+    for row in rows:
+        sheet.append(_evidence_row(row, with_evidence))
 
-    widths = [34, 16, 58, 28, 12, 26, 8, 26, 64, 12, 10]
+    all_widths = [34, 16, 58, 28, 12, 26, 8, 26, 64, 12, 10]
+    widths = (
+        all_widths
+        if with_evidence
+        else [w for i, w in enumerate(all_widths) if i not in _EVIDENCE_COLUMNS]
+    )
     for index, width in enumerate(widths, start=1):
         sheet.column_dimensions[openpyxl.utils.get_column_letter(index)].width = width
 
@@ -377,27 +481,37 @@ def build_markdown(payload: dict[str, Any]) -> bytes:
             lines.append(f"- {item}")
         lines.append("")
 
-    if payload.get("rows"):
+    markdown_rows = payload.get("rows") or []
+    if markdown_rows:
+        with_evidence = _has_evidence(markdown_rows)
+        headers = ["Requirement", "Result", "Finding"]
+        if with_evidence:
+            headers += ["Source", "Location", "Page", "Excerpt"]
+        headers += ["Confidence", "Verified"] if with_evidence else ["Confidence"]
         lines.extend(
             [
-                "## Evidence matrix",
+                "## Evidence matrix" if with_evidence else "## Findings",
                 "",
-                "| Requirement | Result | Finding | Source | Location | Page | Excerpt | Confidence | Verified |",
-                "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+                "| " + " | ".join(headers) + " |",
+                "| " + " | ".join("---" for _ in headers) + " |",
             ]
         )
-        for row in payload["rows"]:
+        for row in markdown_rows:
             cells = [
                 str(row.get("requirement", "")),
                 RESULT_LABELS.get(row.get("result", ""), ""),
                 str(row.get("finding", "")),
-                str(row.get("source", "")),
-                str(row.get("location", "")),
-                str(row.get("page") or ""),
-                str(row.get("excerpt", "")),
-                f"{float(row.get('confidence') or 0) * 100:.0f}%",
-                "yes" if row.get("verified") else "no",
             ]
+            if with_evidence:
+                cells += [
+                    str(row.get("source", "")),
+                    str(row.get("location", "")),
+                    str(row.get("page") or ""),
+                    str(row.get("excerpt", "")),
+                ]
+            cells.append(f"{float(row.get('confidence') or 0) * 100:.0f}%")
+            if with_evidence:
+                cells.append("yes" if row.get("verified") else "no")
             # Escape pipes so a citation containing one cannot break the table.
             lines.append("| " + " | ".join(c.replace("|", "\\|").replace("\n", " ") for c in cells) + " |")
         lines.append("")

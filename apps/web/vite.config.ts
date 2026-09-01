@@ -2,6 +2,7 @@ import { defineConfig, type ProxyOptions } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { fileURLToPath } from 'node:url';
+import type { IncomingMessage, ServerResponse } from 'node:http';
 import { basicAuth } from './vite-basic-auth.js';
 
 /**
@@ -44,6 +45,39 @@ const basicAuthPlugin = process.env.WEB_BASIC_AUTH
  * build that talked to the API cross-origin would behave differently from production and
  * only fail after deploy.
  */
+/**
+ * Stops a browser holding yesterday's `index.html`.
+ *
+ * Route chunks carry a content hash and are replaced on every deploy. A browser that keeps
+ * the entry document then asks for a chunk filename that no longer exists, and the
+ * application fails to navigate with "Failed to fetch dynamically imported module" on a
+ * deployment that is working perfectly well.
+ *
+ * The hashed assets are immutable and cached for a year — the whole point of hashing them.
+ * The document that names them must never be, so a reload always learns the current set.
+ */
+type CacheMiddleware = (
+  req: IncomingMessage,
+  res: ServerResponse,
+  next: (error?: unknown) => void,
+) => void;
+
+const entryDocumentCachePlugin = {
+  name: 'uxe-entry-document-cache',
+  configurePreviewServer(server: { middlewares: { use: (fn: CacheMiddleware) => void } }) {
+    server.middlewares.use((req, res, next) => {
+      const path = (req.url ?? '').split('?')[0] ?? '';
+      if (path.startsWith('/assets/') && /\.[0-9a-zA-Z_-]{8,}\.(js|css)$/.test(path)) {
+        res.setHeader('cache-control', 'public, max-age=31536000, immutable');
+      } else if (path === '/' || path.endsWith('.html') || !path.includes('.')) {
+        // The document, and every client-routed path that resolves to it.
+        res.setHeader('cache-control', 'no-cache');
+      }
+      next();
+    });
+  },
+};
+
 const apiProxy: Record<string, ProxyOptions> = {
   '/api': {
     target: apiTarget,
@@ -60,7 +94,12 @@ const apiProxy: Record<string, ProxyOptions> = {
 };
 
 export default defineConfig(({ mode }) => ({
-  plugins: [...(basicAuthPlugin ? [basicAuthPlugin] : []), react(), tailwindcss()],
+  plugins: [
+    ...(basicAuthPlugin ? [basicAuthPlugin] : []),
+    entryDocumentCachePlugin,
+    react(),
+    tailwindcss(),
+  ],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),

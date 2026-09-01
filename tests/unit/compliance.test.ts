@@ -431,14 +431,45 @@ describe('evaluateRequirement — numbers are only compared when they measure th
     expect(verdict.result).toBe('compliant');
   });
 
-  it('names the missing dimension instead of listing leftover vocabulary', () => {
+  it("says what the clause asks for, in the clause's own words", () => {
     const verdict = evaluateRequirement(
       draft('2.17.2.2', 'Guards shall be not less than 1.20 m in height.', ['guard', 'height']),
       sheet('GUARDS TO BE PROVIDED AT ALL ROOF EDGES. REFER TO DETAIL 4.', 0.4),
     );
     expect(verdict.result).toBe('needs_evidence');
-    expect(verdict.finding).toContain('cannot be verified from the drawing');
-    expect(verdict.finding).toContain('1.20 m');
+    // Readable by somebody who has to act on it, not a dump of the matcher's leftovers.
+    expect(verdict.finding).toBe(
+      '2.17.2.2 requires guards not less than 1.20 m in height. The drawing gives no figure for it.',
+    );
+    // Written the way an engineer writes it: "1.2 m", not "1.20 m".
+    expect(verdict.recommendedAction).toContain('1.2 m');
+  });
+
+  it('falls back to the title when the clause body starts with a list marker', () => {
+    // Real code bodies open with "a." and "iii.", and taking the first sentence blindly
+    // produced findings that read "2.16.6.3 requires a."
+    const verdict = evaluateRequirement(
+      {
+        ...draft('2.16.6.3', 'a. Where ducts penetrate a smoke barrier.', ['duct', 'barrier']),
+        title: 'Smoke dampers at duct penetrations',
+      },
+      sheet('DUCTWORK LAYOUT. REFER TO SCHEDULE.', 0.4),
+    );
+    expect(verdict.finding).not.toMatch(/requires a\./);
+    expect(verdict.finding).toContain('where ducts penetrate a smoke barrier');
+  });
+
+  it('keeps the explanation short enough to read in a table row', () => {
+    const verdict = evaluateRequirement(
+      draft(
+        '2.19',
+        'Lift Hoistway pressurization systems shall comply with Table 10.17., the relevant specifications of Section 2.6., Stair Pressurization, and the general requirements for smoke control systems given in Section 2.5 of this chapter.',
+        ['hoistway', 'pressurization'],
+      ),
+      sheet('LIFT LOBBY LAYOUT.', 0.4),
+    );
+    expect(verdict.finding.length).toBeLessThan(190);
+    expect(verdict.finding).toMatch(/\.\.\./);
   });
 });
 

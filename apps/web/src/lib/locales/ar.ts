@@ -216,11 +216,11 @@ export const ar: Catalogue = {
   'consult.reportNeedsAnswer': 'اطرح سؤالًا أولًا — يُبنى التقرير من إجابة.',
   'consult.reportOptions': 'خيارات التقرير',
   'consult.includeEvidence': 'تضمين الأدلة',
-  'consult.includeEvidenceHint': 'كل متطلب مع بنده وصفحته والمقطع المقتبس.',
+  'consult.includeEvidenceHint': 'البند والصفحة والنص المقتبس خلف كل ملاحظة.',
   'consult.withoutEvidence': 'بدون أدلة',
   'consult.reportQueued': 'سيظهر في التقارير عند جاهزيته.',
   'consult.reportQueuedWithoutEvidence':
-    'نسخة مختصرة بدون مصفوفة الأدلة. ستظهر في التقارير عند جاهزيتها.',
+    'الملاحظات فقط، بدون البند والاقتباس خلف كل واحدة. سيظهر في التقارير عند جاهزيته.',
   'consult.createReport': 'إنشاء تقرير امتثال كامل',
   'consult.evidenceCoverage': 'تغطية الأدلة',
   'consult.citedPassages': '{count} مقاطع مقتبسة',

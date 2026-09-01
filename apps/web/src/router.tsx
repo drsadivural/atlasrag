@@ -1,7 +1,8 @@
-import { lazy, Suspense, type ReactNode } from 'react';
+import { Suspense, useEffect, type ReactNode } from 'react';
 import { createBrowserRouter, Navigate, Outlet, useLocation, useParams } from 'react-router-dom';
 import { EmptyState, Button, LoadingRegion, Skeleton } from '@uxe/ui';
 import { useSession } from './lib/session.js';
+import { clearChunkRetries, lazyRoute } from './lib/lazy-route.js';
 import { AppShell } from './components/AppShell.js';
 import { RouteErrorBoundary } from './components/ErrorBoundary.js';
 import { I18nProvider, useI18n } from './lib/i18n.js';
@@ -15,31 +16,31 @@ import { ConsultPage } from './routes/ConsultPage.js';
 
 // Routes below the fold of the primary experience are split, so the first authenticated
 // paint does not pay for the settings forms or the audit log.
-const ReportsPage = lazy(() =>
+const ReportsPage = lazyRoute('ReportsPage', () =>
   import('./routes/ReportsPage.js').then((m) => ({ default: m.ReportsPage })),
 );
-const ActivityPage = lazy(() =>
+const ActivityPage = lazyRoute('ActivityPage', () =>
   import('./routes/ActivityPage.js').then((m) => ({ default: m.ActivityPage })),
 );
-const UsersPage = lazy(() =>
+const UsersPage = lazyRoute('UsersPage', () =>
   import('./routes/UsersPage.js').then((m) => ({ default: m.UsersPage })),
 );
-const SettingsPage = lazy(() =>
+const SettingsPage = lazyRoute('SettingsPage', () =>
   import('./routes/SettingsPage.js').then((m) => ({ default: m.SettingsPage })),
 );
-const KnowledgeSourcePage = lazy(() =>
+const KnowledgeSourcePage = lazyRoute('KnowledgeSourcePage', () =>
   import('./routes/KnowledgeSourcePage.js').then((m) => ({ default: m.KnowledgeSourcePage })),
 );
-const ReportDetailPage = lazy(() =>
+const ReportDetailPage = lazyRoute('ReportDetailPage', () =>
   import('./routes/ReportDetailPage.js').then((m) => ({ default: m.ReportDetailPage })),
 );
-const AcceptInvitePage = lazy(() =>
+const AcceptInvitePage = lazyRoute('AcceptInvitePage', () =>
   import('./routes/AcceptInvitePage.js').then((m) => ({ default: m.AcceptInvitePage })),
 );
-const VerifyEmailPage = lazy(() =>
+const VerifyEmailPage = lazyRoute('VerifyEmailPage', () =>
   import('./routes/VerifyEmailPage.js').then((m) => ({ default: m.VerifyEmailPage })),
 );
-const ResetPasswordPage = lazy(() =>
+const ResetPasswordPage = lazyRoute('ResetPasswordPage', () =>
   import('./routes/ResetPasswordPage.js').then((m) => ({ default: m.ResetPasswordPage })),
 );
 
@@ -72,6 +73,10 @@ function Boundary({ children }: { children: ReactNode }) {
 function RequireAuth() {
   const { session, isLoading } = useSession();
   const location = useLocation();
+
+  // Getting this far means the chunks resolved, so any reload marks left by a deploy that
+  // landed under an open tab have done their job and should not outlast the session.
+  useEffect(() => clearChunkRetries(), []);
 
   if (isLoading) return <RouteFallback />;
   if (!session) {
