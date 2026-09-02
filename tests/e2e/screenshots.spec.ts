@@ -35,7 +35,7 @@ test.describe('@visual primary screens', () => {
     await page.goto('/dashboard');
     await waitForSettled(page);
     await expect(
-      page.getByRole('button', { name: 'Start consultation', exact: true }),
+      page.getByRole('heading', { name: /^Good (morning|afternoon|evening)/ }),
     ).toBeVisible();
     await capture(page, testInfo.project.name, '02-dashboard');
   });

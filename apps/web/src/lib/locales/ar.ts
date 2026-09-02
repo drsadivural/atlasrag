@@ -177,6 +177,10 @@ export const ar: Catalogue = {
   'consult.title': 'استشر الآن',
   'consult.consultations': 'الاستشارات',
   'consult.newConsultation': 'استشارة جديدة',
+  'consult.latestReport': 'أحدث تقرير',
+  'consult.latestReportHint':
+    'أحدث تقرير من هذه الاستشارة، أُنشئ {when}. التقارير السابقة تحت التقارير.',
+  'consult.attachedForReview': '{title} مرفق بهذه الاستشارة وهو ما ستتم مراجعته.',
   'consult.moveToArchive': 'نقل إلى الأرشيف',
   'consult.moveToArchiveBody':
     'ينقل “{title}” إلى الأرشيف. سيغادر هذه القائمة ويتوقف عن الظهور في التنبيهات. تبقى تقاريره في التقارير.',

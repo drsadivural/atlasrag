@@ -504,6 +504,38 @@ export interface DetailsView {
 }
 
 /** Details + references projection: the full audit-grade view with every citation. */
+/**
+ * What a generated report is called.
+ *
+ * Named after the document it reviews, not the consultation it was asked from. Every
+ * consultation is called "New consultation" until somebody renames it, and nobody does —
+ * so a Reports page full of "New consultation - compliance report" said nothing about
+ * which drawing any of them covered. "FA_32456_Compliance_report" does, and it is also
+ * the file name the download arrives under, so spaces become underscores and the whole
+ * thing is one token.
+ *
+ * With nothing attached for review there is no document to name it after, and the
+ * consultation's own title is used rather than inventing one.
+ */
+export function reportTitle(
+  kind: 'compliance_report' | 'summary' | 'evidence_matrix',
+  documentsReviewed: ReadonlyArray<{ title: string; role: 'governing' | 'project' }>,
+  fallback: string,
+): string {
+  const reviewed = documentsReviewed
+    .filter((document) => document.role === 'project')
+    .map((document) => document.title.trim())
+    .filter((title) => title.length > 0);
+  const subject = (reviewed.length > 0 ? reviewed.join('+') : fallback).replace(/\s+/g, '_');
+  const label = {
+    compliance_report: 'Compliance_report',
+    summary: 'Summary',
+    evidence_matrix: 'Evidence_matrix',
+  }[kind];
+  // A name is for reading in a list; three drawings joined together already say enough.
+  return `${subject.length > 120 ? `${subject.slice(0, 117)}...` : subject}_${label}`;
+}
+
 export function renderDetails(answer: StructuredAnswer): DetailsView {
   const byId = new Map(answer.citations.map((c) => [c.citationId, c]));
 

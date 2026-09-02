@@ -128,6 +128,17 @@ async function downloadArtifact(artifactId: string): Promise<Uint8Array> {
 }
 
 describe('compliance reports', () => {
+  it('is named after the document it reviews, not the consultation', async () => {
+    const { artifactId } = await generateReport('pdf');
+    const list = await owner.client.get<{ items: Array<{ id: string; title: string }> }>(
+      '/artifacts?pageSize=50',
+    );
+    // The consultation is "Report source consultation"; the name comes from the drawing.
+    expect(list.body.items.find((a) => a.id === artifactId)?.title).toBe(
+      'Marina_Tower_Evacuation_Plan_Compliance_report',
+    );
+  });
+
   it('produces a PDF that is really a PDF', async () => {
     const { artifactId } = await generateReport('pdf');
 

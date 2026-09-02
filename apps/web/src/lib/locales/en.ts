@@ -172,6 +172,11 @@ export const en = {
   'consult.title': 'Consult Now',
   'consult.consultations': 'Consultations',
   'consult.newConsultation': 'New consultation',
+  'consult.latestReport': 'Latest report',
+  'consult.latestReportHint':
+    'The newest report from this consultation, made {when}. Earlier ones are under Reports.',
+  'consult.attachedForReview':
+    '{title} is attached to this consultation and is what will be reviewed.',
   'consult.moveToArchive': 'Move to archive',
   'consult.moveToArchiveBody':
     'Moves “{title}” to the archive. It leaves this list and stops being raised for attention. Its reports stay in Reports.',

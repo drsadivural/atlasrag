@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   ChevronLeft,
   ClipboardCheck,
+  Download as DownloadIcon,
   FileEdit,
   FileText,
   HelpCircle,
@@ -52,6 +53,7 @@ import {
 } from '@uxe/ui';
 import type {
   AnswerStyle,
+  ArtifactSummary,
   ConsultationDetail,
   ConsultationSummary,
   Paginated,
@@ -171,8 +173,11 @@ export function ConsultPage() {
           });
         }
       },
-      onDone: () =>
-        void queryClient.invalidateQueries({ queryKey: ['consultation', consultationId] }),
+      onDone: () => {
+        void queryClient.invalidateQueries({ queryKey: ['consultation', consultationId] });
+        // A report job ending is the only way a new artifact appears; the header shows it.
+        void queryClient.invalidateQueries({ queryKey: ['artifacts'] });
+      },
     });
     return () => controller.close();
   }, [consultationId, queryClient, push]);
@@ -197,6 +202,7 @@ export function ConsultPage() {
             </Link>
           </Button>
           <span className="ms-auto" />
+          {consultation && <LatestReport consultationId={consultation.id} />}
           <Button
             variant="secondary"
             size="sm"
@@ -326,6 +332,70 @@ export function ConsultPage() {
 }
 
 /* -------------------------------------------------------------------------- */
+/* Latest report                                                              */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The newest report this consultation has produced, on the screen it was asked from.
+ *
+ * A report is queued from the bar under the conversation and lands on the Reports page —
+ * another screen, reached by leaving this one, with every report from every consultation
+ * on it. The one most recently made from this conversation is shown here by name, with
+ * its download. Everything before it is history, and history is what Reports is for.
+ */
+function LatestReport({ consultationId }: { consultationId: string }) {
+  const { t } = useI18n();
+  const { push } = useToast();
+
+  const latest = useQuery<Paginated<ArtifactSummary>, ApiError>({
+    queryKey: ['artifacts', { consultationId, latest: true }],
+    queryFn: () =>
+      api.get<Paginated<ArtifactSummary>>(
+        `/artifacts?${new URLSearchParams({ consultationId, status: 'ready', pageSize: '1' })}`,
+      ),
+  });
+
+  const download = useMutation({
+    mutationFn: (id: string) =>
+      api.get<{ url: string; fileName: string }>(`/artifacts/${id}/download`),
+    onSuccess: (result) => {
+      // A short-lived signed URL; navigating to it starts the download immediately.
+      const anchor = document.createElement('a');
+      anchor.href = result.url;
+      anchor.download = result.fileName;
+      document.body.append(anchor);
+      anchor.click();
+      anchor.remove();
+    },
+    onError: (error: ApiError) =>
+      push({ tone: 'error', title: 'Download failed', description: error.message }),
+  });
+
+  const report = latest.data?.items[0];
+  if (!report) return null;
+
+  return (
+    <Tooltip content={t('consult.latestReportHint', { when: formatRelative(report.createdAt) })}>
+      <Button
+        variant="ghost"
+        size="sm"
+        className="max-w-[18rem]"
+        onClick={() => download.mutate(report.id)}
+        loading={download.isPending}
+        aria-label={`${t('consult.latestReport')}: ${report.title}`}
+      >
+        <FileText className="h-4 w-4 shrink-0 text-[var(--uxe-cobalt)]" aria-hidden />
+        <span className="truncate">{report.title}</span>
+        <DownloadIcon
+          className="h-3.5 w-3.5 shrink-0 text-[var(--uxe-text-tertiary)]"
+          aria-hidden
+        />
+      </Button>
+    </Tooltip>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
 /* No longer available                                                        */
 /* -------------------------------------------------------------------------- */
 
@@ -448,7 +518,7 @@ function ConsultationWorkspace({
 
   return (
     <>
-      <div className="shrink-0 border-b border-[var(--uxe-border)] bg-[var(--uxe-surface)] px-4 py-3.5 sm:px-6">
+      <div className="shrink-0 border-b border-[var(--uxe-border)] bg-[var(--uxe-surface)] px-4 py-2.5 sm:px-6">
         <label htmlFor="consultation-title" className="sr-only">
           {t('consult.consultationTitle')}
         </label>
@@ -461,15 +531,20 @@ function ConsultationWorkspace({
             if (event.key === 'Enter') event.currentTarget.blur();
             if (event.key === 'Escape') setTitle(consultation.title);
           }}
-          className="w-full truncate rounded-[var(--uxe-radius-control)] bg-transparent text-[22px] font-bold text-[var(--uxe-text)] outline-none focus-visible:bg-[var(--uxe-surface-hover)] focus-visible:px-2 sm:text-[26px]"
+          className="w-full truncate rounded-[var(--uxe-radius-control)] bg-transparent text-[20px] font-bold text-[var(--uxe-text)] outline-none focus-visible:bg-[var(--uxe-surface-hover)] focus-visible:px-2 sm:text-[22px]"
         />
-      </div>
 
-      <div className="shrink-0 border-b border-[var(--uxe-border)] bg-[var(--uxe-surface)] px-4 py-3 sm:px-6">
+        {/*
+          The task, as a row of pills under the title.
+
+          These were four cards the height of a toolbar band, each with its icon stacked
+          over its label, in a band of their own under the title band — a quarter of the
+          screen before the conversation began. The choice is the same; it takes one line.
+        */}
         <div
           role="radiogroup"
           aria-label={t('consult.task')}
-          className="grid grid-cols-2 gap-2 sm:grid-cols-4"
+          className="mt-1.5 flex flex-wrap gap-1.5"
         >
           {TASK_MODES.map((mode) => {
             const Icon = mode.icon;
@@ -482,28 +557,15 @@ function ConsultationWorkspace({
                 aria-checked={active}
                 onClick={() => onTaskModeChange(mode.value)}
                 className={cn(
-                  'flex flex-col items-center gap-1.5 rounded-[var(--uxe-radius-card)] border px-3 py-3 transition-all',
+                  'inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[13px] font-medium transition-colors',
                   'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--uxe-cobalt)]',
                   active
-                    ? 'border-[var(--uxe-cobalt)] bg-[var(--uxe-surface-selected)] shadow-[var(--uxe-shadow-sm)]'
-                    : 'border-[var(--uxe-border)] bg-[var(--uxe-surface)] hover:bg-[var(--uxe-surface-hover)]',
+                    ? 'border-[var(--uxe-cobalt)] bg-[var(--uxe-surface-selected)] text-[var(--uxe-cobalt)]'
+                    : 'border-[var(--uxe-border)] bg-[var(--uxe-surface)] text-[var(--uxe-text-secondary)] hover:bg-[var(--uxe-surface-hover)] hover:text-[var(--uxe-text)]',
                 )}
               >
-                <Icon
-                  className={cn(
-                    'h-5 w-5',
-                    active ? 'text-[var(--uxe-cobalt)]' : 'text-[var(--uxe-text-secondary)]',
-                  )}
-                  aria-hidden
-                />
-                <span
-                  className={cn(
-                    'text-[13px] font-medium',
-                    active ? 'text-[var(--uxe-cobalt)]' : 'text-[var(--uxe-text-secondary)]',
-                  )}
-                >
-                  {t(mode.labelKey)}
-                </span>
+                <Icon className="h-4 w-4 shrink-0" aria-hidden />
+                {t(mode.labelKey)}
               </button>
             );
           })}
@@ -859,6 +921,8 @@ function Composer({
   const [text, setText] = useState('');
   const [listening, setListening] = useState(false);
   const [uploading, setUploading] = useState<string[]>([]);
+  // The documents this consultation will be asked about — the ones uploaded into it.
+  const attached = consultation.sources.filter((source) => source.role === 'project');
   const fileRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const recognitionRef = useRef<{ stop: () => void } | null>(null);
@@ -1012,12 +1076,6 @@ function Composer({
   return (
     <div className="pb-safe shrink-0 border-t border-[var(--uxe-border)] bg-[var(--uxe-surface)] p-3 sm:p-4">
       <div className="mx-auto max-w-4xl">
-        {uploading.length > 0 && (
-          <p role="status" className="mb-2 text-[12px] text-[var(--uxe-text-secondary)]">
-            Uploading {uploading.join(', ')}…
-          </p>
-        )}
-
         {/*
           Said before the question rather than after it.
           
@@ -1093,6 +1151,36 @@ function Composer({
               <Link2 className="h-3.5 w-3.5" aria-hidden />
               <span className="max-sm:sr-only">{t('consult.url')}</span>
             </Button>
+
+            {/*
+              What is attached, by name, where the question is typed.
+
+              An upload ended in a toast, and after that the file's name was only in the
+              settings panel behind the gear. Nothing on the screen where the question is
+              asked said which drawing it would be asked about — and "did I attach the
+              right one?" is the question every reviewer has before pressing send.
+            */}
+            {attached.map((source) => (
+              <Tooltip
+                key={source.sourceId}
+                content={t('consult.attachedForReview', { title: source.title })}
+              >
+                <span className="inline-flex max-w-56 items-center gap-1.5 rounded-full border border-[var(--uxe-cobalt)]/40 bg-[var(--uxe-surface-selected)] px-2.5 py-1 text-[12px] font-medium text-[var(--uxe-text)]">
+                  <FileText className="h-3.5 w-3.5 shrink-0 text-[var(--uxe-cobalt)]" aria-hidden />
+                  <span className="truncate">{source.title}</span>
+                </span>
+              </Tooltip>
+            ))}
+            {uploading.map((name) => (
+              <span
+                key={name}
+                role="status"
+                className="inline-flex max-w-56 items-center gap-1.5 rounded-full border border-dashed border-[var(--uxe-border)] px-2.5 py-1 text-[12px] text-[var(--uxe-text-secondary)]"
+              >
+                <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" aria-hidden />
+                <span className="truncate">{name}</span>
+              </span>
+            ))}
 
             <span className="ms-auto flex items-center gap-2">
               <span className="hidden text-[12px] text-[var(--uxe-text-tertiary)] sm:inline">

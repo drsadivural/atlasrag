@@ -1,42 +1,71 @@
 import { cn } from '@uxe/ui';
 import { useI18n } from '../lib/i18n.js';
 
-/** The product mark: a gradient tile with the sparkle glyph, matching the concepts. */
+/**
+ * The UXE mark — the official logo, not a stand-in for it.
+ *
+ * Two files rather than one recoloured by CSS: the navy letterforms vanish on a dark
+ * ground, and the orange chevron must not be lifted with them — it is the accent, and the
+ * only part of the mark that stays exactly as drawn in both themes. Both are in the page
+ * and a stylesheet rule shows one, because this also appears on the router's error page,
+ * outside every provider, where nothing can be asked which theme is on.
+ *
+ * `size` is the height; the width follows the artwork's own proportions.
+ */
 export function BrandMark({ size = 40, className }: { size?: number; className?: string }) {
+  const width = Math.round(size * (LOGO_WIDTH / LOGO_HEIGHT));
   return (
     <span
       aria-hidden
-      className={cn(
-        'inline-flex shrink-0 items-center justify-center rounded-[calc(var(--uxe-radius-card)-2px)]',
-        'gradient-surface shadow-[var(--uxe-shadow-brand)]',
-        className,
-      )}
-      style={{ width: size, height: size }}
+      className={cn('inline-flex shrink-0 items-center', className)}
+      style={{ width, height: size }}
     >
-      <svg width={size * 0.55} height={size * 0.55} viewBox="0 0 24 24" fill="none">
-        <path
-          d="M12 2.5l1.9 5.3 5.3 1.9-5.3 1.9L12 16.9l-1.9-5.3L4.8 9.7l5.3-1.9L12 2.5z"
-          fill="white"
-        />
-        <circle cx="18.6" cy="17.6" r="2.1" fill="white" fillOpacity="0.92" />
-        <circle cx="6.2" cy="18.4" r="1.3" fill="white" fillOpacity="0.7" />
-      </svg>
+      <img
+        src="/uxelogo.png"
+        width={LOGO_WIDTH}
+        height={LOGO_HEIGHT}
+        alt=""
+        decoding="async"
+        draggable={false}
+        className="uxe-logo-light h-full w-auto"
+      />
+      <img
+        src="/uxelogo-dark.png"
+        width={LOGO_WIDTH}
+        height={LOGO_HEIGHT}
+        alt=""
+        decoding="async"
+        draggable={false}
+        className="uxe-logo-dark h-full w-auto"
+      />
     </span>
   );
 }
 
-/** Wordmark: "UXE" in ink, "Consulting AI" in the brand gradient. */
+/** The artwork's pixel size, so the browser reserves the space before the file arrives. */
+const LOGO_WIDTH = 488;
+const LOGO_HEIGHT = 179;
+
+/**
+ * Wordmark: "UXE" in ink, "Consulting AI" in the brand gradient.
+ *
+ * Next to the logo the "UXE" is already said, in the artwork; `withMark` leaves it out so
+ * the lockup does not read "UXE UXE Consulting AI".
+ */
 export function BrandWordmark({
   className,
   size = 'md',
+  withMark = false,
 }: {
   className?: string;
   size?: 'sm' | 'md' | 'lg';
+  withMark?: boolean;
 }) {
   const scale = { sm: 'text-[17px]', md: 'text-[19px]', lg: 'text-[40px] sm:text-[52px]' }[size];
   return (
     <span className={cn('font-bold tracking-[-0.02em] text-[var(--uxe-text)]', scale, className)}>
-      UXE <span className="gradient-text">Consulting AI</span>
+      {!withMark && 'UXE '}
+      <span className="gradient-text">Consulting AI</span>
     </span>
   );
 }
@@ -48,11 +77,11 @@ export function BrandLockup({
   size?: 'sm' | 'md' | 'lg';
   className?: string;
 }) {
-  const markSize = { sm: 32, md: 40, lg: 76 }[size];
+  const markSize = { sm: 28, md: 34, lg: 64 }[size];
   return (
-    <span className={cn('inline-flex items-center gap-3', className)}>
+    <span className={cn('inline-flex items-center gap-2.5', className)}>
       <BrandMark size={markSize} />
-      <BrandWordmark size={size} />
+      <BrandWordmark size={size} withMark />
     </span>
   );
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Citation, Claim } from '@uxe/contracts';
-import { assembleAnswer } from '../../packages/rag/src/answer.js';
+import { assembleAnswer, reportTitle } from '../../packages/rag/src/answer.js';
 
 /**
  * What an answer is allowed to say about work that was not done.
@@ -149,5 +149,49 @@ describe('a compliance answer with requirements actually tested', () => {
     });
 
     expect(answer.headline).toBe('All 1 reviewed requirements are met');
+  });
+});
+
+/*
+ * What a report is called. Every consultation is "New consultation" until somebody renames
+ * it, so a list of reports named after consultations was a list that said nothing.
+ */
+describe('naming a report', () => {
+  const governing = { title: 'UAE Fire and Life Safety Code', role: 'governing' as const };
+
+  it('takes the name of the document reviewed, as one token', () => {
+    expect(
+      reportTitle(
+        'compliance_report',
+        [governing, { title: 'FA_32456', role: 'project' }],
+        'New consultation',
+      ),
+    ).toBe('FA_32456_Compliance_report');
+    expect(
+      reportTitle(
+        'summary',
+        [governing, { title: 'Marina Tower Evacuation Plan', role: 'project' }],
+        'x',
+      ),
+    ).toBe('Marina_Tower_Evacuation_Plan_Summary');
+  });
+
+  it('never names it after the code it was checked against', () => {
+    expect(reportTitle('evidence_matrix', [governing], 'New consultation')).toBe(
+      'New_consultation_Evidence_matrix',
+    );
+  });
+
+  it('names every drawing when more than one was reviewed', () => {
+    expect(
+      reportTitle(
+        'compliance_report',
+        [
+          { title: 'FA', role: 'project' },
+          { title: 'FF', role: 'project' },
+        ],
+        'x',
+      ),
+    ).toBe('FA+FF_Compliance_report');
   });
 });

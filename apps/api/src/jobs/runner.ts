@@ -11,7 +11,7 @@ import {
   validateDerivative,
   type SourceScope,
 } from '@uxe/rag';
-import { renderDetails } from '@uxe/rag';
+import { renderDetails, reportTitle } from '@uxe/rag';
 import type { AppDeps } from '../context.js';
 import { runConnectorSync } from './connector-sync.js';
 import { runIngestion, base64ToBytes, bytesToBase64 } from './ingest.js';
@@ -629,7 +629,8 @@ async function runReportJob(
   await deps.repos.jobs.updateStage(job.id, 'validate', 'complete', `${bytes.byteLength} bytes`);
 
   await deps.repos.jobs.updateStage(job.id, 'store', 'running');
-  const title = payload.title ?? `${consultation.title} - ${payload.kind.replace(/_/g, ' ')}`;
+  const title =
+    payload.title ?? reportTitle(payload.kind, details.documentsReviewed, consultation.title);
   const artifactId = newId();
   const storageKey = buildStorageKey({
     organizationId: tenant.organizationId,

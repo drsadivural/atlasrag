@@ -97,11 +97,7 @@ export function DashboardPage() {
       <h1 className="sr-only">{t('nav.dashboard')}</h1>
 
       <div className="flex min-w-0 flex-col gap-5">
-        <GreetingBanner
-          name={data.greetingName}
-          onStart={() => start.mutate()}
-          starting={start.isPending}
-        />
+        <GreetingBanner name={data.greetingName} />
 
         {isEmpty ? (
           <Card>
@@ -304,15 +300,14 @@ export function DashboardPage() {
 /* Pieces                                                                     */
 /* -------------------------------------------------------------------------- */
 
-function GreetingBanner({
-  name,
-  onStart,
-  starting,
-}: {
-  name: string;
-  onStart: () => void;
-  starting: boolean;
-}) {
+/**
+ * The greeting, and only the greeting.
+ *
+ * It used to carry a "Start consultation" button as well. Consult now is one click away in
+ * the navigation at every width, so the button was a second way to the same place, taking
+ * a third of the banner to say so.
+ */
+function GreetingBanner({ name }: { name: string }) {
   const { t } = useI18n();
   const hour = new Date().getHours();
   const key =
@@ -328,8 +323,7 @@ function GreetingBanner({
       className="relative overflow-hidden bg-[linear-gradient(100deg,var(--uxe-surface)_0%,var(--uxe-surface-selected)_100%)]"
     >
       <div className="flex items-center gap-4 p-4 sm:gap-6 sm:p-5">
-        {/* Ayumi is decorative here — the greeting text carries the meaning — and she is
-            sized so she never overlaps the primary action. */}
+        {/* Ayumi is decorative here — the greeting text carries the meaning. */}
         <div className="hidden h-24 w-24 shrink-0 sm:block">
           <Ayumi variant="sm" decorative />
         </div>
@@ -341,16 +335,6 @@ function GreetingBanner({
             {t('dashboard.greetingSub')}
           </p>
         </div>
-        <Button
-          variant="primary"
-          size="lg"
-          onClick={onStart}
-          loading={starting}
-          className="shrink-0 max-sm:h-11 max-sm:px-4"
-        >
-          <Sparkles className="h-4 w-4" aria-hidden />
-          <span className="max-sm:sr-only">{t('dashboard.startConsultation')}</span>
-        </Button>
       </div>
     </Card>
   );

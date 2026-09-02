@@ -49,3 +49,6 @@ storage-local/
 
 # Agent worktrees: full checkouts of this repo, owned by another session.
 .claude/worktrees/
+
+# Playwright MCP session output (snapshots, screenshots)
+.playwright-mcp/

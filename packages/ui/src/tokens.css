@@ -308,3 +308,26 @@ body {
     opacity: 0.35;
   }
 }
+
+/*
+ * The UXE mark ships as two files and exactly one is shown. The states mirror the palette
+ * above: system dark with no explicit choice, and an explicit dark choice; everything else
+ * is the light artwork.
+ */
+.uxe-logo-dark {
+  display: none;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .uxe-logo-light {
+    display: none;
+  }
+  :root:not([data-theme='light']) .uxe-logo-dark {
+    display: block;
+  }
+}
+:root[data-theme='dark'] .uxe-logo-light {
+  display: none;
+}
+:root[data-theme='dark'] .uxe-logo-dark {
+  display: block;
+}
