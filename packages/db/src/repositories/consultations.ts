@@ -52,6 +52,15 @@ function visibleConsultationPredicate(ctx: TenantContext) {
   );
 }
 
+/**
+ * The name a consultation is created with, and the only one an attachment may replace.
+ *
+ * Kept here rather than compared inline so the check and the value cannot drift: if the
+ * default ever changes, renaming stops silently working instead of loudly failing.
+ */
+export const DEFAULT_CONSULTATION_TITLE = 'New consultation';
+const DEFAULT_TITLE = DEFAULT_CONSULTATION_TITLE;
+
 export class ConsultationRepository {
   constructor(private readonly db: Database) {}
 
@@ -286,7 +295,16 @@ export class ConsultationRepository {
     if (role === 'governing' && !(await this.isKnowledgeBaseSource(ctx, sourceId))) {
       throw new NotAuthorityError(sourceId);
     }
-    await this.db
+    /*
+     * `returning()` is empty when the conflict clause swallowed the insert, and that
+     * difference decides whether the consultation is renamed below.
+     *
+     * A document already attached as governing — which every approved source is, on a
+     * consultation opened without a narrowed list — hits the conflict and changes nothing.
+     * Renaming on the attempt rather than the insert named consultations after whichever
+     * code they were being checked against.
+     */
+    const [attached] = await this.db
       .insert(consultationSources)
       .values({
         id: newId(),
@@ -296,7 +314,35 @@ export class ConsultationRepository {
         workspaceId: ctx.workspaceId,
         role,
       })
-      .onConflictDoNothing();
+      .onConflictDoNothing()
+      .returning({ id: consultationSources.id });
+
+    if (attached && role === 'project') await this.nameAfterDocument(consultationId, sourceId);
+  }
+
+  /**
+   * Gives the consultation the name of the document sent into it for review.
+   *
+   * Every consultation is created as "New consultation" and nobody renames it, so the list
+   * of past consultations was three hundred rows of the same four words — no way to find
+   * the one about a particular drawing, which is the only reason anybody opens the list.
+   *
+   * Two rules keep it honest. Only the default name is replaced, so a title somebody typed
+   * is never overwritten by an attachment. And only the first document names it: a second
+   * drawing added later does not rewrite the name the consultation has been known by.
+   */
+  private async nameAfterDocument(consultationId: string, sourceId: string): Promise<void> {
+    const [source] = await this.db
+      .select({ title: sources.title })
+      .from(sources)
+      .where(eq(sources.id, sourceId))
+      .limit(1);
+    if (!source?.title.trim()) return;
+
+    await this.db
+      .update(consultations)
+      .set({ title: source.title.trim().slice(0, 200), updatedAt: new Date() })
+      .where(and(eq(consultations.id, consultationId), eq(consultations.title, DEFAULT_TITLE)));
   }
 
   /** True only for a document published through the knowledge base. */

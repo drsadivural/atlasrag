@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Download, FileBarChart, FileText, Info, Trash2 } from 'lucide-react';
 import {
@@ -38,6 +38,7 @@ export function ReportsPage() {
   const { t } = useI18n();
   const { can } = useSession();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const { push } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -153,6 +154,9 @@ export function ReportsPage() {
               caption={t('report.tableCaption')}
               rows={query.data?.items ?? []}
               rowKey={(row) => row.id}
+              // The whole row opens the report, where a PDF is now read rather than
+              // downloaded first. The title link stays: it is what a keyboard reaches.
+              onRowClick={(row) => navigate(`/reports/${row.id}`)}
               empty={
                 <EmptyState
                   icon={<FileBarChart className="h-6 w-6" aria-hidden />}
@@ -372,7 +376,11 @@ function RowAction({
           aria-label={reason ? `${label}: ${title} — ${reason}` : `${label}: ${title}`}
           disabled={reason !== null}
           loading={loading}
-          onClick={onClick}
+          // The row itself opens the report; downloading or removing must not also do that.
+          onClick={(event) => {
+            event.stopPropagation();
+            onClick();
+          }}
           className={
             destructive ? 'text-[var(--uxe-danger)] hover:bg-[var(--uxe-danger-bg)]' : undefined
           }

@@ -276,7 +276,7 @@ function AttentionPanel({
       onOpenChange={onOpenChange}
       title={item?.title ?? ''}
       description={ATTENTION_KIND_LABELS[item?.kind ?? 'failed_job']}
-      width="md"
+      width="half"
       footer={
         <>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>

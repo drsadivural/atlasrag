@@ -140,6 +140,41 @@ export function ConsultPage() {
       push({ tone: 'error', title: 'Could not start a consultation', description: error.message }),
   });
 
+  /*
+   * "Consult now" opens a consultation rather than offering to open one.
+   *
+   * The empty state was a screen whose only content was a button that did the one thing
+   * anybody arrives here to do. It is now done on arrival.
+   *
+   * A blank one already waiting is reused instead of adding another. Creating on every
+   * visit would fill the consultation list with untouched rows — which is the same list
+   * that has just been made worth reading by naming each row after its document. "Blank"
+   * means nothing was ever said in it and nothing was attached, so nothing is lost by
+   * landing back in it.
+   */
+  const opening = useRef(false);
+  const openable = useQuery<Paginated<ConsultationSummary>, ApiError>({
+    enabled: !consultationId,
+    queryKey: ['consultations', { openable: true }],
+    queryFn: () =>
+      api.get<Paginated<ConsultationSummary>>('/consultations?page=1&pageSize=1&status=all'),
+    // Always re-read: a blank consultation stops being blank as soon as it is used.
+    staleTime: 0,
+    gcTime: 0,
+  });
+
+  useEffect(() => {
+    if (consultationId || opening.current || !openable.isSuccess) return;
+    opening.current = true;
+
+    const newest = openable.data.items[0];
+    const blank = newest?.lastMessageAt === null && newest.documentCount === 0;
+    if (blank && newest) navigate(`/consult/${newest.id}`, { replace: true });
+    else create.mutate();
+    // `create` is a stable mutation object; listing it would re-run this on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [consultationId, openable.isSuccess, openable.data, navigate]);
+
   // Live job progress. Every event is already persisted, so a reconnect just re-reads.
   useEffect(() => {
     if (!consultationId) return;
@@ -193,7 +228,19 @@ export function ConsultPage() {
         to go back to something, and it was the same list on every visit. What stays here is
         the way out of it: back to that list, and a button to start a new one.
       */}
-      <section className="flex min-h-0 min-w-0 flex-1 flex-col" aria-label={t('consult.title')}>
+      {/*
+        `overflow-hidden` is load-bearing.
+
+        Everything around the conversation is `shrink-0`, so on a short window their fixed
+        heights added up past the column and spilled out — giving the whole application a
+        second scrollbar and squeezing the conversation itself down to a 40px slot. Clipping
+        here keeps the conversation the only thing that scrolls, and the bars below are
+        built not to grow into it.
+      */}
+      <section
+        className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
+        aria-label={t('consult.title')}
+      >
         <div className="flex shrink-0 items-center gap-2 border-b border-[var(--uxe-border)] bg-[var(--uxe-surface)] px-3 py-2.5">
           <Button asChild variant="ghost" size="sm">
             <Link to="/activity?tab=consultations">
@@ -232,23 +279,33 @@ export function ConsultPage() {
         </div>
 
         {!consultationId ? (
-          <div className="flex min-h-0 flex-1 items-center justify-center p-6">
-            <EmptyState
-              icon={<Sparkles className="h-7 w-7" aria-hidden />}
-              title={t('consult.emptyTitle')}
-              description={t('consult.emptyBody')}
-              action={
-                <Button
-                  variant="primary"
-                  onClick={() => create.mutate()}
-                  loading={create.isPending}
-                >
-                  <Plus className="h-4 w-4" aria-hidden />
-                  {t('consult.newConsultation')}
-                </Button>
-              }
-            />
-          </div>
+          /*
+           * Opening one, from the effect above.
+           *
+           * The skeleton is the consultation arriving — but only while something is still
+           * on its way. If the list could not be read or the consultation could not be
+           * created, this is a dead screen with a spinner on it, so it says what happened
+           * and offers the button again. A retry is safe: the effect's guard is released
+           * with it, and a blank consultation is reused rather than piling up.
+           */
+          (openable.error ?? create.error) ? (
+            <div className="p-6">
+              <ErrorState
+                labels={{ retry: t('common.retry'), reference: t('common.reference') }}
+                title={t('consult.couldNotOpen')}
+                message={(create.error ?? openable.error)?.message ?? ''}
+                traceId={(create.error ?? openable.error)?.traceId}
+                onRetry={() => {
+                  opening.current = false;
+                  create.reset();
+                  void openable.refetch();
+                }}
+                retrying={create.isPending || openable.isFetching}
+              />
+            </div>
+          ) : (
+            <ConsultSkeleton />
+          )
         ) : detail.isLoading ? (
           <ConsultSkeleton />
         ) : detail.error?.status === 404 && !consultation ? (
@@ -518,57 +575,64 @@ function ConsultationWorkspace({
 
   return (
     <>
-      <div className="shrink-0 border-b border-[var(--uxe-border)] bg-[var(--uxe-surface)] px-4 py-2.5 sm:px-6">
-        <label htmlFor="consultation-title" className="sr-only">
-          {t('consult.consultationTitle')}
-        </label>
-        <input
-          id="consultation-title"
-          value={title}
-          onChange={(event) => setTitle(event.target.value)}
-          onBlur={() => title.trim() && title !== consultation.title && rename.mutate(title.trim())}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') event.currentTarget.blur();
-            if (event.key === 'Escape') setTitle(consultation.title);
-          }}
-          className="w-full truncate rounded-[var(--uxe-radius-control)] bg-transparent text-[20px] font-bold text-[var(--uxe-text)] outline-none focus-visible:bg-[var(--uxe-surface-hover)] focus-visible:px-2 sm:text-[22px]"
-        />
-
+      <div className="shrink-0 border-b border-[var(--uxe-border)] bg-[var(--uxe-surface)] px-4 py-2 sm:px-6">
         {/*
-          The task, as a row of pills under the title.
+          The name and the task on one line where there is room for both.
+
+          Two stacked bands cost 90px of a window that has to hold a conversation. They are
+          a name and four short pills; on anything wider than a phone they fit beside each
+          other, and the space goes to the messages instead.
+        */}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
+          <label htmlFor="consultation-title" className="sr-only">
+            {t('consult.consultationTitle')}
+          </label>
+          <input
+            id="consultation-title"
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+            onBlur={() =>
+              title.trim() && title !== consultation.title && rename.mutate(title.trim())
+            }
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') event.currentTarget.blur();
+              if (event.key === 'Escape') setTitle(consultation.title);
+            }}
+            className="min-w-0 flex-1 truncate rounded-[var(--uxe-radius-control)] bg-transparent text-[20px] font-bold text-[var(--uxe-text)] outline-none focus-visible:bg-[var(--uxe-surface-hover)] focus-visible:px-2 sm:text-[22px]"
+          />
+
+          {/*
+          The task, as a row of pills.
 
           These were four cards the height of a toolbar band, each with its icon stacked
-          over its label, in a band of their own under the title band — a quarter of the
-          screen before the conversation began. The choice is the same; it takes one line.
+          over its label, in a band of their own under the title — a quarter of the screen
+          before the conversation began. The choice is the same; it takes one line.
         */}
-        <div
-          role="radiogroup"
-          aria-label={t('consult.task')}
-          className="mt-1.5 flex flex-wrap gap-1.5"
-        >
-          {TASK_MODES.map((mode) => {
-            const Icon = mode.icon;
-            const active = taskMode === mode.value;
-            return (
-              <button
-                key={mode.value}
-                type="button"
-                role="radio"
-                aria-checked={active}
-                onClick={() => onTaskModeChange(mode.value)}
-                className={cn(
-                  'inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[13px] font-medium transition-colors',
-                  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--uxe-cobalt)]',
-                  active
-                    ? 'border-[var(--uxe-cobalt)] bg-[var(--uxe-surface-selected)] text-[var(--uxe-cobalt)]'
-                    : 'border-[var(--uxe-border)] bg-[var(--uxe-surface)] text-[var(--uxe-text-secondary)] hover:bg-[var(--uxe-surface-hover)] hover:text-[var(--uxe-text)]',
-                )}
-              >
-                <Icon className="h-4 w-4 shrink-0" aria-hidden />
-                {t(mode.labelKey)}
-              </button>
-            );
-          })}
+          <div role="radiogroup" aria-label={t('consult.task')} className="flex shrink-0 gap-1.5">
+            {TASK_MODES.map((mode) => {
+              const Icon = mode.icon;
+              const active = taskMode === mode.value;
+              return (
+                <button
+                  key={mode.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={active}
+                  onClick={() => onTaskModeChange(mode.value)}
+                  className={cn(
+                    'inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[13px] font-medium transition-colors',
+                    'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--uxe-cobalt)]',
+                    active
+                      ? 'border-[var(--uxe-cobalt)] bg-[var(--uxe-surface-selected)] text-[var(--uxe-cobalt)]'
+                      : 'border-[var(--uxe-border)] bg-[var(--uxe-surface)] text-[var(--uxe-text-secondary)] hover:bg-[var(--uxe-surface-hover)] hover:text-[var(--uxe-text)]',
+                  )}
+                >
+                  <Icon className="h-4 w-4 shrink-0" aria-hidden />
+                  {t(mode.labelKey)}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 
@@ -692,13 +756,13 @@ function AnswerActions({ consultation }: { consultation: ConsultationDetail }) {
 
   return (
     <div className="shrink-0 border-t border-[var(--uxe-border)] bg-[var(--uxe-surface)] px-4 py-2.5 sm:px-6">
-      <div className="mx-auto flex max-w-4xl flex-wrap items-center gap-2">
+      <div className="mx-auto flex max-w-4xl items-center gap-2 overflow-x-auto">
         {/*
           The button and its one option, joined into a split control.
           What a report contains is a decision about that report, so it belongs on the
           control that makes it rather than in a settings panel two clicks away.
         */}
-        <span className="flex items-center">
+        <span className="flex shrink-0 items-center">
           <Button
             variant="secondary"
             size="sm"
@@ -743,6 +807,7 @@ function AnswerActions({ consultation }: { consultation: ConsultationDetail }) {
         <Button
           variant="ghost"
           size="sm"
+          className="shrink-0"
           onClick={() => generate.mutate({ kind: 'evidence_matrix', format: 'csv' })}
           loading={
             generate.isPending &&
@@ -758,6 +823,7 @@ function AnswerActions({ consultation }: { consultation: ConsultationDetail }) {
         <Button
           variant="ghost"
           size="sm"
+          className="shrink-0"
           onClick={() => generate.mutate({ kind: 'evidence_matrix', format: 'xlsx' })}
           loading={
             generate.isPending &&
@@ -770,7 +836,6 @@ function AnswerActions({ consultation }: { consultation: ConsultationDetail }) {
           <Table2 className="h-4 w-4" aria-hidden />
           {t('evidence.downloadXlsx')}
         </Button>
-        {!ready && <p className="text-[12px] text-[var(--uxe-text-secondary)]">{whyDisabled}</p>}
       </div>
     </div>
   );
@@ -1118,7 +1183,14 @@ function Composer({
             className="resize-none border-0 bg-transparent shadow-none focus:ring-0"
           />
 
-          <div className="flex flex-wrap items-center gap-1.5 border-t border-[var(--uxe-border)] p-2">
+          {/*
+            One line, scrolled sideways if it has to be.
+
+            Wrapping put the connectors, the attachments and the send controls on three
+            rows on a narrow window — 100px of composer taken from the conversation above
+            it. A row that scrolls costs a fixed 44px whatever is in it.
+          */}
+          <div className="flex items-center gap-1.5 overflow-x-auto border-t border-[var(--uxe-border)] p-2">
             <input
               ref={fileRef}
               type="file"

@@ -684,6 +684,86 @@ describe('consultation management', () => {
   });
 });
 
+/*
+ * A list of three hundred rows all reading "New consultation" is a list nobody can use,
+ * and that is what every consultation was called until somebody renamed it — which nobody
+ * did. The document sent in for review names it instead.
+ */
+describe('naming a consultation', () => {
+  /*
+   * Created the way the application creates one — with the default name — because the
+   * default name is exactly what the rename is allowed to replace. The shared helper here
+   * titles its consultations "Integration consultation", which is a name somebody chose.
+   */
+  async function unnamedConsultation(): Promise<string> {
+    const response = await owner.client.post<{ id: string; version: number }>('/consultations', {
+      title: 'New consultation',
+      taskMode: 'ask',
+      /*
+       * Narrowed to the code deliberately. Opening a consultation with no list attaches
+       * every approved source as governing — including the fixture about to be sent in for
+       * review, which then has nowhere to arrive as a project document.
+       */
+      sourceIds: [regulationId],
+    });
+    expect(response.status).toBeLessThan(300);
+    return response.body.id;
+  }
+
+  async function detailOf(consultationId: string) {
+    const response = await owner.client.get<{
+      title: string;
+      sources: Array<{ title: string; role: string }>;
+    }>(`/consultations/${consultationId}`);
+    expect(response.status).toBe(200);
+    return response.body;
+  }
+
+  /*
+   * Asserted against the document the consultation ends up holding rather than the file
+   * name posted, because the two are allowed to differ: these fixtures' bytes are already
+   * in the workspace, so the upload deduplicates onto the copy it already has. The rule is
+   * that a consultation is named after the document attached to it, and that is what is
+   * checked — a test pinned to the posted file name would be testing the dedupe instead.
+   */
+  it('takes the name of the document sent into it', async () => {
+    const consultationId = await unnamedConsultation();
+    await attachProjectDocument(consultationId, 'FA_32456.pdf', 'project-plan.pdf');
+
+    const detail = await detailOf(consultationId);
+    const document = detail.sources.find((source) => source.role === 'project');
+    expect(document).toBeDefined();
+    expect(detail.title).toBe(document?.title);
+    expect(detail.title).not.toBe('New consultation');
+  });
+
+  it('never overwrites a name somebody typed', async () => {
+    const consultationId = await unnamedConsultation();
+    // A freshly created consultation is at version 0.
+    const renamed = await owner.client.patch(`/consultations/${consultationId}`, {
+      title: 'Tower A — second submission',
+      version: 0,
+    });
+    expect(renamed.status, JSON.stringify(renamed.body)).toBeLessThan(300);
+
+    await attachProjectDocument(consultationId, 'FA_99999.pdf', 'project-plan.pdf');
+
+    expect((await detailOf(consultationId)).title).toBe('Tower A — second submission');
+  });
+
+  it('keeps the name it is known by when a second document arrives', async () => {
+    const consultationId = await unnamedConsultation();
+    await attachProjectDocument(consultationId, 'FA_first.pdf', 'project-plan.pdf');
+    const firstName = (await detailOf(consultationId)).title;
+
+    await attachProjectDocument(consultationId, 'FA_second.docx', 'policy.docx');
+
+    const after = await detailOf(consultationId);
+    expect(after.sources.filter((source) => source.role === 'project')).toHaveLength(2);
+    expect(after.title).toBe(firstName);
+  });
+});
+
 describe('what needs attention', () => {
   /*
    * The finished review is written directly rather than produced by asking a question.

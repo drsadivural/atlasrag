@@ -1,6 +1,15 @@
+import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Download, FileText, Info, ShieldCheck } from 'lucide-react';
+import {
+  ArrowLeft,
+  Download,
+  FileText,
+  Info,
+  Maximize2,
+  Minimize2,
+  ShieldCheck,
+} from 'lucide-react';
 import {
   Badge,
   Button,
@@ -119,6 +128,10 @@ export function ReportDetailPage() {
       />
 
       <div className="mt-5 flex flex-col gap-4">
+        {artifact.documentType === 'pdf' && artifact.status === 'ready' && (
+          <PdfPreview artifactId={artifact.id} title={artifact.title} />
+        )}
+
         <Card>
           <CardHeader>
             <CardTitle>{t('reports.generatedBy')}</CardTitle>
@@ -228,6 +241,94 @@ export function ReportDetailPage() {
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * The report itself, read on the page rather than downloaded first.
+ *
+ * The bytes are fetched through the same signed link the download button uses — the same
+ * permission check, the same expiring URL — and handed to the browser's own PDF viewer as
+ * a blob.
+ *
+ * Fetched rather than framed directly, deliberately. The storage endpoint serves every
+ * file as `application/octet-stream` with `Content-Disposition: attachment`, because
+ * rendering a user-supplied document inline would let an uploaded HTML file execute on
+ * this origin. That header stays exactly as it is. What happens here instead is that bytes
+ * this person is already authorised to download are re-typed, client-side, as
+ * `application/pdf` — so a file that turned out not to be a PDF fails to render rather
+ * than running. The type is asserted, never sniffed.
+ */
+function PdfPreview({ artifactId, title }: { artifactId: string; title: string }) {
+  const { t } = useI18n();
+  const [expanded, setExpanded] = useState(false);
+
+  const preview = useQuery<string, Error>({
+    queryKey: ['artifact-preview', artifactId],
+    queryFn: async () => {
+      const signed = await api.get<{ url: string }>(`/artifacts/${artifactId}/download`);
+      const response = await fetch(signed.url);
+      if (!response.ok) throw new Error(`The file could not be read (${response.status}).`);
+      return URL.createObjectURL(
+        new Blob([await response.arrayBuffer()], { type: 'application/pdf' }),
+      );
+    },
+    // A blob URL is a handle on memory, not a cached value: it is released on unmount, so
+    // it must not be handed back to a later mount that would find it already revoked.
+    gcTime: 0,
+    staleTime: 0,
+    retry: false,
+  });
+
+  const url = preview.data;
+  useEffect(
+    () => () => {
+      if (url) URL.revokeObjectURL(url);
+    },
+    [url],
+  );
+
+  return (
+    <Card flush className="overflow-hidden">
+      <div className="flex items-center justify-between gap-2 border-b border-[var(--uxe-border)] px-4 py-2.5">
+        <CardTitle>{t('report.preview')}</CardTitle>
+        <Button variant="ghost" size="sm" onClick={() => setExpanded((value) => !value)}>
+          {expanded ? (
+            <Minimize2 className="h-4 w-4" aria-hidden />
+          ) : (
+            <Maximize2 className="h-4 w-4" aria-hidden />
+          )}
+          {expanded ? t('report.previewShrink') : t('report.previewExpand')}
+        </Button>
+      </div>
+
+      {preview.isLoading && (
+        <LoadingRegion label={t('report.previewLoading')}>
+          <Skeleton className="h-[70vh] w-full rounded-none" />
+        </LoadingRegion>
+      )}
+
+      {preview.error && (
+        <div className="p-4">
+          <ErrorState
+            labels={{ retry: t('common.retry'), reference: t('common.reference') }}
+            title={t('report.previewFailed')}
+            message={preview.error.message}
+            onRetry={() => void preview.refetch()}
+          />
+        </div>
+      )}
+
+      {url && (
+        <iframe
+          src={url}
+          title={t('report.previewOf', { title })}
+          className={
+            expanded ? 'h-[calc(100dvh-8rem)] w-full border-0' : 'h-[70vh] w-full border-0'
+          }
+        />
+      )}
+    </Card>
   );
 }
 

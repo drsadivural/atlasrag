@@ -308,7 +308,7 @@ function AuditEventPanel({
       onOpenChange={onOpenChange}
       title={event?.summary ?? ''}
       description={event ? formatDateTime(event.at) : ''}
-      width="md"
+      width="half"
       footer={
         <Button variant="ghost" onClick={() => onOpenChange(false)}>
           {t('common.close')}

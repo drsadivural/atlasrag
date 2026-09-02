@@ -204,8 +204,20 @@ export function SlideOver({
   children,
   footer,
   width = 'md',
-}: Omit<DialogProps, 'size' | 'variant'> & { width?: 'sm' | 'md' | 'lg' }) {
-  const widths = { sm: 'sm:max-w-sm', md: 'sm:max-w-md', lg: 'sm:max-w-2xl' } as const;
+}: Omit<DialogProps, 'size' | 'variant'> & { width?: 'sm' | 'md' | 'lg' | 'half' }) {
+  /*
+   * `half` is half the window, not a size that happens to look like it.
+   *
+   * The others are content widths — as wide as their text wants to be. A detail panel read
+   * beside the list it came from is a different thing: it is asked for as a share of the
+   * screen, and on a wide monitor `max-w-2xl` leaves two thirds of it empty.
+   */
+  const widths = {
+    sm: 'sm:max-w-sm',
+    md: 'sm:max-w-md',
+    lg: 'sm:max-w-2xl',
+    half: 'sm:max-w-[50vw]',
+  } as const;
 
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
