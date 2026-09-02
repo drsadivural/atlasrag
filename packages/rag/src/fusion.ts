@@ -6,9 +6,11 @@ export interface FusedCandidate extends ChunkCandidate {
   fusedScore: number;
   /** Post-rerank score in 0..1. This is what drives evidence selection. */
   rerankScore: number;
-  channels: Array<'lexical' | 'vector'>;
+  channels: Array<'lexical' | 'vector' | 'locator'>;
   lexicalRank: number | null;
   vectorRank: number | null;
+  /** Rank in the clause-number channel, when the query named one. */
+  locatorRank: number | null;
 }
 
 /**
@@ -24,7 +26,11 @@ export interface FusedCandidate extends ChunkCandidate {
  * completely dictate the merged order.
  */
 export function reciprocalRankFusion(
-  lists: Array<{ channel: 'lexical' | 'vector'; items: ChunkCandidate[]; weight?: number }>,
+  lists: Array<{
+    channel: 'lexical' | 'vector' | 'locator';
+    items: ChunkCandidate[];
+    weight?: number;
+  }>,
   k = 60,
 ): FusedCandidate[] {
   const merged = new Map<string, FusedCandidate>();
@@ -40,7 +46,8 @@ export function reciprocalRankFusion(
         existing.fusedScore += contribution;
         if (!existing.channels.includes(list.channel)) existing.channels.push(list.channel);
         if (list.channel === 'lexical') existing.lexicalRank = rank;
-        else existing.vectorRank = rank;
+        else if (list.channel === 'vector') existing.vectorRank = rank;
+        else existing.locatorRank = rank;
         // Keep the strongest raw score seen for this chunk, for display and audit.
         existing.score = Math.max(existing.score, item.score);
       } else {
@@ -51,6 +58,7 @@ export function reciprocalRankFusion(
           channels: [list.channel],
           lexicalRank: list.channel === 'lexical' ? rank : null,
           vectorRank: list.channel === 'vector' ? rank : null,
+          locatorRank: list.channel === 'locator' ? rank : null,
         });
       }
     });
@@ -175,17 +183,45 @@ export function rerank(
 
 /** Pulls clause-like references out of a natural-language question. */
 export function extractLocators(query: string): string[] {
-  const out = new Set<string>();
+  const found = locatorsByConfidence(query);
+  return [...new Set([...found.named, ...found.bare])];
+}
+
+/**
+ * Locators split by how sure we are that a number is one.
+ *
+ * `named` was introduced by a word — "clause 6.4.2", "section 5.2" — and is not in doubt.
+ * `bare` is a dotted number standing on its own, which is usually a clause reference in a
+ * question and is sometimes a measurement: "2.5" is a clause in "does 2.5 apply?" and a
+ * width in "a 2.5 m corridor". Three or more components settle it, because dimensions are
+ * not written 6.4.2.
+ *
+ * The distinction exists because the two are used differently. Reranking may use every
+ * candidate locator, since it only reorders passages retrieval already found. Fetching
+ * passages *by* locator may not: a measurement read as a clause number pulls in an
+ * unrelated clause and pushes a real answer out of the results, which is what a small
+ * regression on sentence-shaped queries turned out to be.
+ */
+export function locatorsByConfidence(query: string): { named: string[]; bare: string[] } {
+  const named = new Set<string>();
   for (const m of query.matchAll(
     /\b(?:clause|section|article|chapter|annex|table|part)\s+([0-9A-Z]+(?:\.\d+)*)/gi,
   )) {
-    if (m[1]) out.add(m[1]);
+    if (m[1]) named.add(m[1]);
   }
-  // A bare dotted number in a question is almost always a clause reference.
+
+  const bare = new Set<string>();
   for (const m of query.matchAll(/\b(\d{1,3}(?:\.\d{1,3}){1,4})\b/g)) {
-    if (m[1]) out.add(m[1]);
+    if (m[1] && !named.has(m[1])) bare.add(m[1]);
   }
-  return [...out];
+  return { named: [...named], bare: [...bare] };
+}
+
+/** Locators confident enough to fetch passages by, rather than merely to rank with. */
+export function retrievableLocators(query: string): string[] {
+  const { named, bare } = locatorsByConfidence(query);
+  const deep = bare.filter((locator) => locator.split('.').length >= 3);
+  return [...new Set([...named, ...deep])];
 }
 
 function computeProximity(tokens: string[], querySet: Set<string>): number {

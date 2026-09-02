@@ -18,6 +18,7 @@
     "format": "prettier --write \"**/*.{ts,tsx,js,json,md,css,yml,yaml}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,json,md,css,yml,yaml}\"",
     "test": "vitest run --project unit --project component --project integration --project rag-evals --project security",
+    "accuracy": "tsx --env-file=.env scripts/retrieval-accuracy.ts",
     "test:unit": "vitest run --project unit",
     "test:component": "vitest run --project component",
     "test:integration": "vitest run --project integration",

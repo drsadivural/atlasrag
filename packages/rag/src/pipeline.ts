@@ -15,6 +15,7 @@ import {
   dedupeCandidates,
   diversify,
   extractLocators,
+  retrievableLocators,
   reciprocalRankFusion,
   rerank,
   type FusedCandidate,
@@ -97,6 +98,13 @@ export interface RetrieveOptions {
 export interface RetrievalTelemetry {
   lexicalCandidates: number;
   vectorCandidates: number;
+  /** Chunks matched by clause number. Zero unless the query named one. */
+  locatorCandidates: number;
+  /**
+   * True when the vector channel returned nothing and the corpus is embedded under a
+   * different model — the signature of an embedding provider changed without re-indexing.
+   */
+  vectorIndexMismatch: boolean;
   fusedCandidates: number;
   afterDedupe: number;
   finalCandidates: number;
@@ -141,6 +149,8 @@ export async function retrieve(
       telemetry: {
         lexicalCandidates: 0,
         vectorCandidates: 0,
+        locatorCandidates: 0,
+        vectorIndexMismatch: false,
         fusedCandidates: 0,
         afterDedupe: 0,
         finalCandidates: 0,
@@ -152,10 +162,23 @@ export async function retrieve(
   }
 
   const expandedQuery = expandQuery(query, inScope);
+  const locators = extractLocators(query);
+  // Ranking may use every candidate locator; fetching by one may not. See the note there.
+  const fetchable = retrievableLocators(query);
 
-  const [lexical, embedding] = await Promise.all([
+  const [lexical, embedding, locatorHits] = await Promise.all([
     repo.lexicalSearch(ctx, { sourceVersionIds: versionIds }, expandedQuery, channelLimit),
     embedder.embed([expandedQuery]).then((v) => v[0] ?? []),
+    /*
+     * A third channel, and only when the query names a clause.
+     *
+     * It reads the clause column rather than searching text, which is the only way this
+     * lookup can be reliable: the indexer lifts "6.4.2" out of the heading into its own
+     * column and the body does not repeat it, so on a real code the number is absent from
+     * the indexed text of all but a handful of the chunks that carry one. Both text
+     * channels were searching for a string that is not there.
+     */
+    repo.locatorSearch(ctx, { sourceVersionIds: versionIds }, fetchable, channelLimit),
   ]);
 
   const vector = await repo.vectorSearch(
@@ -166,13 +189,34 @@ export async function retrieve(
     channelLimit,
   );
 
+  /*
+   * Half the retrieval going missing should not be silent.
+   *
+   * Embeddings are stored per model and searched per model, so changing the embedding
+   * provider without re-embedding the corpus returns zero vector rows for every query
+   * forever. Answers keep coming — the lexical half still works — and nothing says that
+   * paraphrase matching has stopped. Only asked when the channel came back empty, so the
+   * usual path costs nothing.
+   */
+  const vectorIndexMismatch =
+    vector.length === 0
+      ? await repo.embeddedUnderOtherModel(ctx, { sourceVersionIds: versionIds }, embedder.model)
+      : false;
+
   const fused = reciprocalRankFusion([
     { channel: 'lexical', items: lexical, weight: 1 },
     { channel: 'vector', items: vector, weight: 1 },
+    /*
+     * Weighted above the text channels because it is not a guess. An exact match on a
+     * parsed identifier is the strongest evidence available that this is the clause asked
+     * for, and it is the difference between a clause lookup landing first and not landing
+     * at all. It contributes nothing when the query names no clause.
+     */
+    { channel: 'locator', items: locatorHits, weight: 2 },
   ]);
 
   const ranked = rerank(query, fused, {
-    targetLocators: extractLocators(query),
+    targetLocators: locators,
     preferRequirements: options.preferRequirements ?? false,
   });
 
@@ -189,6 +233,8 @@ export async function retrieve(
     telemetry: {
       lexicalCandidates: lexical.length,
       vectorCandidates: vector.length,
+      locatorCandidates: locatorHits.length,
+      vectorIndexMismatch,
       fusedCandidates: fused.length,
       afterDedupe: deduped.length,
       finalCandidates: finalCandidates.length,

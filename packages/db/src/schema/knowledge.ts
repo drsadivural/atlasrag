@@ -274,7 +274,15 @@ export const sourceChunks = pgTable(
      * in `headingText` and is folded into the search index and the embedding input instead.
      */
     content: text('content').notNull(),
-    /** Parent heading path, indexed for search but never quoted as source text. */
+    /**
+     * Parent heading path, indexed for search but never quoted as source text.
+     *
+     * Also where the clause number lives for retrieval purposes. Structure detection lifts
+     * "6.4.2" out of the heading into its own column and the body does not repeat it, so
+     * without this the identifier was absent from everything searchable and a clause could
+     * not be looked up by number. Safe to put here precisely because this column is never
+     * quoted: it can never appear inside an excerpt that then fails verbatim verification.
+     */
     headingText: text('heading_text').notNull().default(''),
     tokenCount: integer('token_count').notNull().default(0),
     pageNumber: integer('page_number'),
@@ -297,13 +305,21 @@ export const sourceChunks = pgTable(
     index('source_chunks_tenant_idx').on(t.workspaceId, t.sourceId),
     index('source_chunks_page_idx').on(t.sourceVersionId, t.pageNumber),
     /**
-     * GIN index over exactly the expression the lexical query uses, so the BM25-equivalent
-     * half of hybrid retrieval never falls back to a sequential scan on a large corpus.
+     * GIN index over the stored search vector.
+     *
+     * The column it indexes — `search_vector`, a `tsvector` generated always as
+     * `to_tsvector('english', coalesce(heading_text,'') || ' ' || content)` — is created in
+     * migration 0013 rather than declared here, because a stored generated column is not
+     * something this schema's column helpers can express. It is not read through Drizzle:
+     * the lexical query is raw SQL, and nothing else needs it.
+     *
+     * It replaced an index over the same expression computed at query time. The index could
+     * satisfy the match but not `ts_rank_cd`, so every matched row had its vector rebuilt to
+     * be scored — on a real code that is around 17,500 rebuilds for one broad search, and
+     * most of the query's time. Storing it also made the table smaller, because the vector
+     * is no longer duplicated inside an expression index.
      */
-    index('source_chunks_fts_idx').using(
-      'gin',
-      sql`to_tsvector('english', coalesce(${t.headingText}, '') || ' ' || ${t.content})`,
-    ),
+    index('source_chunks_search_vector_idx').using('gin', sql`search_vector`),
   ],
 );
 

@@ -290,7 +290,25 @@ async function runAnswerJob(
     job.id,
     'retrieval',
     'complete',
-    `${result.telemetry.finalCandidates} passage(s) from ${result.telemetry.lexicalCandidates} lexical + ${result.telemetry.vectorCandidates} vector candidates`,
+    [
+      `${result.telemetry.finalCandidates} passage(s) from ${result.telemetry.lexicalCandidates} lexical`,
+      `${result.telemetry.vectorCandidates} vector`,
+      result.telemetry.locatorCandidates > 0
+        ? `${result.telemetry.locatorCandidates} clause candidates`
+        : null,
+      /*
+       * Said out loud, because it is the failure that otherwise says nothing.
+       *
+       * Embeddings are stored and searched per model, so changing the embedding provider
+       * without re-indexing returns zero vector rows for every query from then on. Answers
+       * keep arriving on the lexical half alone and nothing on the screen is different.
+       */
+      result.telemetry.vectorIndexMismatch
+        ? 'WARNING: these documents are embedded under a different model, so the vector half of retrieval matched nothing — re-index them'
+        : null,
+    ]
+      .filter(Boolean)
+      .join(' + '),
   );
   await deps.repos.jobs.updateStage(job.id, 'rerank', 'complete');
   await deps.repos.jobs.updateStage(job.id, 'analysis', 'complete');

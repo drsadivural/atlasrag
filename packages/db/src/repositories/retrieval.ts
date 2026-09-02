@@ -94,7 +94,7 @@ export interface ChunkCandidate {
   /** Normalised 0..1. Lexical rank for BM25-equivalent hits, cosine similarity for vectors. */
   score: number;
   /** Where the candidate came from, so reciprocal-rank fusion can weight the two lists. */
-  channel: 'lexical' | 'vector';
+  channel: 'lexical' | 'vector' | 'locator';
   rank: number;
 }
 
@@ -259,6 +259,25 @@ export class RetrievalRepository {
    * tsquery operator can arrive from user input.
    */
   static buildTsQuery(query: string): string | null {
+    return RetrievalRepository.tsQueryParts(query)?.any ?? null;
+  }
+
+  /**
+   * The query in two strengths: every term, and any term.
+   *
+   * `any` is what has always been used, and it is right for recall — a paraphrased
+   * question shares only some words with the passage that answers it. On a small corpus
+   * that is enough. On a 17,000-chunk code it is not: "fire resistance rated window
+   * assemblies" ORs down to a pool where thousands of chunks match on "fire" alone, and the
+   * passage that contains all five words has to out-rank them on `ts_rank_cd` to survive
+   * into the top sixty.
+   *
+   * `all` fixes that by asking the question precisely first. It is run before `any` and
+   * usually returns few or no rows; the two are concatenated, so precision leads and recall
+   * still follows. Neither is discarded, which matters because `all` returns nothing at all
+   * for most natural questions.
+   */
+  static tsQueryParts(query: string): { all: string; any: string } | null {
     const phrases: string[] = [];
     const remainder = query.replace(/"([^"]{2,120})"/g, (_m, phrase: string) => {
       const words = String(phrase)
@@ -275,12 +294,18 @@ export class RetrievalRepository {
       .map((t) => (t.includes('.') ? `'${t}'` : t));
 
     const parts = [...phrases.map((p) => `(${p})`), ...new Set(terms)];
-    return parts.length === 0 ? null : parts.join(' | ');
+    if (parts.length === 0) return null;
+    return { all: parts.join(' & '), any: parts.join(' | ') };
   }
 
   /**
    * Lexical half of hybrid retrieval: PostgreSQL full-text search with `ts_rank_cd`,
    * a BM25-equivalent ranking over the same chunk text the vectors index.
+   *
+   * Reads `search_vector`, a stored generated column, rather than building the tsvector per
+   * row. The GIN index could satisfy the match but not the ranking, so every matched row
+   * was rebuilt to be scored — on a real code a broad query matches around 17,500 chunks,
+   * and that rebuild was most of the query's time.
    *
    * `sourceVersionIds` is always supplied by the caller *after* running the ACL
    * predicate, so this query can never reach a document the user may not see.
@@ -292,11 +317,23 @@ export class RetrievalRepository {
     limit: number,
   ): Promise<ChunkCandidate[]> {
     if (scope.sourceVersionIds.length === 0 || !query.trim()) return [];
-    const tsquery = RetrievalRepository.buildTsQuery(query);
-    if (!tsquery) return [];
+    const parts = RetrievalRepository.tsQueryParts(query);
+    if (!parts) return [];
 
+    /*
+     * Precision first, then recall, in one pass.
+     *
+     * `matched_all` is 1 for a chunk that contains every query term and 0 otherwise, and it
+     * is the primary sort key. So a passage answering the whole question outranks every
+     * passage that merely shares a common word with it, and when nothing matches everything
+     * — which is the usual case for a natural question — the ordering falls back to
+     * `ts_rank_cd` over the OR query exactly as before.
+     */
     const rows = await this.db.execute(sql`
-      WITH q AS (SELECT to_tsquery('english', ${tsquery}) AS tsq)
+      WITH q AS (
+        SELECT to_tsquery('english', ${parts.any}) AS tsq,
+               to_tsquery('english', ${parts.all}) AS tsq_all
+      )
       SELECT
         c.id, c.source_id, c.source_version_id, c.ordinal, c.content,
         c.page_number, c.page_end, c.sheet_name, c.cell_range, c.slide_number,
@@ -304,19 +341,16 @@ export class RetrievalRepository {
         c.char_start, c.char_end, c.kind,
         s.title AS document_title, s.document_type, s.effective_date,
         v.sha256 AS source_sha256, v.version AS source_version_label,
-        ts_rank_cd(
-          to_tsvector('english', coalesce(c.heading_text, '') || ' ' || c.content),
-          q.tsq,
-          32
-        ) AS rank
+        ts_rank_cd(c.search_vector, q.tsq, 32) AS rank,
+        (c.search_vector @@ q.tsq_all) AS matched_all
       FROM source_chunks c
       CROSS JOIN q
       JOIN sources s ON s.id = c.source_id
       JOIN source_versions v ON v.id = c.source_version_id
       WHERE c.workspace_id = ${ctx.workspaceId}
         AND c.source_version_id = ANY(${sql.param(scope.sourceVersionIds)}::text[])
-        AND to_tsvector('english', coalesce(c.heading_text, '') || ' ' || c.content) @@ q.tsq
-      ORDER BY rank DESC
+        AND c.search_vector @@ q.tsq
+      ORDER BY matched_all DESC, rank DESC
       LIMIT ${limit}
     `);
 
@@ -360,9 +394,96 @@ export class RetrievalRepository {
     return this.mapCandidates(rows as unknown as Array<Record<string, unknown>>, 'vector');
   }
 
+  /**
+   * Whether these documents are embedded under a model other than the one asking.
+   *
+   * `vectorSearch` filters on the embedding model, so a deployment that switches embedding
+   * providers without re-embedding gets zero vector rows for every query — retrieval
+   * silently drops to lexical-only, with no error and nothing on screen to say the semantic
+   * half has stopped working. This distinguishes that from a corpus that simply has no
+   * embeddings yet, which is a different and much more visible problem.
+   */
+  async embeddedUnderOtherModel(
+    ctx: TenantContext,
+    scope: RetrievalScope,
+    model: string,
+  ): Promise<boolean> {
+    if (scope.sourceVersionIds.length === 0) return false;
+    const rows = (await this.db.execute(sql`
+      SELECT 1
+        FROM embeddings e
+       WHERE e.workspace_id = ${ctx.workspaceId}
+         AND e.source_version_id = ANY(${sql.param(scope.sourceVersionIds)}::text[])
+         AND e.model <> ${model}
+       LIMIT 1
+    `)) as unknown as unknown[];
+    return Array.isArray(rows) && rows.length > 0;
+  }
+
+  /**
+   * The clause a query names, matched against the column that holds it.
+   *
+   * Structure detection lifts "6.4.2" out of the heading into `clause`, and the body below
+   * a heading does not repeat it — so on a real code, a clause number is absent from the
+   * indexed text of all but a handful of the chunks that carry one. Searching for it as
+   * text found nothing, whatever the ranking did afterwards.
+   *
+   * This does not search text at all. It reads the identifier the indexer already parsed,
+   * which is exact, needs no extraction to have gone well, and is the one lookup in a
+   * compliance product that should never be approximate.
+   *
+   * Sub-clauses come back under their parent — asking for 6.4 returns 6.4.1 and 6.4.2 —
+   * but always after every exact match, so naming a clause precisely still puts that clause
+   * first.
+   */
+  async locatorSearch(
+    ctx: TenantContext,
+    scope: RetrievalScope,
+    locators: string[],
+    limit: number,
+  ): Promise<ChunkCandidate[]> {
+    if (scope.sourceVersionIds.length === 0 || locators.length === 0) return [];
+
+    // Bounded so a query full of numbers cannot turn into an unbounded prefix scan.
+    const wanted = [...new Set(locators.map((l) => l.trim()).filter(Boolean))].slice(0, 8);
+    if (wanted.length === 0) return [];
+    const prefixes = wanted.map((l) => `${l}.%`);
+
+    const rows = await this.db.execute(sql`
+      SELECT
+        c.id, c.source_id, c.source_version_id, c.ordinal, c.content,
+        c.page_number, c.page_end, c.sheet_name, c.cell_range, c.slide_number,
+        c.chapter, c.section, c.clause, c.heading_path, c.paragraph_index,
+        c.char_start, c.char_end, c.kind,
+        s.title AS document_title, s.document_type, s.effective_date,
+        v.sha256 AS source_sha256, v.version AS source_version_label,
+        CASE
+          WHEN c.clause = ANY(${sql.param(wanted)}::text[]) THEN 1.0
+          WHEN c.section = ANY(${sql.param(wanted)}::text[]) THEN 0.8
+          WHEN c.chapter = ANY(${sql.param(wanted)}::text[]) THEN 0.6
+          ELSE 0.4
+        END AS rank
+      FROM source_chunks c
+      JOIN sources s ON s.id = c.source_id
+      JOIN source_versions v ON v.id = c.source_version_id
+      WHERE c.workspace_id = ${ctx.workspaceId}
+        AND c.source_version_id = ANY(${sql.param(scope.sourceVersionIds)}::text[])
+        AND (
+          c.clause = ANY(${sql.param(wanted)}::text[])
+          OR c.section = ANY(${sql.param(wanted)}::text[])
+          OR c.chapter = ANY(${sql.param(wanted)}::text[])
+          OR c.clause LIKE ANY(${sql.param(prefixes)}::text[])
+        )
+      ORDER BY rank DESC, c.ordinal ASC
+      LIMIT ${limit}
+    `);
+
+    return this.mapCandidates(rows as unknown as Array<Record<string, unknown>>, 'locator');
+  }
+
   private mapCandidates(
     rows: Array<Record<string, unknown>>,
-    channel: 'lexical' | 'vector',
+    channel: 'lexical' | 'vector' | 'locator',
   ): ChunkCandidate[] {
     const list = Array.isArray(rows) ? rows : [];
     // Normalise raw ranks to 0..1 within this result set so the two channels are fusible.

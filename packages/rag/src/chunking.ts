@@ -41,6 +41,43 @@ const DEFAULTS: Required<ChunkOptions> = {
   includeHeadingContext: true,
 };
 
+/**
+ * The clause number, put back where retrieval can see it.
+ *
+ * Structure detection lifts "6.4.2" out of the heading and into its own column, and the
+ * body text below a heading does not repeat it — so across a real 1,348-page code, of the
+ * 10,215 chunks carrying a clause number, the number itself appeared in the indexed text
+ * of 90 and in the heading text of none. Asking for "clause 2.7.1" searched text that
+ * contained no such string: the right passage was never even a candidate, and reranking
+ * cannot promote what retrieval never returned. Measured over the real corpus, a
+ * clause-number lookup found its own clause 0% of the time at rank 1.
+ *
+ * `headingText` is the right home for it. It is folded into both the lexical vector and
+ * the embedding input, and it is never quoted as source text — so the number becomes
+ * findable without any risk of appearing inside an excerpt that then fails verbatim
+ * verification.
+ *
+ * Clause and section only — never the chapter.
+ *
+ * Measured over the real corpus the three variants are indistinguishable (MRR 0.823 with
+ * the chapter, 0.824 without, on 268 queries), so this is decided on correctness rather
+ * than on the metric. A clause or section number is dotted and specific; a chapter number
+ * is a single digit, the most common token there is, and the one heading detection most
+ * often gets wrong — "16 CFR 1634", "1 U.S. gal" and "Part 1" all yield a chapter number
+ * from text that names no chapter. Writing a wrong identifier into the text a compliance
+ * search reads is not worth a gain that is not there.
+ *
+ * Nothing is lost for a chapter lookup: the retrieval channel matches the chapter column
+ * directly, so "chapter 6" still resolves exactly.
+ */
+function locatorPrefix(section: { clause: string | null; section: string | null }): string {
+  const parts = [section.clause, section.section]
+    .filter((part): part is string => typeof part === 'string' && part.trim().length > 0)
+    .map((part) => part.trim());
+  const unique = [...new Set(parts)];
+  return unique.length === 0 ? '' : `${unique.join(' ')} `;
+}
+
 /** Rough token estimate. Close enough for budgeting; exactness is not required here. */
 export function estimateTokens(text: string): number {
   return Math.ceil(normalizeWhitespace(text).length / 4);
@@ -84,7 +121,7 @@ export function chunkSections(sections: DetectedSection[], options: ChunkOptions
         : '';
     const headingLine =
       section.headingPath.length > 0 ? section.headingPath.join(' > ') : section.title;
-    const headingText = opts.includeHeadingContext ? headingLine : '';
+    const headingText = opts.includeHeadingContext ? locatorPrefix(section) + headingLine : '';
 
     const base = {
       headingText,

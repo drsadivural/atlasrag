@@ -189,6 +189,66 @@ describe(`retrieval quality at K=${K}`, () => {
   });
 });
 
+/*
+ * Looking a clause up by its number.
+ *
+ * This is the most literal thing anybody does with a code, and it was the pipeline's worst
+ * failure. Structure detection lifts "6.4.2" out of the heading into its own column and the
+ * body below does not repeat it, so both text channels were searching for a string that was
+ * not in the index: measured over the real 1,348-page corpus, a clause-number lookup found
+ * its own clause 0% of the time at rank 1 and 14% anywhere in the top ten.
+ *
+ * Asserted at rank 1, because there is no partial credit here. Somebody who types a clause
+ * number has told the system exactly what they want.
+ */
+describe('clause lookup', () => {
+  const CLAUSES = ['6.4.2', '6.5.1', '6.6.1'];
+
+  it('returns the clause asked for, first', async () => {
+    for (const clause of CLAUSES) {
+      const outcome = await retrieve(
+        tenant,
+        harness.deps.repos.retrieval,
+        harness.deps.services.embeddings,
+        `clause ${clause}`,
+        scope,
+        { finalLimit: K, maxPerSource: K },
+      );
+
+      expect(outcome.candidates.length, `no candidates for clause ${clause}`).toBeGreaterThan(0);
+      expect(outcome.candidates[0]?.clause, `clause ${clause} was not ranked first`).toBe(clause);
+    }
+  }, 120_000);
+
+  it('reaches the clause through the structured column, not the prose', async () => {
+    const outcome = await retrieve(
+      tenant,
+      harness.deps.repos.retrieval,
+      harness.deps.services.embeddings,
+      'clause 6.4.2',
+      scope,
+      { finalLimit: K, maxPerSource: K },
+    );
+
+    // The channel exists and fired. Without it the lookup depends on the number happening
+    // to survive into the body text, which across a real code it does not.
+    expect(outcome.telemetry.locatorCandidates).toBeGreaterThan(0);
+    expect(outcome.candidates[0]?.channels).toContain('locator');
+  }, 120_000);
+
+  it('costs nothing when the question names no clause', async () => {
+    const outcome = await retrieve(
+      tenant,
+      harness.deps.repos.retrieval,
+      harness.deps.services.embeddings,
+      'What average illuminance must emergency lighting provide?',
+      scope,
+      { finalLimit: K },
+    );
+    expect(outcome.telemetry.locatorCandidates).toBe(0);
+  }, 120_000);
+});
+
 describe('citation quality', () => {
   it('verifies every quoted excerpt against the stored page text', async () => {
     const consultation = await owner.client.post<{ id: string }>('/consultations', {
