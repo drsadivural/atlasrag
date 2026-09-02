@@ -15,6 +15,7 @@ import {
 } from '../schema/index.js';
 import { newId } from '../ids.js';
 import {
+  AuthorizationError,
   NotAuthorityError,
   NotFoundError,
   VersionConflictError,
@@ -177,16 +178,35 @@ export class ConsultationRepository {
     return row;
   }
 
+  /**
+   * Removes a consultation by archiving it.
+   *
+   * `status` moves with `deletedAt`, because leaving the two to disagree is what produced
+   * a workspace full of deleted consultations still labelled `action_required` — read by
+   * everything downstream as live work waiting on somebody. A removed consultation is in
+   * the archive, and the row now says so.
+   */
   async softDelete(ctx: TenantContext, id: string) {
     requirePermission(ctx, 'consultation:delete');
     const current = await this.getById(ctx, id);
-    // Only the owner or an admin may delete; a mere participant may not.
+    /*
+     * Only the owner or an admin may delete; a mere participant may not.
+     *
+     * Refused with 403 rather than 404. The caller has just read the consultation, so
+     * claiming it does not exist hides nothing and misinforms: a reviewer, who can see
+     * every consultation in the workspace, was told "Consultation not found" about a row
+     * still on their screen. The rule is that they may not delete it, so that is what it
+     * says.
+     */
     if (current.ownerUserId !== ctx.userId && !hasPermission(ctx, 'workspace:update')) {
-      throw new NotFoundError('Consultation');
+      throw new AuthorizationError(
+        'consultation:delete',
+        'You can only delete consultations you own.',
+      );
     }
     await this.db
       .update(consultations)
-      .set({ deletedAt: new Date(), updatedAt: new Date() })
+      .set({ deletedAt: new Date(), status: 'archived', updatedAt: new Date() })
       .where(and(eq(consultations.id, id), eq(consultations.workspaceId, ctx.workspaceId)));
   }
 

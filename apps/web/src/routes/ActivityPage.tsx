@@ -1,4 +1,5 @@
-import { useSearchParams } from 'react-router-dom';
+import { useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Activity, CheckCircle2, Download, ShieldAlert, XCircle } from 'lucide-react';
 import {
@@ -14,11 +15,11 @@ import {
   LoadingRegion,
   Pagination,
   Skeleton,
+  SlideOver,
   Tab,
   TabList,
   TabPanel,
   Tabs,
-  Tooltip,
   formatDateTime,
 } from '@uxe/ui';
 import type { AuditEvent, Paginated } from '@uxe/contracts';
@@ -26,7 +27,7 @@ import { type ApiError, api } from '../lib/api.js';
 import { useI18n } from '../lib/i18n.js';
 import { useSession } from '../lib/session.js';
 import { PageHeader } from '../components/PageHeader.js';
-import { NeedsAttention, useAttention } from '../components/NeedsAttention.js';
+import { DetailField, NeedsAttention, useAttention } from '../components/NeedsAttention.js';
 import { PastConsultations } from '../components/PastConsultations.js';
 
 const TABS = ['attention', 'consultations', 'audit'] as const;
@@ -51,6 +52,7 @@ export function ActivityPage() {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const attention = useAttention();
+  const [openEvent, setOpenEvent] = useState<AuditEvent | null>(null);
 
   /*
    * Three things belong on this page and only one fits above the fold, so they are tabs.
@@ -188,6 +190,7 @@ export function ActivityPage() {
                   caption={t('activity.tableCaption')}
                   rows={query.data?.items ?? []}
                   rowKey={(row) => row.id}
+                  onRowClick={(row) => setOpenEvent(row)}
                   empty={
                     <EmptyState
                       icon={<Activity className="h-6 w-6" aria-hidden />}
@@ -255,16 +258,9 @@ export function ActivityPage() {
                       header: t('activity.trace'),
                       hideOnMobile: true,
                       render: (row) => (
-                        <Tooltip
-                          content={`Trace ${row.traceId}${row.ipAddress ? ` · ${row.ipAddress}` : ''}`}
-                        >
-                          <button
-                            type="button"
-                            className="cursor-help font-[family-name:var(--uxe-font-mono)] text-[11px] text-[var(--uxe-text-tertiary)]"
-                          >
-                            {row.traceId.slice(0, 8)}
-                          </button>
-                        </Tooltip>
+                        <span className="font-[family-name:var(--uxe-font-mono)] text-[11px] text-[var(--uxe-text-tertiary)]">
+                          {row.traceId.slice(0, 8)}
+                        </span>
                       ),
                     },
                   ]}
@@ -284,6 +280,122 @@ export function ActivityPage() {
           </Card>
         </TabPanel>
       </Tabs>
+
+      <AuditEventPanel event={openEvent} onOpenChange={(next) => !next && setOpenEvent(null)} />
     </div>
   );
 }
+
+/**
+ * One audit event, in full.
+ *
+ * The table shows what fits in a row. Everything the record actually holds — who, from
+ * where, against what, and the trace that ties it to the request — is here, because an
+ * audit line is only worth keeping if the whole of it can be read.
+ */
+function AuditEventPanel({
+  event,
+  onOpenChange,
+}: {
+  event: AuditEvent | null;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const { t } = useI18n();
+
+  return (
+    <SlideOver
+      open={event !== null}
+      onOpenChange={onOpenChange}
+      title={event?.summary ?? ''}
+      description={event ? formatDateTime(event.at) : ''}
+      width="md"
+      footer={
+        <Button variant="ghost" onClick={() => onOpenChange(false)}>
+          {t('common.close')}
+        </Button>
+      }
+    >
+      {event && (
+        <div className="flex flex-col gap-5">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge
+              tone={
+                event.result === 'success'
+                  ? 'success'
+                  : event.result === 'denied'
+                    ? 'warning'
+                    : 'danger'
+              }
+              size="sm"
+              icon={
+                event.result === 'success' ? (
+                  <CheckCircle2 className="h-3 w-3" aria-hidden />
+                ) : event.result === 'denied' ? (
+                  <ShieldAlert className="h-3 w-3" aria-hidden />
+                ) : (
+                  <XCircle className="h-3 w-3" aria-hidden />
+                )
+              }
+            >
+              {RESULT_LABELS[event.result]}
+            </Badge>
+            <Badge tone="neutral" size="sm">
+              {event.category}
+            </Badge>
+          </div>
+
+          <DetailField label={t('activity.action')}>
+            <span className="font-[family-name:var(--uxe-font-mono)] text-[13px]">
+              {event.action}
+            </span>
+          </DetailField>
+
+          <DetailField label={t('activity.actor')}>
+            <span className="flex items-center gap-2">
+              <Avatar name={event.actorName} size={22} />
+              {event.actorName}
+              <span className="text-[12px] text-[var(--uxe-text-tertiary)]">
+                ({event.actorType})
+              </span>
+            </span>
+          </DetailField>
+
+          <DetailField label={t('activity.target')}>
+            {event.targetLabel ?? event.targetType ?? null}
+          </DetailField>
+
+          <DetailField label={t('activity.when')}>{formatDateTime(event.at)}</DetailField>
+
+          <DetailField label={t('activity.trace')}>
+            <span className="font-[family-name:var(--uxe-font-mono)] text-[12px]">
+              {event.traceId}
+            </span>
+          </DetailField>
+
+          <DetailField label={t('activity.ipAddress')}>{event.ipAddress}</DetailField>
+
+          {/* Long, and only ever read when something looks wrong, so it stays small. */}
+          <DetailField label={t('activity.userAgent')}>
+            {event.userAgent && (
+              <span className="text-[12px] text-[var(--uxe-text-secondary)]">
+                {event.userAgent}
+              </span>
+            )}
+          </DetailField>
+
+          {event.targetId && event.targetType === 'consultation' && (
+            <Button variant="secondary" asChild className="self-start">
+              <Link to={`/consult/${event.targetId}`}>{t('dashboard.openIt')}</Link>
+            </Button>
+          )}
+        </div>
+      )}
+    </SlideOver>
+  );
+}
+
+const RESULT_LABELS = {
+  success: 'Succeeded',
+  failure: 'Failed',
+  denied: 'Denied',
+} as const;

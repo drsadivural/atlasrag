@@ -5,7 +5,6 @@ import { hasStalled } from '../lib/staleness.js';
 import {
   AlertTriangle,
   CheckCircle2,
-  ChevronRight,
   Circle,
   CloudUpload,
   Database,
@@ -41,7 +40,6 @@ import {
   StaleNotice,
   Field,
   FilterChip,
-  Gauge,
   Input,
   LoadingRegion,
   Pagination,
@@ -65,7 +63,6 @@ import type {
 import { ApiError, api, newIdempotencyKey, uploadFile } from '../lib/api.js';
 import { useI18n } from '../lib/i18n.js';
 import { useSession } from '../lib/session.js';
-import { Ayumi } from '../components/Brand.js';
 import { PageHeader } from '../components/PageHeader.js';
 
 const TYPE_ICONS: Record<string, typeof FileText> = {
@@ -323,331 +320,320 @@ export function KnowledgeSection() {
 
   return (
     <>
-      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
-        <div className="flex min-w-0 flex-col gap-5">
-          <PageHeader
-            icon={<Database className="h-5 w-5" aria-hidden />}
-            title={t('knowledge.title')}
-            subtitle={t('knowledge.subtitle')}
-            actions={
-              can('source:create') ? (
-                <Button variant="outline" onClick={() => setUrlDialogOpen(true)}>
-                  <Plus className="h-4 w-4" aria-hidden />
-                  {t('knowledge.addSources')}
-                </Button>
-              ) : null
-            }
+      <div className="flex min-w-0 flex-col gap-5">
+        <PageHeader
+          icon={<Database className="h-5 w-5" aria-hidden />}
+          title={t('knowledge.title')}
+          subtitle={t('knowledge.subtitle')}
+          actions={
+            can('source:create') ? (
+              <Button variant="outline" onClick={() => setUrlDialogOpen(true)}>
+                <Plus className="h-4 w-4" aria-hidden />
+                {t('knowledge.addSources')}
+              </Button>
+            ) : null
+          }
+        />
+
+        {can('source:create') && (
+          <UploadZone
+            onFiles={startUpload}
+            onUrlClick={() => setUrlDialogOpen(true)}
+            onTextClick={() => setTextDialogOpen(true)}
           />
+        )}
 
-          {can('source:create') && (
-            <UploadZone
-              onFiles={startUpload}
-              onUrlClick={() => setUrlDialogOpen(true)}
-              onTextClick={() => setTextDialogOpen(true)}
-            />
-          )}
+        {uploads.length > 0 && (
+          <UploadList
+            uploads={uploads}
+            onDismiss={(id) => setUploads((c) => c.filter((u) => u.id !== id))}
+          />
+        )}
 
-          {uploads.length > 0 && (
-            <UploadList
-              uploads={uploads}
-              onDismiss={(id) => setUploads((c) => c.filter((u) => u.id !== id))}
-            />
-          )}
-
-          <div className="flex flex-wrap items-center gap-2">
-            <div
-              role="group"
-              aria-label={t('knowledge.filterStatus')}
-              className="flex min-w-0 flex-1 flex-wrap items-center gap-2"
-            >
-              {filters.map((filter) => (
-                <FilterChip
-                  key={filter.key}
-                  active={status === filter.key}
-                  onClick={() => setParam('status', filter.key)}
-                  label={filter.label}
-                  count={filter.count}
-                  dotColor={filter.color}
-                />
-              ))}
-            </div>
-
-            <Select
-              value={documentType}
-              onValueChange={(value) => setParam('type', value)}
-              ariaLabel={t('knowledge.filterType')}
-              size="sm"
-              options={[
-                { value: 'all', label: t('knowledge.allTypes') },
-                { value: 'pdf', label: 'PDF' },
-                { value: 'docx', label: 'DOCX' },
-                { value: 'xlsx', label: 'XLSX' },
-                { value: 'pptx', label: 'PPTX' },
-                { value: 'csv', label: 'CSV' },
-                { value: 'html', label: 'HTML' },
-                { value: 'image', label: 'Image' },
-              ]}
-            />
+        <div className="flex flex-wrap items-center gap-2">
+          <div
+            role="group"
+            aria-label={t('knowledge.filterStatus')}
+            className="flex min-w-0 flex-1 flex-wrap items-center gap-2"
+          >
+            {filters.map((filter) => (
+              <FilterChip
+                key={filter.key}
+                active={status === filter.key}
+                onClick={() => setParam('status', filter.key)}
+                label={filter.label}
+                count={filter.count}
+                dotColor={filter.color}
+              />
+            ))}
           </div>
 
-          <Card flush>
-            <div className="flex flex-wrap items-center gap-3 border-b border-[var(--uxe-border)] p-3 sm:p-4">
-              <div className="flex min-w-0 flex-1 items-center gap-3">
-                <span className="text-[13px] font-medium text-[var(--uxe-text-secondary)]">
-                  {t('knowledge.selected', { count: selected.size })}
-                </span>
-                {selected.size > 0 && can('source:update') && (
-                  <DropdownMenu
-                    label={t('knowledge.bulkActions')}
-                    trigger={
-                      <Button variant="secondary" size="sm">
-                        {t('knowledge.bulkActions')}
-                      </Button>
-                    }
-                    items={[
-                      {
-                        label: 'Reprocess',
-                        icon: <RefreshCw className="h-4 w-4" aria-hidden />,
-                        onSelect: () => bulk.mutate('reprocess'),
-                      },
-                      {
-                        label: 'Archive',
-                        icon: <Database className="h-4 w-4" aria-hidden />,
-                        onSelect: () => bulk.mutate('archive'),
-                      },
-                      {
-                        label: 'Delete',
-                        icon: <X className="h-4 w-4" aria-hidden />,
-                        onSelect: () => bulk.mutate('delete'),
-                        destructive: true,
-                        disabled: !can('source:delete'),
-                        disabledReason: 'Your role cannot delete sources',
-                        separatorBefore: true,
-                      },
-                    ]}
-                  />
-                )}
-              </div>
-
-              <div className="flex items-center gap-2">
-                <Input
-                  value={q}
-                  onChange={(event) => setParam('q', event.target.value)}
-                  placeholder={t('knowledge.searchPlaceholder')}
-                  aria-label={t('knowledge.searchPlaceholder')}
-                  iconLeft={<Search className="h-4 w-4" aria-hidden />}
-                  className="h-9 w-full text-[13px] sm:w-64"
-                />
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => void query.refetch()}
-                  loading={query.isRefetching}
-                >
-                  <RefreshCw className="h-4 w-4" aria-hidden />
-                  <span className="max-sm:sr-only">{t('knowledge.refresh')}</span>
-                </Button>
-              </div>
-            </div>
-
-            <div className="p-3 sm:p-4">
-              {query.data && hasStalled(query) && (
-                <StaleNotice
-                  labels={{ paused: t('common.updatesPaused'), retry: t('common.retryNow') }}
-                  className="mb-3"
-                  message={query.error?.message ?? 'This list has stopped refreshing.'}
-                  onRetry={() => void query.refetch()}
-                  retrying={query.isFetching}
-                />
-              )}
-              {query.isLoading ? (
-                <LoadingRegion label={t('consult.loadingSources')}>
-                  <div className="flex flex-col gap-2">
-                    {[0, 1, 2, 3, 4].map((i) => (
-                      <Skeleton key={i} className="h-14 w-full" />
-                    ))}
-                  </div>
-                </LoadingRegion>
-              ) : query.error && !query.data ? (
-                <ErrorState
-                  labels={{ retry: t('common.retry'), reference: t('common.reference') }}
-                  message={query.error.message}
-                  traceId={query.error.traceId}
-                  onRetry={() => void query.refetch()}
-                  retrying={query.isRefetching}
-                />
-              ) : (
-                <>
-                  <DataTable
-                    caption={t('knowledge.tableCaption')}
-                    rows={data?.items ?? []}
-                    rowKey={(row) => row.id}
-                    onRowClick={(row) => navigate(`/settings/knowledge/${row.id}`)}
-                    selection={
-                      can('source:update')
-                        ? {
-                            selected,
-                            onToggle: (id) =>
-                              setSelected((current) => {
-                                const next = new Set(current);
-                                if (next.has(id)) next.delete(id);
-                                else next.add(id);
-                                return next;
-                              }),
-                            onToggleAll: () =>
-                              setSelected((current) =>
-                                current.size === (data?.items.length ?? 0)
-                                  ? new Set()
-                                  : new Set((data?.items ?? []).map((s) => s.id)),
-                              ),
-                            rowLabel: (row) => row.title,
-                            renderCheckbox: (checked, onChange, label) => (
-                              <Checkbox
-                                checked={checked}
-                                onCheckedChange={onChange}
-                                ariaLabel={label}
-                              />
-                            ),
-                          }
-                        : undefined
-                    }
-                    empty={
-                      <EmptyState
-                        icon={<Database className="h-6 w-6" aria-hidden />}
-                        title={
-                          q || status !== 'all'
-                            ? 'No sources match these filters'
-                            : t('knowledge.emptyTitle')
-                        }
-                        description={
-                          q || status !== 'all'
-                            ? 'Try clearing the search or choosing a different status.'
-                            : t('knowledge.emptyBody')
-                        }
-                        action={
-                          q || status !== 'all' ? (
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              onClick={() => setSearchParams({}, { replace: true })}
-                            >
-                              {t('common.clearFilters')}
-                            </Button>
-                          ) : undefined
-                        }
-                      />
-                    }
-                    columns={[
-                      {
-                        key: 'document',
-                        width: '30%',
-                        header: t('knowledge.document'),
-                        primary: true,
-                        // The title is already a link to the source.
-                        selfActivating: true,
-                        render: (row) => <SourceTitleCell source={row} />,
-                      },
-                      {
-                        key: 'type',
-                        width: '9%',
-                        header: t('knowledge.type'),
-                        render: (row) => (
-                          <span className="text-[var(--uxe-text-secondary)] uppercase">
-                            {row.documentType}
-                          </span>
-                        ),
-                      },
-                      {
-                        key: 'pages',
-                        width: '7%',
-                        header: t('knowledge.pages'),
-                        align: 'right',
-                        render: (row) => (
-                          <span className="text-[var(--uxe-text-secondary)] tabular-nums">
-                            {row.pages === null ? '—' : formatNumber(row.pages)}
-                          </span>
-                        ),
-                      },
-                      {
-                        key: 'version',
-                        width: '9%',
-                        header: t('knowledge.version'),
-                        render: (row) => (
-                          <span className="text-[var(--uxe-text-secondary)] tabular-nums">
-                            {row.currentVersion}
-                          </span>
-                        ),
-                      },
-                      {
-                        key: 'access',
-                        width: '13%',
-                        header: t('knowledge.access'),
-                        render: (row) => (
-                          <Badge
-                            tone="neutral"
-                            size="sm"
-                            icon={
-                              row.accessScope === 'workspace' ? (
-                                <Globe className="h-3 w-3" aria-hidden />
-                              ) : (
-                                <Users2 className="h-3 w-3" aria-hidden />
-                              )
-                            }
-                          >
-                            {row.accessLabel}
-                          </Badge>
-                        ),
-                      },
-                      {
-                        key: 'synced',
-                        width: '16%',
-                        header: t('knowledge.lastSynced'),
-                        render: (row) => (
-                          <span className="whitespace-nowrap text-[var(--uxe-text-secondary)]">
-                            {formatRelative(row.lastSyncedAt ?? row.updatedAt)}
-                          </span>
-                        ),
-                      },
-                      {
-                        key: 'status',
-                        width: '16%',
-                        header: t('knowledge.status'),
-                        render: (row) => (
-                          <SourceStatusCell
-                            source={row}
-                            onRetry={() => reprocess.mutate(row.id)}
-                            retrying={reprocess.isPending && reprocess.variables === row.id}
-                            canRetry={can('source:reprocess')}
-                          />
-                        ),
-                      },
-                    ]}
-                  />
-
-                  {data && (
-                    <Pagination
-                      page={data.page}
-                      pageSize={data.pageSize}
-                      total={data.total}
-                      totalPages={data.totalPages}
-                      onPageChange={(next) => setParam('page', String(next))}
-                      onPageSizeChange={(size) => setParam('pageSize', String(size))}
-                    />
-                  )}
-                </>
-              )}
-            </div>
-          </Card>
+          <Select
+            value={documentType}
+            onValueChange={(value) => setParam('type', value)}
+            ariaLabel={t('knowledge.filterType')}
+            size="sm"
+            options={[
+              { value: 'all', label: t('knowledge.allTypes') },
+              { value: 'pdf', label: 'PDF' },
+              { value: 'docx', label: 'DOCX' },
+              { value: 'xlsx', label: 'XLSX' },
+              { value: 'pptx', label: 'PPTX' },
+              { value: 'csv', label: 'CSV' },
+              { value: 'html', label: 'HTML' },
+              { value: 'image', label: 'Image' },
+            ]}
+          />
         </div>
 
-        <aside
-          className="flex min-w-0 flex-col gap-5"
-          aria-label={t('knowledge.pipelineAndHealth')}
-        >
-          {data && <PipelineCard pipeline={data.pipeline} />}
-          {data && <HealthCard health={data.knowledgeHealth} counts={data.counts} />}
-          <AskAyumiCard />
-        </aside>
+        <Card flush>
+          <div className="flex flex-wrap items-center gap-3 border-b border-[var(--uxe-border)] p-3 sm:p-4">
+            <div className="flex min-w-0 flex-1 items-center gap-3">
+              <span className="text-[13px] font-medium text-[var(--uxe-text-secondary)]">
+                {t('knowledge.selected', { count: selected.size })}
+              </span>
+              {selected.size > 0 && can('source:update') && (
+                <DropdownMenu
+                  label={t('knowledge.bulkActions')}
+                  trigger={
+                    <Button variant="secondary" size="sm">
+                      {t('knowledge.bulkActions')}
+                    </Button>
+                  }
+                  items={[
+                    {
+                      label: 'Reprocess',
+                      icon: <RefreshCw className="h-4 w-4" aria-hidden />,
+                      onSelect: () => bulk.mutate('reprocess'),
+                    },
+                    {
+                      label: 'Archive',
+                      icon: <Database className="h-4 w-4" aria-hidden />,
+                      onSelect: () => bulk.mutate('archive'),
+                    },
+                    {
+                      label: 'Delete',
+                      icon: <X className="h-4 w-4" aria-hidden />,
+                      onSelect: () => bulk.mutate('delete'),
+                      destructive: true,
+                      disabled: !can('source:delete'),
+                      disabledReason: 'Your role cannot delete sources',
+                      separatorBefore: true,
+                    },
+                  ]}
+                />
+              )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Input
+                value={q}
+                onChange={(event) => setParam('q', event.target.value)}
+                placeholder={t('knowledge.searchPlaceholder')}
+                aria-label={t('knowledge.searchPlaceholder')}
+                iconLeft={<Search className="h-4 w-4" aria-hidden />}
+                className="h-9 w-full text-[13px] sm:w-64"
+              />
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => void query.refetch()}
+                loading={query.isRefetching}
+              >
+                <RefreshCw className="h-4 w-4" aria-hidden />
+                <span className="max-sm:sr-only">{t('knowledge.refresh')}</span>
+              </Button>
+            </div>
+          </div>
+
+          <div className="p-3 sm:p-4">
+            {query.data && hasStalled(query) && (
+              <StaleNotice
+                labels={{ paused: t('common.updatesPaused'), retry: t('common.retryNow') }}
+                className="mb-3"
+                message={query.error?.message ?? 'This list has stopped refreshing.'}
+                onRetry={() => void query.refetch()}
+                retrying={query.isFetching}
+              />
+            )}
+            {query.isLoading ? (
+              <LoadingRegion label={t('consult.loadingSources')}>
+                <div className="flex flex-col gap-2">
+                  {[0, 1, 2, 3, 4].map((i) => (
+                    <Skeleton key={i} className="h-14 w-full" />
+                  ))}
+                </div>
+              </LoadingRegion>
+            ) : query.error && !query.data ? (
+              <ErrorState
+                labels={{ retry: t('common.retry'), reference: t('common.reference') }}
+                message={query.error.message}
+                traceId={query.error.traceId}
+                onRetry={() => void query.refetch()}
+                retrying={query.isRefetching}
+              />
+            ) : (
+              <>
+                <DataTable
+                  caption={t('knowledge.tableCaption')}
+                  rows={data?.items ?? []}
+                  rowKey={(row) => row.id}
+                  onRowClick={(row) => navigate(`/settings/knowledge/${row.id}`)}
+                  selection={
+                    can('source:update')
+                      ? {
+                          selected,
+                          onToggle: (id) =>
+                            setSelected((current) => {
+                              const next = new Set(current);
+                              if (next.has(id)) next.delete(id);
+                              else next.add(id);
+                              return next;
+                            }),
+                          onToggleAll: () =>
+                            setSelected((current) =>
+                              current.size === (data?.items.length ?? 0)
+                                ? new Set()
+                                : new Set((data?.items ?? []).map((s) => s.id)),
+                            ),
+                          rowLabel: (row) => row.title,
+                          renderCheckbox: (checked, onChange, label) => (
+                            <Checkbox
+                              checked={checked}
+                              onCheckedChange={onChange}
+                              ariaLabel={label}
+                            />
+                          ),
+                        }
+                      : undefined
+                  }
+                  empty={
+                    <EmptyState
+                      icon={<Database className="h-6 w-6" aria-hidden />}
+                      title={
+                        q || status !== 'all'
+                          ? 'No sources match these filters'
+                          : t('knowledge.emptyTitle')
+                      }
+                      description={
+                        q || status !== 'all'
+                          ? 'Try clearing the search or choosing a different status.'
+                          : t('knowledge.emptyBody')
+                      }
+                      action={
+                        q || status !== 'all' ? (
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => setSearchParams({}, { replace: true })}
+                          >
+                            {t('common.clearFilters')}
+                          </Button>
+                        ) : undefined
+                      }
+                    />
+                  }
+                  columns={[
+                    {
+                      key: 'document',
+                      width: '30%',
+                      header: t('knowledge.document'),
+                      primary: true,
+                      // The title is already a link to the source.
+                      selfActivating: true,
+                      render: (row) => <SourceTitleCell source={row} />,
+                    },
+                    {
+                      key: 'type',
+                      width: '9%',
+                      header: t('knowledge.type'),
+                      render: (row) => (
+                        <span className="text-[var(--uxe-text-secondary)] uppercase">
+                          {row.documentType}
+                        </span>
+                      ),
+                    },
+                    {
+                      key: 'pages',
+                      width: '7%',
+                      header: t('knowledge.pages'),
+                      align: 'right',
+                      render: (row) => (
+                        <span className="text-[var(--uxe-text-secondary)] tabular-nums">
+                          {row.pages === null ? '—' : formatNumber(row.pages)}
+                        </span>
+                      ),
+                    },
+                    {
+                      key: 'version',
+                      width: '9%',
+                      header: t('knowledge.version'),
+                      render: (row) => (
+                        <span className="text-[var(--uxe-text-secondary)] tabular-nums">
+                          {row.currentVersion}
+                        </span>
+                      ),
+                    },
+                    {
+                      key: 'access',
+                      width: '13%',
+                      header: t('knowledge.access'),
+                      render: (row) => (
+                        <Badge
+                          tone="neutral"
+                          size="sm"
+                          icon={
+                            row.accessScope === 'workspace' ? (
+                              <Globe className="h-3 w-3" aria-hidden />
+                            ) : (
+                              <Users2 className="h-3 w-3" aria-hidden />
+                            )
+                          }
+                        >
+                          {row.accessLabel}
+                        </Badge>
+                      ),
+                    },
+                    {
+                      key: 'synced',
+                      width: '16%',
+                      header: t('knowledge.lastSynced'),
+                      render: (row) => (
+                        <span className="whitespace-nowrap text-[var(--uxe-text-secondary)]">
+                          {formatRelative(row.lastSyncedAt ?? row.updatedAt)}
+                        </span>
+                      ),
+                    },
+                    {
+                      key: 'status',
+                      width: '16%',
+                      header: t('knowledge.status'),
+                      render: (row) => (
+                        <SourceStatusCell
+                          source={row}
+                          onRetry={() => reprocess.mutate(row.id)}
+                          retrying={reprocess.isPending && reprocess.variables === row.id}
+                          canRetry={can('source:reprocess')}
+                        />
+                      ),
+                    },
+                  ]}
+                />
+
+                {data && (
+                  <Pagination
+                    page={data.page}
+                    pageSize={data.pageSize}
+                    total={data.total}
+                    totalPages={data.totalPages}
+                    onPageChange={(next) => setParam('page', String(next))}
+                    onPageSizeChange={(size) => setParam('pageSize', String(size))}
+                  />
+                )}
+              </>
+            )}
+          </div>
+        </Card>
       </div>
 
       <AddUrlDialog open={urlDialogOpen} onOpenChange={setUrlDialogOpen} />
@@ -1118,286 +1104,6 @@ export function SourceStatusCell({
         {t('knowledge.processing')}
       </Badge>
     </span>
-  );
-}
-
-/* -------------------------------------------------------------------------- */
-/* Right rail                                                                 */
-/* -------------------------------------------------------------------------- */
-
-const STAGE_LABELS: Record<string, string> = {
-  malware_scan: 'Malware scan',
-  extraction: 'Extraction / OCR',
-  structure_analysis: 'Structure analysis',
-  chunking: 'Chunking',
-  embeddings: 'Embeddings',
-  lexical_index: 'Lexical index',
-  citation_map: 'Citation map',
-  validation: 'Validation',
-};
-
-/**
- * What each stage does, in one line.
- *
- * Shown when a stage is opened, because the stage names are the pipeline's vocabulary and
- * not everybody reading the screen shares it.
- */
-const STAGE_DESCRIPTIONS: Record<string, string> = {
-  malware_scan: 'Every uploaded file is scanned before anything reads it.',
-  extraction: 'Text is read from the document, and scanned pages go through OCR.',
-  structure_analysis:
-    'Headings, clauses and tables are identified, and the text is screened for instructions aimed at the assistant.',
-  chunking: 'The document is divided into passages small enough to retrieve precisely.',
-  embeddings: 'Each passage is turned into a vector so it can be found by meaning.',
-  lexical_index: 'Each passage is indexed by its words so exact terms can be found.',
-  citation_map:
-    'Every passage is mapped back to its page and character range, so a quotation can be re-located in the original.',
-  validation: 'The indexed document is checked against the original before it is used for answers.',
-};
-
-/**
- * The indexing pipeline.
- *
- * Each stage opens. A count says a stage is blocked; it does not say which document
- * blocked it or why, and that is the one thing somebody looking at a stalled pipeline
- * actually needs. Opening a stage names the documents still in it and shows what the
- * stage recorded against each — a page count, an OCR confidence, or the reason it
- * stopped. A stage with nothing outstanding says so rather than opening on an empty box.
- */
-function PipelineCard({ pipeline }: { pipeline: SourcesResponse['pipeline'] }) {
-  const { t } = useI18n();
-  const [open, setOpen] = useState<string | null>(null);
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{t('knowledge.indexingPipeline')}</CardTitle>
-      </CardHeader>
-
-      <ul className="flex flex-col gap-1">
-        {pipeline.map((stage) => {
-          const percent = stage.total === 0 ? 0 : (stage.completed / stage.total) * 100;
-          const expanded = open === stage.stage;
-          const panelId = `pipeline-${stage.stage}`;
-
-          return (
-            <li key={stage.stage}>
-              <button
-                type="button"
-                onClick={() => setOpen(expanded ? null : stage.stage)}
-                aria-expanded={expanded}
-                aria-controls={panelId}
-                className="w-full rounded-[var(--uxe-radius-control)] px-1.5 py-1.5 text-start transition-colors hover:bg-[var(--uxe-surface-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--uxe-cobalt)]"
-              >
-                <span className="flex items-center justify-between gap-3">
-                  <span className="flex min-w-0 items-center gap-2">
-                    <ChevronRight
-                      className={cn(
-                        'h-3.5 w-3.5 shrink-0 text-[var(--uxe-text-tertiary)] transition-transform',
-                        expanded && 'rotate-90',
-                      )}
-                      aria-hidden
-                    />
-                    {stage.state === 'complete' ? (
-                      <CheckCircle2
-                        className="h-4 w-4 shrink-0 text-[var(--uxe-success)]"
-                        aria-hidden
-                      />
-                    ) : stage.state === 'blocked' ? (
-                      <XCircle className="h-4 w-4 shrink-0 text-[var(--uxe-danger)]" aria-hidden />
-                    ) : stage.state === 'running' ? (
-                      <Loader2
-                        className="h-4 w-4 shrink-0 animate-[uxe-spin_1s_linear_infinite] text-[var(--uxe-info)]"
-                        aria-hidden
-                      />
-                    ) : (
-                      <Circle
-                        className="h-4 w-4 shrink-0 text-[var(--uxe-text-tertiary)]"
-                        aria-hidden
-                      />
-                    )}
-                    <span className="truncate text-[13px] font-medium text-[var(--uxe-text)]">
-                      {STAGE_LABELS[stage.stage] ?? stage.stage}
-                    </span>
-                  </span>
-                  <span className="shrink-0 text-[12px] text-[var(--uxe-text-secondary)] tabular-nums">
-                    {stage.completed} / {stage.total}
-                  </span>
-                </span>
-                <ProgressBar
-                  value={percent}
-                  tone={
-                    stage.state === 'blocked'
-                      ? 'danger'
-                      : stage.state === 'complete'
-                        ? 'success'
-                        : 'brand'
-                  }
-                  label={`${STAGE_LABELS[stage.stage]}: ${stage.completed} of ${stage.total}`}
-                  className="mt-1.5"
-                />
-              </button>
-
-              {expanded && (
-                <div
-                  id={panelId}
-                  className="ms-6 mt-1 mb-2 rounded-[var(--uxe-radius-control)] border border-[var(--uxe-border)] bg-[var(--uxe-surface-sunken)] p-3"
-                >
-                  <p className="text-[12px] text-[var(--uxe-text-secondary)]">
-                    {STAGE_DESCRIPTIONS[stage.stage]}
-                  </p>
-
-                  {stage.documents.length === 0 ? (
-                    <p className="mt-2 text-[12px] text-[var(--uxe-text-tertiary)]">
-                      {stage.total === 0
-                        ? t('knowledge.stageNothingYet')
-                        : t('knowledge.stageAllThrough', { count: stage.total })}
-                    </p>
-                  ) : (
-                    <ul className="mt-2 flex flex-col gap-2">
-                      {stage.documents.map((document) => (
-                        <li key={`${document.sourceId}-${document.state}`}>
-                          <Link
-                            to={`/settings/knowledge/${document.sourceId}`}
-                            className="flex items-start gap-2 rounded-[var(--uxe-radius-control)] p-1 hover:bg-[var(--uxe-surface-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--uxe-cobalt)]"
-                          >
-                            {document.state === 'failed' ? (
-                              <XCircle
-                                className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--uxe-danger)]"
-                                aria-hidden
-                              />
-                            ) : document.state === 'running' ? (
-                              <Loader2
-                                className="mt-0.5 h-3.5 w-3.5 shrink-0 animate-[uxe-spin_1s_linear_infinite] text-[var(--uxe-info)]"
-                                aria-hidden
-                              />
-                            ) : (
-                              <Circle
-                                className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--uxe-text-tertiary)]"
-                                aria-hidden
-                              />
-                            )}
-                            <span className="min-w-0">
-                              <span className="block truncate text-[12px] font-medium text-[var(--uxe-text)]">
-                                {document.title}
-                              </span>
-                              {/* The stage's own words: why it stopped, or how far it got. */}
-                              <span
-                                className={cn(
-                                  'block text-[12px] leading-snug',
-                                  document.state === 'failed'
-                                    ? 'text-[var(--uxe-danger-text)]'
-                                    : 'text-[var(--uxe-text-secondary)]',
-                                )}
-                              >
-                                {document.detail ?? t(`knowledge.stageState.${document.state}`)}
-                              </span>
-                            </span>
-                          </Link>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-    </Card>
-  );
-}
-
-function HealthCard({
-  health,
-  counts,
-}: {
-  health: SourcesResponse['knowledgeHealth'];
-  counts: SourcesResponse['counts'];
-}) {
-  const { t } = useI18n();
-  const rows = [
-    { label: t('knowledge.ready'), value: counts.ready, color: 'var(--uxe-success)' },
-    { label: t('knowledge.processing'), value: counts.processing, color: 'var(--uxe-info)' },
-    { label: t('knowledge.needsReview'), value: counts.needs_review, color: 'var(--uxe-warning)' },
-    { label: t('knowledge.failed'), value: counts.failed, color: 'var(--uxe-danger)' },
-  ];
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{t('dashboard.knowledgeHealth')}</CardTitle>
-        <Tooltip
-          content={
-            <span className="font-[family-name:var(--uxe-font-mono)] text-[11px]">
-              {health.formula}
-            </span>
-          }
-        >
-          <button
-            type="button"
-            aria-label={t('dashboard.healthFormula')}
-            className="rounded p-1 text-[var(--uxe-text-tertiary)]"
-          >
-            <Info className="h-4 w-4" aria-hidden />
-          </button>
-        </Tooltip>
-      </CardHeader>
-
-      <div className="flex items-center gap-5">
-        <Gauge
-          value={health.score}
-          label={t('dashboard.knowledgeHealth')}
-          tone={health.score >= 90 ? 'success' : health.score >= 70 ? 'brand' : 'warning'}
-          size={104}
-        />
-        <ul className="min-w-0 flex-1 space-y-2">
-          {rows.map((row) => (
-            <li key={row.label} className="flex items-center justify-between gap-2 text-[13px]">
-              <span className="flex min-w-0 items-center gap-2">
-                <span
-                  aria-hidden
-                  className="h-2.5 w-2.5 shrink-0 rounded-full"
-                  style={{ background: row.color }}
-                />
-                <span className="truncate text-[var(--uxe-text-secondary)]">{row.label}</span>
-              </span>
-              <span className="shrink-0 font-semibold tabular-nums">{row.value}</span>
-            </li>
-          ))}
-        </ul>
-      </div>
-    </Card>
-  );
-}
-
-function AskAyumiCard() {
-  const { t } = useI18n();
-  const navigate = useNavigate();
-
-  return (
-    <Card
-      flush
-      className="relative overflow-hidden bg-[linear-gradient(150deg,var(--uxe-surface)_0%,var(--uxe-surface-selected)_100%)]"
-    >
-      <div className="relative flex items-end gap-2 p-5">
-        <div className="min-w-0 flex-1">
-          <h3 className="text-[16px] font-semibold text-[var(--uxe-text)]">
-            {t('knowledge.askAyumi')}
-          </h3>
-          <p className="mt-1.5 text-[13px] leading-snug text-[var(--uxe-text-secondary)]">
-            {t('knowledge.askAyumiBody')}
-          </p>
-          <Button variant="primary" size="md" className="mt-4" onClick={() => navigate('/consult')}>
-            {t('knowledge.askAyumi')}
-          </Button>
-        </div>
-        {/* Ayumi is anchored to the card edge so she never covers the button. */}
-        <div className="pointer-events-none -mb-5 hidden h-40 w-24 shrink-0 sm:block">
-          <Ayumi variant="sm" decorative />
-        </div>
-      </div>
-    </Card>
   );
 }
 

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, CheckCircle2, ChevronRight, Info, XCircle } from 'lucide-react';
@@ -8,9 +8,9 @@ import {
   Card,
   CardHeader,
   CardTitle,
-  Dialog,
   LoadingRegion,
   Skeleton,
+  SlideOver,
   StaleNotice,
   cn,
   useToast,
@@ -53,6 +53,21 @@ const SEVERITY_STYLES = {
   warning: 'bg-[var(--uxe-warning-bg)] text-[var(--uxe-warning-text)]',
   info: 'bg-[var(--uxe-info-bg)] text-[var(--uxe-info-text)]',
 } as const;
+
+const SEVERITY_LABELS = {
+  critical: 'Critical',
+  warning: 'Needs looking at',
+  info: 'For information',
+} as const;
+
+/** What kind of thing this is, so the panel's heading says more than the title repeats. */
+const ATTENTION_KIND_LABELS: Record<AttentionItem['kind'], string> = {
+  failed_job: 'A job that did not finish',
+  critical_gap: 'A finding recorded as non-compliant',
+  unresolved_evidence: 'A requirement with nothing to evidence it',
+  stale_knowledge: 'A source that has not been re-checked',
+  pending_review: 'A report waiting to be read',
+};
 
 /**
  * What a person can actually do about each thing raised here.
@@ -207,12 +222,20 @@ export function NeedsAttention() {
         </p>
       )}
 
-      <AttentionDialog item={open} onOpenChange={(next) => !next && setOpen(null)} />
+      <AttentionPanel item={open} onOpenChange={(next) => !next && setOpen(null)} />
     </Card>
   );
 }
 
-function AttentionDialog({
+/**
+ * One item, opened out at the side rather than over the middle of the page.
+ *
+ * The row has a title and a line; everything else about the item had nowhere to go. A
+ * centred dialog sat on top of the list it came from and had to stay small to avoid
+ * burying it, so it showed a single sentence. The panel takes the edge of the screen
+ * instead, which leaves the list readable and has room for the rest of the record.
+ */
+function AttentionPanel({
   item,
   onOpenChange,
 }: {
@@ -245,18 +268,19 @@ function AttentionDialog({
   });
 
   const fix = item ? ATTENTION_FIX[item.kind] : null;
+  const Icon = item ? ATTENTION_ICONS[item.kind] : null;
 
   return (
-    <Dialog
+    <SlideOver
       open={item !== null}
       onOpenChange={onOpenChange}
       title={item?.title ?? ''}
-      description={item?.detail}
-      size="sm"
+      description={ATTENTION_KIND_LABELS[item?.kind ?? 'failed_job']}
+      width="md"
       footer={
         <>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
-            {t('common.cancel')}
+            {t('common.close')}
           </Button>
           {item && (
             <Button variant="secondary" asChild>
@@ -269,7 +293,38 @@ function AttentionDialog({
         </>
       }
     >
-      <p className="text-[14px] leading-relaxed text-[var(--uxe-text)]">{fix?.explain}</p>
-    </Dialog>
+      {item && (
+        <div className="flex flex-col gap-5">
+          <div
+            className={cn(
+              'flex items-start gap-3 rounded-[var(--uxe-radius-card)] p-4',
+              SEVERITY_STYLES[item.severity],
+            )}
+          >
+            {Icon && <Icon className="mt-0.5 h-5 w-5 shrink-0" aria-hidden />}
+            <p className="text-[14px] leading-relaxed font-medium">{item.detail}</p>
+          </div>
+
+          <DetailField label={t('attention.whatHappens')}>{fix?.explain}</DetailField>
+          <DetailField label={t('attention.severity')}>
+            {SEVERITY_LABELS[item.severity]}
+          </DetailField>
+        </div>
+      )}
+    </SlideOver>
+  );
+}
+
+/** A labelled line in a detail panel. Shared so every panel reads the same way. */
+export function DetailField({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="text-[11px] font-semibold tracking-[0.06em] text-[var(--uxe-text-tertiary)] uppercase">
+        {label}
+      </span>
+      <span className="text-[14px] leading-relaxed break-words text-[var(--uxe-text)]">
+        {children ?? <span className="text-[var(--uxe-text-tertiary)]">&mdash;</span>}
+      </span>
+    </div>
   );
 }

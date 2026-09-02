@@ -222,6 +222,20 @@ export class MetricsRepository {
         and(
           eq(complianceReviews.workspaceId, ctx.workspaceId),
           eq(complianceReviews.status, 'complete'),
+          /*
+           * A review outlives the consultation it belongs to, and this list must not.
+           *
+           * Deleting a consultation leaves its compliance reviews in place — the rows are
+           * only removed when the consultation itself is, and a soft delete never gets
+           * there. Without this the review kept raising "9 critical gaps" against a
+           * consultation that had been deleted, and the item's own link answered
+           * "Consultation not found" because every read of one filters deleted rows.
+           *
+           * The item is dropped rather than repaired because there is nothing left to
+           * repair: the consultation is in the archive, and an item pointing into the
+           * archive is not something anybody needs to act on.
+           */
+          isNull(consultations.deletedAt),
           sql`${complianceReviews.nonCompliantCount} > 0 OR ${complianceReviews.needsEvidenceCount} > 0`,
         ),
       )

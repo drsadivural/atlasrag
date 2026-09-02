@@ -11,7 +11,11 @@ import {
   UploadList,
   type UploadState,
 } from '../../apps/web/src/routes/KnowledgePage.js';
-import { SourceSelectorDialog } from '../../apps/web/src/routes/ConsultPage.js';
+import { MemoryRouter } from 'react-router-dom';
+import {
+  ConsultationUnavailable,
+  SourceSelectorDialog,
+} from '../../apps/web/src/routes/ConsultPage.js';
 
 function Providers({ children }: { children: ReactNode }) {
   const client = new QueryClient({
@@ -407,6 +411,65 @@ describe('SourceSelectorDialog', () => {
     await userEvent.type(screen.getByRole('textbox'), 'egress');
     await waitFor(() => {
       expect(fetchMock.mock.calls.some(([url]) => String(url).includes('q=egress'))).toBe(true);
+    });
+  });
+});
+
+/*
+ * A link to a consultation outlives the consultation. An attention item, a bookmark, a row
+ * read from a list a moment before somebody archived it — each of them used to land on
+ * "Something went wrong: Consultation not found", which reads as a broken product rather
+ * than a thing that has been put away.
+ */
+describe('a consultation that is no longer there', () => {
+  function renderArchived(cached: { id: string; title: string }[]) {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { retry: false } },
+    });
+    client.setQueryData(['consultations', { q: '', page: 1 }], {
+      items: cached,
+      total: cached.length,
+      page: 1,
+      pageSize: 20,
+      totalPages: 1,
+    });
+
+    render(
+      <QueryClientProvider client={client}>
+        <I18nProvider locale="en">
+          <MemoryRouter>
+            <ConsultationUnavailable id="con-gone" onNew={() => {}} />
+          </MemoryRouter>
+        </I18nProvider>
+      </QueryClientProvider>,
+    );
+    return client;
+  }
+
+  it('says the consultation is gone rather than reporting a fault', async () => {
+    renderArchived([{ id: 'con-gone', title: 'Marina Tower' }]);
+
+    expect(await screen.findByText('This consultation is no longer available')).toBeInTheDocument();
+    expect(screen.queryByText(/Something went wrong/i)).not.toBeInTheDocument();
+    // No Retry: a 404 here is the answer, not a failure, and asking again returns it again.
+    expect(screen.queryByRole('button', { name: /retry/i })).not.toBeInTheDocument();
+  });
+
+  it('drops the row from the list so the same dead end cannot be clicked twice', async () => {
+    const client = renderArchived([
+      { id: 'con-gone', title: 'Marina Tower' },
+      { id: 'con-live', title: 'Palm Jumeirah' },
+    ]);
+
+    await waitFor(() => {
+      const cached = client.getQueryData<{ items: Array<{ id: string }>; total: number }>([
+        'consultations',
+        { q: '', page: 1 },
+      ]);
+      expect(cached?.items.map((item) => item.id)).toEqual(['con-live']);
+      // `total` is the server's count and this row went locally; leaving it keeps the pager
+      // honest until the next real read.
+      expect(cached?.total).toBe(2);
     });
   });
 });

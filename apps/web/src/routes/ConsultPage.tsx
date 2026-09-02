@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { hasStalled } from '../lib/staleness.js';
 import {
   AlertTriangle,
+  Archive,
   CheckCircle2,
   ChevronLeft,
   ClipboardCheck,
@@ -52,12 +53,15 @@ import {
 import type {
   AnswerStyle,
   ConsultationDetail,
+  ConsultationSummary,
+  Paginated,
   SourcesResponse,
   TaskMode,
   UploadTicket,
 } from '@uxe/contracts';
 import { ApiError, api, newIdempotencyKey, uploadFile } from '../lib/api.js';
 import { subscribeToConsultation } from '../lib/stream.js';
+import { ATTENTION_QUERY_KEY } from '../components/NeedsAttention.js';
 import {
   CorrectionReviewDialog,
   type CorrectionPlanSummary,
@@ -241,6 +245,19 @@ export function ConsultPage() {
           </div>
         ) : detail.isLoading ? (
           <ConsultSkeleton />
+        ) : detail.error?.status === 404 && !consultation ? (
+          /*
+           * The consultation is gone, and this says so instead of reporting a fault.
+           *
+           * A link to a consultation outlives the consultation: an attention item, a
+           * bookmark, a row from a list read before somebody archived it. Every one of
+           * them used to land on "Something went wrong — Consultation not found", which
+           * reads as a broken product rather than a thing that has been put away.
+           *
+           * There is no Retry, because a 404 here is an answer, not a failure: asking
+           * again returns the same thing.
+           */
+          <ConsultationUnavailable id={consultationId} onNew={() => create.mutate()} />
         ) : detail.error && !consultation ? (
           <div className="p-6">
             <ErrorState
@@ -303,6 +320,75 @@ export function ConsultPage() {
         citationId={openCitationId}
         onClose={() => setOpenCitationId(null)}
         onNavigate={setOpenCitationId}
+      />
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* No longer available                                                        */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * What is shown when the consultation behind a link is no longer there.
+ *
+ * Named for what is known rather than for the likely cause. A 404 covers two cases — it
+ * has been archived, or it is no longer shared with this person — and the screen cannot
+ * tell them apart, so it does not claim to: saying "this is archived" to somebody who was
+ * simply removed from it would be a confident wrong answer.
+ *
+ * Besides saying so, it clears the reference out: the row is dropped from every cached
+ * consultation list so it cannot be clicked a second time, and the attention list is
+ * re-read so an item pointing here goes with it. Without that, going back to the list
+ * shows the same row again and the same dead end.
+ */
+export function ConsultationUnavailable({
+  id,
+  onNew,
+}: {
+  id: string | undefined;
+  onNew: () => void;
+}) {
+  const { t } = useI18n();
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (!id) return;
+    queryClient.setQueriesData<Paginated<ConsultationSummary>>(
+      { queryKey: ['consultations'] },
+      (previous) =>
+        // The key is matched by prefix, so anything else filed under `consultations` is
+        // reached too. Only a page of rows is edited; everything else is handed back
+        // untouched rather than rewritten into a shape it never had.
+        Array.isArray(previous?.items)
+          ? {
+              ...previous,
+              items: previous.items.filter((item) => item.id !== id),
+              // `total` is the server's count and this row is only being dropped locally;
+              // leaving it alone keeps the pager honest until the next real read.
+            }
+          : previous,
+    );
+    void queryClient.invalidateQueries({ queryKey: ATTENTION_QUERY_KEY });
+  }, [id, queryClient]);
+
+  return (
+    <div className="flex min-h-0 flex-1 items-center justify-center p-6">
+      <EmptyState
+        icon={<Archive className="h-7 w-7" aria-hidden />}
+        title={t('consult.gone')}
+        description={t('consult.goneBody')}
+        action={
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <Button variant="secondary" asChild>
+              <Link to="/activity?tab=consultations">{t('activity.pastConsultations')}</Link>
+            </Button>
+            <Button variant="primary" onClick={onNew}>
+              <Plus className="h-4 w-4" aria-hidden />
+              {t('consult.newConsultation')}
+            </Button>
+          </div>
+        }
       />
     </div>
   );

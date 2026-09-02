@@ -1,11 +1,13 @@
+import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowRight, MessageSquare, MoreHorizontal, Plus, X } from 'lucide-react';
+import { Archive, ArrowRight, MessageSquare, MoreHorizontal, Plus } from 'lucide-react';
 import {
   Avatar,
   Badge,
   Button,
   Card,
+  ConfirmDialog,
   DataTable,
   DropdownMenu,
   EmptyState,
@@ -15,12 +17,14 @@ import {
   Pagination,
   Skeleton,
   formatRelative,
+  useToast,
 } from '@uxe/ui';
 import type { ConsultationSummary, Paginated } from '@uxe/contracts';
 import { type ApiError, api } from '../lib/api.js';
 import { useI18n } from '../lib/i18n.js';
 import { useSession } from '../lib/session.js';
 import { StatusBadge } from '../routes/DashboardPage.js';
+import { ATTENTION_QUERY_KEY } from './NeedsAttention.js';
 
 /**
  * Every consultation the caller can see, as a page rather than a rail.
@@ -189,10 +193,7 @@ export function PastConsultations() {
                   header: '',
                   align: 'right',
                   render: (row) => (
-                    <RowActions
-                      consultation={row}
-                      canDelete={row.ownerId === session?.user.id || can(session, 'delete')}
-                    />
+                    <RowActions consultation={row} canDelete={canArchive(session, row)} />
                   ),
                 },
               ]}
@@ -231,51 +232,100 @@ function RowActions({
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { t } = useI18n();
+  const { push } = useToast();
+  const [confirming, setConfirming] = useState(false);
 
   const remove = useMutation({
     mutationFn: () => api.delete(`/consultations/${consultation.id}`),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['consultations'] }),
+    onSuccess: () => {
+      push({
+        tone: 'success',
+        title: t('consult.moved'),
+        description: t('consult.movedBody', { title: consultation.title }),
+      });
+      void queryClient.invalidateQueries({ queryKey: ['consultations'] });
+      void queryClient.invalidateQueries({ queryKey: ATTENTION_QUERY_KEY });
+      setConfirming(false);
+    },
+    /*
+     * This had no failure branch at all.
+     *
+     * A refused delete answered with a 404 and nothing caught it, so the row stayed where
+     * it was and the person was told "Consultation not found" about something still on
+     * their screen. The server now refuses with a reason; this shows the reason.
+     */
+    onError: (error: ApiError) => {
+      push({ tone: 'error', title: t('consult.couldNotArchive'), description: error.message });
+      setConfirming(false);
+    },
   });
 
   return (
-    <DropdownMenu
-      label={`Actions for ${consultation.title}`}
-      trigger={
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label={`Actions for ${consultation.title}`}
-          // The row itself navigates, so the menu must not also trigger that.
-          onClick={(event) => event.stopPropagation()}
-        >
-          <MoreHorizontal className="h-4 w-4" aria-hidden />
-        </Button>
-      }
-      items={[
-        {
-          label: 'Open',
-          icon: <ArrowRight className="h-4 w-4" aria-hidden />,
-          onSelect: () => navigate(`/consult/${consultation.id}`),
-        },
-        ...(canDelete
-          ? [
-              {
-                label: t('common.delete'),
-                icon: <X className="h-4 w-4" aria-hidden />,
-                onSelect: () => remove.mutate(),
-                destructive: true,
-                separatorBefore: true,
-              },
-            ]
-          : []),
-      ]}
-    />
+    <>
+      <DropdownMenu
+        label={`Actions for ${consultation.title}`}
+        trigger={
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={`Actions for ${consultation.title}`}
+            // The row itself navigates, so the menu must not also trigger that.
+            onClick={(event) => event.stopPropagation()}
+          >
+            <MoreHorizontal className="h-4 w-4" aria-hidden />
+          </Button>
+        }
+        items={[
+          {
+            label: 'Open',
+            icon: <ArrowRight className="h-4 w-4" aria-hidden />,
+            onSelect: () => navigate(`/consult/${consultation.id}`),
+          },
+          ...(canDelete
+            ? [
+                {
+                  label: t('consult.moveToArchive'),
+                  icon: <Archive className="h-4 w-4" aria-hidden />,
+                  onSelect: () => setConfirming(true),
+                  destructive: true,
+                  separatorBefore: true,
+                },
+              ]
+            : []),
+        ]}
+      />
+
+      <ConfirmDialog
+        open={confirming}
+        onOpenChange={setConfirming}
+        title={t('consult.moveToArchive')}
+        description={t('consult.moveToArchiveBody', { title: consultation.title })}
+        confirmLabel={t('consult.moveToArchive')}
+        cancelLabel={t('common.cancel')}
+        destructive
+        loading={remove.isPending}
+        onConfirm={() => remove.mutate()}
+      />
+    </>
   );
 }
 
-function can(session: ReturnType<typeof useSession>['session'], action: 'delete'): boolean {
-  if (action !== 'delete') return false;
-  return session?.permissions.includes('consultation:delete') ?? false;
+/**
+ * Whether this person may archive this consultation.
+ *
+ * Mirrors the server exactly: the permission, and then either owning it or holding
+ * `workspace:update`. The old version checked only the permission, which every member
+ * holds — so a reviewer, who can see the whole workspace, was offered the action on all
+ * three hundred consultations and refused on every one that was not theirs.
+ */
+function canArchive(
+  session: ReturnType<typeof useSession>['session'],
+  consultation: ConsultationSummary,
+): boolean {
+  if (!session?.permissions.includes('consultation:delete')) return false;
+  return (
+    consultation.ownerId === session.user.id || session.permissions.includes('workspace:update')
+  );
 }
 
 /** Anything in the URL is text, not a number: `Number('')` is 0 and `Number('x')` is NaN. */

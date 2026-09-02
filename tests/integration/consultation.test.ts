@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
+  addMember,
   createHarness,
   registerOwner,
   truncateAll,
@@ -632,5 +633,112 @@ describe('consultation management', () => {
     const deleted = await owner.client.delete(`/consultations/${consultationId}`);
     expect(deleted.status).toBeLessThan(300);
     expect((await owner.client.get(`/consultations/${consultationId}`)).status).toBe(404);
+  });
+
+  it('files the removed consultation as archived rather than leaving its old status', async () => {
+    const consultationId = await newConsultation([]);
+    await owner.client.patch(`/consultations/${consultationId}`, {
+      status: 'action_required',
+      version: 1,
+    });
+    await owner.client.delete(`/consultations/${consultationId}`);
+
+    /*
+     * Read from the table, because every endpoint filters deleted rows — which is the whole
+     * problem this covers. A consultation removed while it was `action_required` used to
+     * keep that status for good, and the compliance reviews hanging off it went on raising
+     * attention items for work nobody could open.
+     */
+    const rows = await harness.db.execute(
+      `SELECT status, deleted_at IS NOT NULL AS deleted
+         FROM consultations WHERE id = '${consultationId}'`,
+    );
+    expect(rows[0]).toMatchObject({ status: 'archived', deleted: true });
+  });
+
+  it("tells a reviewer they may not delete somebody else's, rather than that it is missing", async () => {
+    const consultationId = await newConsultation([]);
+    const reviewer = await addMember(harness, owner, 'reviewer');
+
+    /*
+     * A reviewer holds `consultation:read_all`, so this consultation is on their screen,
+     * in their list, with a delete action offered. Answering "not found" described
+     * something they were looking at — which is exactly how "Something went wrong:
+     * Consultation not found" reached somebody who had done nothing wrong.
+     */
+    expect((await reviewer.client.get(`/consultations/${consultationId}`)).status).toBe(200);
+
+    const refused = await reviewer.client.delete(`/consultations/${consultationId}`);
+    expect(refused.status).toBe(403);
+    expect(JSON.stringify(refused.body)).toMatch(/only delete consultations you own/i);
+    expect((await owner.client.get(`/consultations/${consultationId}`)).status).toBe(200);
+  });
+
+  it('still answers 404 to somebody who cannot see it at all', async () => {
+    const consultationId = await newConsultation([]);
+    const member = await addMember(harness, owner, 'member');
+
+    // A plain member sees only their own consultations. Telling them this one exists but
+    // is not theirs to delete would be a new way to enumerate a workspace's work.
+    expect((await member.client.delete(`/consultations/${consultationId}`)).status).toBe(404);
+  });
+});
+
+describe('what needs attention', () => {
+  /*
+   * The finished review is written directly rather than produced by asking a question.
+   *
+   * What is under test is which rows survive a delete, and driving that through the whole
+   * review pipeline would make it depend on whatever verdict the fixture happens to earn —
+   * a test that passes or fails for reasons that have nothing to do with the filter.
+   */
+  async function completedReviewFor(consultationId: string): Promise<void> {
+    const rows = await harness.db.execute(
+      `SELECT organization_id, workspace_id FROM consultations WHERE id = '${consultationId}'`,
+    );
+    const consultation = rows[0] as { organization_id: string; workspace_id: string } | undefined;
+    if (!consultation) throw new Error('Consultation not created');
+
+    await harness.db.execute(
+      `INSERT INTO compliance_reviews
+         (id, consultation_id, organization_id, workspace_id, status,
+          requirements_total, non_compliant_count, needs_evidence_count)
+       VALUES
+         ('01M${consultationId.slice(3)}', '${consultationId}',
+          '${consultation.organization_id}', '${consultation.workspace_id}', 'complete', 4, 2, 0)`,
+    );
+  }
+
+  it('raises a review that has findings against it', async () => {
+    const consultationId = await newConsultation([]);
+    await completedReviewFor(consultationId);
+
+    const response = await owner.client.get<{ items: Array<{ href: string }> }>(
+      '/dashboard/attention',
+    );
+    expect(response.body.items.some((item) => item.href.includes(consultationId))).toBe(true);
+  });
+
+  it('stops raising a review whose consultation has been removed', async () => {
+    const consultationId = await newConsultation([]);
+    await completedReviewFor(consultationId);
+    await owner.client.delete(`/consultations/${consultationId}`);
+
+    /*
+     * The review row survives the consultation — nothing cascades on a soft delete — so
+     * without an explicit filter it kept producing an item whose own link answered 404,
+     * which is what the user saw as "Something went wrong: Consultation not found".
+     */
+    const response = await owner.client.get<{ items: Array<{ href: string }> }>(
+      '/dashboard/attention',
+    );
+    expect(response.body.items.some((item) => item.href.includes(consultationId))).toBe(false);
+
+    // And the row is still there, so this is a filter and not a silent cascade delete.
+    const reviews = await harness.db.execute(
+      `SELECT count(*)::text AS count FROM compliance_reviews
+         WHERE consultation_id = '${consultationId}'`,
+    );
+    expect((reviews[0] as { count: string } | undefined)?.count).toBe('1');
   });
 });

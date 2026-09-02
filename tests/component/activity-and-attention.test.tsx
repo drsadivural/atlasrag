@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import type { ReactNode } from 'react';
-import type { AttentionItem, SessionResponse } from '@uxe/contracts';
+import type { AttentionItem, AuditEvent, SessionResponse } from '@uxe/contracts';
 import { ROLE_PERMISSIONS, type Role } from '@uxe/contracts';
 import { ToastProvider, TooltipProvider } from '@uxe/ui';
 import { ActivityPage } from '../../apps/web/src/routes/ActivityPage.js';
@@ -68,7 +68,32 @@ const CONSULTATION = {
   createdAt: '2026-08-01T09:00:00.000Z',
 };
 
-function renderActivity(role: Role, items: AttentionItem[] = [], route = '/activity') {
+const AUDIT_EVENT: AuditEvent = {
+  id: '01JQ8Z9CT2K5V6W7X8Y9Z0AUDT',
+  at: '2026-08-30T09:15:00.000Z',
+  actorId: 'usr-1',
+  actorName: 'Dr Sadi Vural',
+  actorType: 'user',
+  action: 'consultation.deleted',
+  category: 'deletion',
+  targetType: 'consultation',
+  targetId: '01JQ8Z9CT2K5V6W7X8Y9Z0CONS',
+  targetLabel: 'Marina Tower Evacuation Plan',
+  result: 'success',
+  ipAddress: '203.0.113.42',
+  userAgent: 'Mozilla/5.0 (Macintosh)',
+  traceId: '9f2c1b7e-4a55-4d0e-8f1a-2b6c9d0e3f41',
+  summary: 'Archived consultation "Marina Tower Evacuation Plan".',
+  before: null,
+  after: null,
+};
+
+function renderActivity(
+  role: Role,
+  items: AttentionItem[] = [],
+  route = '/activity',
+  auditEvents: AuditEvent[] = [],
+) {
   const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input);
     const json = (body: unknown) =>
@@ -82,7 +107,13 @@ function renderActivity(role: Role, items: AttentionItem[] = [], route = '/activ
       return json({ items, total: items.length, truncated: false });
     }
     if (url.includes('/audit-events')) {
-      return json({ items: [], total: 0, page: 1, pageSize: 25, totalPages: 0 });
+      return json({
+        items: auditEvents,
+        total: auditEvents.length,
+        page: 1,
+        pageSize: 25,
+        totalPages: 1,
+      });
     }
     if (url.includes('/consultations')) {
       return json({ items: [CONSULTATION], total: 1, page: 1, pageSize: 20, totalPages: 1 });
@@ -145,6 +176,38 @@ describe('the page the bell opens', () => {
     // The wording a compliance product cannot get wrong: this changes the reminder, not
     // the finding.
     expect(within(dialog).getByText(/nothing here makes it compliant/i)).toBeInTheDocument();
+  });
+
+  /*
+   * The row is a title and one line. The panel is where the rest of it lives: what kind of
+   * thing this is, and how serious — neither of which the list had room to say.
+   */
+  it('opens an item in a side panel carrying more than the row showed', async () => {
+    const user = userEvent.setup();
+    renderActivity('owner', [ITEM]);
+
+    await user.click(await screen.findByRole('button', { name: /Marina Tower Evacuation Plan/ }));
+
+    const panel = await screen.findByRole('dialog');
+    expect(within(panel).getByText('A finding recorded as non-compliant')).toBeInTheDocument();
+    expect(within(panel).getByText('Critical')).toBeInTheDocument();
+    expect(within(panel).getByText('Severity')).toBeInTheDocument();
+  });
+
+  it('opens an audit row and shows the whole record, not the part that fitted', async () => {
+    const user = userEvent.setup();
+    renderActivity('owner', [], '/activity?tab=audit', [AUDIT_EVENT]);
+
+    // The table renders a row and a card, one per breakpoint; either opens the same event.
+    await user.click((await screen.findAllByText('consultation.deleted'))[0]!);
+
+    const panel = await screen.findByRole('dialog');
+    // The trace was a truncated tooltip on a button that did nothing else; it is readable
+    // now, in full, beside where the request came from.
+    expect(within(panel).getByText('9f2c1b7e-4a55-4d0e-8f1a-2b6c9d0e3f41')).toBeInTheDocument();
+    expect(within(panel).getByText('203.0.113.42')).toBeInTheDocument();
+    expect(within(panel).getByText('Marina Tower Evacuation Plan')).toBeInTheDocument();
+    expect(within(panel).getByText('Succeeded')).toBeInTheDocument();
   });
 
   it('shows the audit log to a role that may read it', async () => {

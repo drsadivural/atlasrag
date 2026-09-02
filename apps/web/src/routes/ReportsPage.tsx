@@ -1,3 +1,4 @@
+import { useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Download, FileBarChart, FileText, Info, Trash2 } from 'lucide-react';
@@ -5,8 +6,8 @@ import {
   Badge,
   Button,
   Card,
+  ConfirmDialog,
   DataTable,
-  DropdownMenu,
   EmptyState,
   ErrorState,
   FilterChip,
@@ -39,6 +40,8 @@ export function ReportsPage() {
   const queryClient = useQueryClient();
   const { push } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
+
+  const [removing, setRemoving] = useState<ArtifactSummary | null>(null);
 
   const kind = searchParams.get('kind') ?? 'all';
   const page = Number(searchParams.get('page') ?? '1');
@@ -73,14 +76,29 @@ export function ReportsPage() {
       push({ tone: 'error', title: 'Download failed', description: error.message }),
   });
 
+  /**
+   * Removing a report archives it.
+   *
+   * `DELETE /artifacts/:id` marks the row archived and stamps `deleted_at`; the file itself
+   * stays until retention collects it. The wording says archive rather than delete, because
+   * that is what happens, and a compliance report is not a thing to be vague about.
+   */
   const archive = useMutation({
     mutationFn: (id: string) => api.delete(`/artifacts/${id}`),
-    onSuccess: () => {
-      push({ tone: 'success', title: 'Artifact archived' });
+    onSuccess: (_result, id) => {
+      const title = removing?.id === id ? removing.title : null;
+      push({
+        tone: 'success',
+        title: t('reports.removed'),
+        description: title ? t('reports.removedBody', { title }) : undefined,
+      });
       void queryClient.invalidateQueries({ queryKey: ['artifacts'] });
+      setRemoving(null);
     },
-    onError: (error: ApiError) =>
-      push({ tone: 'error', title: 'Could not archive', description: error.message }),
+    onError: (error: ApiError) => {
+      push({ tone: 'error', title: t('reports.couldNotRemove'), description: error.message });
+      setRemoving(null);
+    },
   });
 
   return (
@@ -245,42 +263,48 @@ export function ReportsPage() {
                   key: 'actions',
                   header: '',
                   align: 'right',
-                  hideOnMobile: true,
-                  render: (row) => (
-                    <DropdownMenu
-                      label={`Actions for ${row.title}`}
-                      trigger={
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          aria-label={`Actions for ${row.title}`}
+                  /*
+                   * Both actions are buttons, on every width.
+                   *
+                   * They used to be a menu behind a download-arrow trigger, which read as a
+                   * download button and hid removing a report two clicks deep — and the
+                   * whole column disappeared on a phone, so on a phone there was no way to
+                   * remove anything at all.
+                   */
+                  render: (row) => {
+                    const noDownload =
+                      row.status !== 'ready'
+                        ? t('reports.stillGenerating')
+                        : can('artifact:download')
+                          ? null
+                          : t('reports.cannotDownload');
+                    const noRemove = can('artifact:delete') ? null : t('reports.cannotRemove');
+
+                    return (
+                      <span className="flex items-center justify-end gap-1">
+                        <RowAction
+                          label={t('reports.download')}
+                          title={row.title}
+                          reason={noDownload}
+                          loading={download.isPending && download.variables === row.id}
+                          onClick={() => download.mutate(row.id)}
                         >
                           <Download className="h-4 w-4" aria-hidden />
-                        </Button>
-                      }
-                      items={[
-                        {
-                          label: t('reports.download'),
-                          icon: <Download className="h-4 w-4" aria-hidden />,
-                          onSelect: () => download.mutate(row.id),
-                          disabled: !can('artifact:download') || row.status !== 'ready',
-                          disabledReason:
-                            row.status !== 'ready'
-                              ? 'Still generating'
-                              : 'Your role cannot download artifacts',
-                        },
-                        {
-                          label: t('reports.archive'),
-                          icon: <Trash2 className="h-4 w-4" aria-hidden />,
-                          onSelect: () => archive.mutate(row.id),
-                          destructive: true,
-                          disabled: !can('artifact:delete'),
-                          disabledReason: 'Your role cannot archive artifacts',
-                          separatorBefore: true,
-                        },
-                      ]}
-                    />
-                  ),
+                        </RowAction>
+
+                        <RowAction
+                          label={t('reports.remove')}
+                          title={row.title}
+                          reason={noRemove}
+                          destructive
+                          loading={archive.isPending && archive.variables === row.id}
+                          onClick={() => setRemoving(row)}
+                        >
+                          <Trash2 className="h-4 w-4" aria-hidden />
+                        </RowAction>
+                      </span>
+                    );
+                  },
                 },
               ]}
             />
@@ -297,6 +321,65 @@ export function ReportsPage() {
           </>
         )}
       </Card>
+
+      <ConfirmDialog
+        open={removing !== null}
+        onOpenChange={(next) => !next && setRemoving(null)}
+        title={t('reports.remove')}
+        description={t('reports.removeBody', { title: removing?.title ?? '' })}
+        confirmLabel={t('reports.remove')}
+        cancelLabel={t('common.cancel')}
+        destructive
+        loading={archive.isPending}
+        onConfirm={() => removing && archive.mutate(removing.id)}
+      />
     </div>
+  );
+}
+
+/**
+ * One icon button in a row, with the reason it is unavailable.
+ *
+ * The tooltip hangs on a wrapper rather than on the button, because a disabled button
+ * carries `pointer-events-none` and would never fire it — so the explanation for why the
+ * control is greyed out would be the one thing nobody could read. The reason is repeated
+ * into the accessible name for the same reason: a disabled control cannot be focused, so
+ * the tooltip alone reaches only a mouse.
+ */
+function RowAction({
+  label,
+  title,
+  reason,
+  destructive,
+  loading,
+  onClick,
+  children,
+}: {
+  label: string;
+  title: string;
+  reason: string | null;
+  destructive?: boolean;
+  loading: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <Tooltip content={reason ?? label}>
+      <span className="inline-flex">
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label={reason ? `${label}: ${title} — ${reason}` : `${label}: ${title}`}
+          disabled={reason !== null}
+          loading={loading}
+          onClick={onClick}
+          className={
+            destructive ? 'text-[var(--uxe-danger)] hover:bg-[var(--uxe-danger-bg)]' : undefined
+          }
+        >
+          {children}
+        </Button>
+      </span>
+    </Tooltip>
   );
 }
