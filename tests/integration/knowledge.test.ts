@@ -363,3 +363,69 @@ describe('source lifecycle', () => {
     expect(audit.body.items.every((event) => event.actorName.length > 0)).toBe(true);
   });
 });
+
+describe('an upload whose bytes never arrive', () => {
+  /*
+   * Requesting an upload creates the source row; the ingest job is only enqueued when the
+   * content arrives. Nothing failed when it did not, because nothing had started — so the
+   * row sat at "Pending" with no reason and no Retry. Seventeen of a customer's drawings
+   * sat like that for three days.
+   */
+  async function requestUpload(name: string) {
+    const response = await owner.client.post<{
+      tickets: Array<{ uploadId: string; sourceId: string }>;
+    }>('/sources/uploads', {
+      files: [{ fileName: name, sizeBytes: 1024, contentType: 'application/pdf' }],
+    });
+    expect(response.status).toBe(201);
+    return response.body.tickets[0]!;
+  }
+
+  // A plain string, as elsewhere in these tests: drizzle-orm is not resolvable from here.
+  // The id is an app-generated ULID, so there is nothing to escape.
+  const expireTicket = (sourceId: string) =>
+    harness.db.execute(
+      `UPDATE upload_tickets SET expires_at = now() - interval '1 hour' WHERE source_id = '${sourceId}'`,
+    );
+
+  const statusOf = async (sourceId: string) => {
+    const view = await owner.client.get<{ status: string; failureReason: string | null }>(
+      `/sources/${sourceId}`,
+    );
+    return view.body;
+  };
+
+  it('is reported as failed, with a reason, once its ticket has expired', async () => {
+    const ticket = await requestUpload('abandoned.pdf');
+    expect((await statusOf(ticket.sourceId)).status).toBe('pending');
+
+    await expireTicket(ticket.sourceId);
+    expect(await harness.deps.repos.sources.failAbandonedUploads()).toBe(1);
+
+    const after = await statusOf(ticket.sourceId);
+    expect(after.status).toBe('failed');
+    expect(after.failureReason).toMatch(/did not complete/i);
+  });
+
+  it('leaves an upload that is still in flight alone', async () => {
+    // The ticket has not expired: the bytes may yet arrive.
+    const ticket = await requestUpload('in-flight.pdf');
+    expect(await harness.deps.repos.sources.failAbandonedUploads()).toBe(0);
+    expect((await statusOf(ticket.sourceId)).status).toBe('pending');
+  });
+
+  it('leaves a source whose bytes did arrive alone', async () => {
+    const uploaded = await uploadFixture(harness, owner.client, 'regulation-native.pdf');
+    await expireTicket(uploaded.sourceId);
+    expect(await harness.deps.repos.sources.failAbandonedUploads()).toBe(0);
+    expect((await statusOf(uploaded.sourceId)).status).toBe('ready');
+  });
+
+  it('runs again without changing anything it already resolved', async () => {
+    const ticket = await requestUpload('twice.pdf');
+    await expireTicket(ticket.sourceId);
+    expect(await harness.deps.repos.sources.failAbandonedUploads()).toBe(1);
+    expect(await harness.deps.repos.sources.failAbandonedUploads()).toBe(0);
+    expect((await statusOf(ticket.sourceId)).status).toBe('failed');
+  });
+});

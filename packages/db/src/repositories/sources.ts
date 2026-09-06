@@ -660,4 +660,37 @@ export class SourceRepository {
       throw new AuthorizationError('source:read', 'One or more sources are not accessible to you');
     }
   }
+
+  /**
+   * Resolves uploads whose bytes never arrived.
+   *
+   * Requesting an upload creates the source row; the ingest job is only enqueued when the
+   * content arrives. If it never does — the tab was closed, the network dropped, the
+   * upload failed — there is no job, so nothing ever fails and nothing reports anything.
+   * The row sits at "Pending" for ever: no reason, no Retry, and nothing to tell the user
+   * the file will never be indexed. Seventeen of a customer's drawings sat like that for
+   * three days.
+   *
+   * A source is only touched once its ticket has expired, so an upload still in flight is
+   * never disturbed, and only when no version exists — bytes that did arrive mean the
+   * normal pipeline owns the row.
+   */
+  async failAbandonedUploads(): Promise<number> {
+    const rows = await this.db.execute(sql`
+      UPDATE sources SET
+        status = 'failed',
+        failure_reason = 'The upload did not complete, so this file was never indexed. Upload it again.',
+        updated_at = now()
+      WHERE status = 'pending'
+        AND deleted_at IS NULL
+        AND NOT EXISTS (SELECT 1 FROM source_versions v WHERE v.source_id = sources.id)
+        AND EXISTS (
+          SELECT 1 FROM upload_tickets t
+          WHERE t.source_id = sources.id AND t.deleted_at IS NULL AND t.expires_at < now()
+        )
+      RETURNING id
+    `);
+    const list = rows as unknown as unknown[];
+    return Array.isArray(list) ? list.length : 0;
+  }
 }

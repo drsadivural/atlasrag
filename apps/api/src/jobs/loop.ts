@@ -37,6 +37,11 @@ export function startWorkerLoop(deps: AppDeps, options: WorkerLoopOptions = {}):
           lastReclaim = Date.now();
           const reclaimed = await deps.repos.jobs.reclaimStale(staleAfterMs);
           if (reclaimed > 0) logger.warn('jobs.reclaimed', { count: reclaimed });
+
+          // An upload whose bytes never arrived has no job to fail, so nothing else here
+          // would ever notice it.
+          const abandoned = await deps.repos.sources.failAbandonedUploads();
+          if (abandoned > 0) logger.warn('uploads.abandoned', { count: abandoned });
         }
 
         const claimed = await deps.repos.jobs.claimNext();
