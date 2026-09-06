@@ -116,12 +116,23 @@ export class DocumentWorkerError extends Error {
  * OCR and conversion run in a sandboxed container while the API stays on the edge runtime,
  * and it means a malicious document can at worst crash a disposable worker process.
  */
+/**
+ * How long a liveness probe waits, and above which latency the worker counts as busy.
+ *
+ * The timeout is generous because a worker under load answers late, and treating late as
+ * dead is the mistake this pair exists to prevent. The busy threshold sits well above a
+ * healthy reply (single-digit milliseconds) and well below the timeout.
+ */
+const WORKER_HEALTH_TIMEOUT_MS = 10_000;
+const WORKER_HEALTH_BUSY_MS = 1_000;
+
 export class DocumentWorkerClient {
   constructor(
     private readonly baseUrl: string,
     private readonly token: string,
     private readonly timeoutMs: number,
     private readonly fetchImpl: typeof fetch = fetch,
+    private readonly extractTimeoutMs: number = timeoutMs,
   ) {}
 
   async capabilities(): Promise<DocumentCapabilitiesResponse> {
@@ -136,7 +147,14 @@ export class DocumentWorkerClient {
     forceOcr?: boolean;
     password?: string | null;
   }): Promise<ExtractionResult> {
-    return this.request<ExtractionResult>('POST', '/extract', input);
+    /*
+     * Extraction gets its own, longer allowance. It is the only call whose cost scales
+     * with the document: a 300-page scan is 300 OCR passes, and while those now run in
+     * parallel the total still runs to minutes. The shared default is sized for calls
+     * that should answer promptly, and applying it here failed large documents on the
+     * clock rather than on their merits.
+     */
+    return this.request<ExtractionResult>('POST', '/extract', input, this.extractTimeoutMs);
   }
 
   async correct(
@@ -182,14 +200,34 @@ export class DocumentWorkerClient {
     return this.request('POST', '/scan', input);
   }
 
-  async health(): Promise<{ ok: boolean; detail: string | null; latencyMs: number }> {
+  /**
+   * Liveness, separating a worker that is busy from one that is gone.
+   *
+   * These are not the same condition and must not produce the same answer. A slow reply
+   * means documents are being processed; reporting that as "unavailable" told operators
+   * the service was broken at exactly the moments it was working hardest, and any caller
+   * polling readiness to decide whether to keep waiting would abandon a healthy job.
+   */
+  async health(): Promise<{
+    state: 'ok' | 'busy' | 'down';
+    detail: string | null;
+    latencyMs: number;
+  }> {
     const started = Date.now();
     try {
-      await this.request('GET', '/health', undefined, 5000);
-      return { ok: true, detail: null, latencyMs: Date.now() - started };
+      await this.request('GET', '/health', undefined, WORKER_HEALTH_TIMEOUT_MS);
+      const latencyMs = Date.now() - started;
+      return {
+        state: latencyMs > WORKER_HEALTH_BUSY_MS ? 'busy' : 'ok',
+        detail:
+          latencyMs > WORKER_HEALTH_BUSY_MS
+            ? 'Answering slowly; documents are being processed.'
+            : null,
+        latencyMs,
+      };
     } catch (error) {
       return {
-        ok: false,
+        state: 'down',
         detail: error instanceof Error ? error.message : 'unknown',
         latencyMs: Date.now() - started,
       };

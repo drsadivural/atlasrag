@@ -1325,9 +1325,12 @@ export function systemRoutes(deps: AppDeps) {
     const worker = await deps.services.documentWorker.health();
     checks.push({
       name: 'document-worker',
-      status: worker.ok ? 'ok' : 'degraded',
+      // Busy is a healthy state: the worker is answering, just under load. Only a worker
+      // that cannot answer at all makes extraction unavailable.
+      status: worker.state === 'down' ? 'degraded' : 'ok',
       latencyMs: worker.latencyMs,
-      detail: worker.ok ? null : 'Extraction, OCR and correction are unavailable.',
+      detail:
+        worker.state === 'down' ? 'Extraction, OCR and correction are unavailable.' : worker.detail,
     });
 
     const storage = await deps.services.storage.health();

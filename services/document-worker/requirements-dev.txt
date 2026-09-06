@@ -1,0 +1,3 @@
+# Test-only dependencies. Not installed in the container image.
+pytest==8.4.1
+httpx==0.28.1

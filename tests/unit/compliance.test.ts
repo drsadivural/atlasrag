@@ -15,8 +15,10 @@ import {
   isRequirementText,
   quantitySatisfies,
   requirementKeyTerms,
+  selectRelevantRequirements,
   validateDerivative,
   type DetectedSection,
+  type RequirementDraft,
 } from '@uxe/rag';
 
 const CODE_PAGES = [
@@ -906,5 +908,88 @@ describe('what a capped review is allowed to imply', () => {
 
     expect(drafts).toHaveLength(4);
     expect(omittedRequirements(drafts)).toBe(0);
+  });
+});
+
+describe('selectRelevantRequirements', () => {
+  /*
+   * A drawing set states its requirements in symbols, schedules and title blocks, not in
+   * the code's prose. Judging a clause's relevance by how much of its wording reappears in
+   * the submission therefore under-reads drawings badly: a nine-sheet fire-alarm package
+   * scored two of the code's 228 in-scope obligations above the floor, and the clauses it
+   * left out included manual call points and detector spacing.
+   */
+  const draft = (reference: string, keyTerms: string[]): RequirementDraft =>
+    ({
+      requirementId: reference,
+      reference,
+      title: reference,
+      obligationText: `${reference} shall be provided.`,
+      modality: 'mandatory',
+      keyTerms,
+      sourceId: 'code',
+      sourceVersionId: 'v1',
+      sectionId: reference,
+      pageNumber: 1,
+      effectiveDate: null,
+    }) as unknown as RequirementDraft;
+
+  // "detector" and "spacing" are the clause's own words and appear nowhere in the drawing.
+  const callPoints = draft('4.10', ['callpoint', 'manual', 'initiating']);
+  const spacing = draft('4.8.1', ['detector', 'spacing', 'linetype']);
+  // This one does share the drawing's vocabulary, so it clears the floor on its own.
+  const shared = draft('4.2.1', ['alarm', 'panel', 'zone']);
+  const unrouted = draft('9.9', ['bedroom', 'dormitory', 'locker']);
+  const all = [callPoints, spacing, shared, unrouted];
+  const vocabulary = new Map([
+    ['alarm', 40],
+    ['panel', 30],
+    ['zone', 30],
+  ]);
+
+  it('keeps a clause of the submission’s own trade even when the drawing does not repeat its wording', () => {
+    const picked = selectRelevantRequirements(
+      all,
+      vocabulary,
+      60,
+      new Set([callPoints, spacing, shared]),
+    );
+    expect(picked.map((r) => r.reference).sort()).toEqual(['4.10', '4.2.1', '4.8.1']);
+  });
+
+  it('still excludes a clause no trade claimed and the submission does not engage with', () => {
+    const picked = selectRelevantRequirements(
+      all,
+      vocabulary,
+      60,
+      new Set([callPoints, spacing, shared]),
+    );
+    expect(picked.map((r) => r.reference)).not.toContain('9.9');
+  });
+
+  it('applies the vocabulary floor when nothing was trade-matched', () => {
+    // The previous behaviour, which is still right for clauses no trade claims.
+    const picked = selectRelevantRequirements(all, vocabulary, 60);
+    expect(picked.map((r) => r.reference)).toEqual(['4.2.1']);
+  });
+
+  it('honours the budget, spending it on the best-scoring clauses first', () => {
+    const picked = selectRelevantRequirements(
+      all,
+      vocabulary,
+      1,
+      new Set([callPoints, spacing, shared]),
+    );
+    expect(picked.map((r) => r.reference)).toEqual(['4.2.1']);
+  });
+
+  it('returns document order so the review reads in the order the code is written', () => {
+    const picked = selectRelevantRequirements(
+      all,
+      vocabulary,
+      60,
+      new Set([callPoints, spacing, shared]),
+    );
+    expect(picked.map((r) => r.reference)).toEqual(['4.10', '4.8.1', '4.2.1']);
   });
 });

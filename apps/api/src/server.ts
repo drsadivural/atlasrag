@@ -13,7 +13,7 @@ import { startWorkerLoop } from './jobs/loop.js';
  */
 const { app, deps } = buildApp();
 
-const stopWorker = startWorkerLoop(deps);
+const stopWorker = startWorkerLoop(deps, { concurrency: deps.env.JOB_CONCURRENCY });
 
 const server = serve(
   { fetch: app.fetch, port: deps.env.API_PORT, hostname: deps.env.API_HOST },

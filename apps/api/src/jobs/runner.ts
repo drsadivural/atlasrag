@@ -20,6 +20,12 @@ import { buildStorageKey } from '../services/storage.js';
 import { workspaceSettingsFrom } from '../services/settings.js';
 import { EmailTemplates } from '../services/email.js';
 
+/**
+ * How often a running job proves it is alive. The reclaimer treats a row untouched for
+ * five minutes as abandoned; a beat every minute leaves that a wide margin.
+ */
+const JOB_HEARTBEAT_MS = 60_000;
+
 export interface RunResult {
   ok: boolean;
   resultRef: { kind: string; id: string } | null;
@@ -44,6 +50,18 @@ export async function runJob(deps: AppDeps, job: JobRecord): Promise<RunResult> 
 
   await deps.repos.jobs.beginAttempt(job.id, job.attempt, job.workspaceId);
   const started = Date.now();
+
+  // Keeps the row moving while a long stage runs, so the stale reclaimer does not mistake
+  // a slow document for an abandoned job. A failed beat is logged, never fatal: the job
+  // itself is fine, and the worst case is the reclaim this exists to prevent.
+  const heartbeat = setInterval(() => {
+    deps.repos.jobs.heartbeat(job.id).catch((error: unknown) => {
+      logger.warn('job.heartbeat_failed', {
+        message: error instanceof Error ? error.message : String(error),
+      });
+    });
+  }, JOB_HEARTBEAT_MS);
+  heartbeat.unref();
 
   try {
     const result = await dispatch(deps, tenant, job, logger);
@@ -101,6 +119,8 @@ export async function runJob(deps: AppDeps, job: JobRecord): Promise<RunResult> 
       await notifyCompletion(deps, tenant, job, false, classified.message);
     }
     throw error;
+  } finally {
+    clearInterval(heartbeat);
   }
 }
 

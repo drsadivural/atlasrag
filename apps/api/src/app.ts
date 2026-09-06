@@ -184,6 +184,8 @@ export function buildApp(options: BuildOptions = {}): BuiltApp {
       env.DOCUMENT_WORKER_URL,
       env.DOCUMENT_WORKER_TOKEN,
       env.DOCUMENT_WORKER_TIMEOUT_MS,
+      fetch,
+      env.DOCUMENT_WORKER_EXTRACT_TIMEOUT_MS,
     ),
     rateLimiter: options.rateLimiter ?? new MemoryRateLimiter(),
     embeddings: providers.embeddings,

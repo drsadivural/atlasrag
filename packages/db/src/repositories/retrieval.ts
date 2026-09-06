@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, or, sql } from 'drizzle-orm';
 import type { Database } from '../client.js';
 import {
   sourceChunks,
@@ -559,6 +559,44 @@ export class RetrievalRepository {
       )
       .limit(1);
     return row ?? null;
+  }
+
+  /**
+   * The pages behind a set of citations, in one round trip.
+   *
+   * Citation verification needs the full text of every page it quotes from. Fetching them
+   * one at a time made the cost of verifying an answer scale with the number of distinct
+   * pages it cited, which is exactly the answers that matter most — a compliance review
+   * spanning a whole code. Page text is large, so the pages are named rather than the
+   * whole version being loaded.
+   */
+  async getPagesByNumber(
+    ctx: TenantContext,
+    wanted: ReadonlyArray<{ versionId: string; pageNumber: number }>,
+  ) {
+    if (wanted.length === 0) return [];
+    const byVersion = new Map<string, Set<number>>();
+    for (const { versionId, pageNumber } of wanted) {
+      const pages = byVersion.get(versionId) ?? new Set<number>();
+      pages.add(pageNumber);
+      byVersion.set(versionId, pages);
+    }
+    return this.db
+      .select()
+      .from(sourcePages)
+      .where(
+        and(
+          eq(sourcePages.workspaceId, ctx.workspaceId),
+          or(
+            ...[...byVersion].map(([versionId, pages]) =>
+              and(
+                eq(sourcePages.sourceVersionId, versionId),
+                inArray(sourcePages.pageNumber, [...pages]),
+              ),
+            ),
+          ),
+        ),
+      );
   }
 
   async getPages(ctx: TenantContext, versionId: string) {

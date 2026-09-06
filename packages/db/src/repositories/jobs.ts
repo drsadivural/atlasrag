@@ -523,6 +523,21 @@ export class JobRepository {
   }
 
   /** Requeues jobs that a crashed worker left in `running`. */
+  /**
+   * Proves a running attempt is still alive.
+   *
+   * The stale reclaimer requeues any running job whose row has not moved for a while, and
+   * the row only moves when a stage changes. A single stage can legitimately take longer
+   * than that — extracting a scanned drawing set is one long call to the worker — so
+   * without this a healthy job was requeued mid-flight and ran twice.
+   */
+  async heartbeat(jobId: string) {
+    await this.db
+      .update(processingJobs)
+      .set({ updatedAt: new Date() })
+      .where(and(eq(processingJobs.id, jobId), eq(processingJobs.status, 'running')));
+  }
+
   async reclaimStale(olderThanMs: number) {
     const cutoff = new Date(Date.now() - olderThanMs);
     const rows = await this.db

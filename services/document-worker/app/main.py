@@ -8,11 +8,13 @@ in normal operation. It receives bytes, returns structured data, and holds nothi
 from __future__ import annotations
 
 import base64
+import contextlib
 import hmac
 import logging
 import shutil
 import subprocess
 import time
+from collections.abc import AsyncIterator
 from typing import Any, Literal
 
 from fastapi import FastAPI, Header, HTTPException, Request
@@ -28,12 +30,35 @@ logging.basicConfig(
 )
 logger = logging.getLogger("uxe.document-worker")
 
+
+@contextlib.asynccontextmanager
+async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    """Widens the pool the document handlers run in.
+
+    Starlette hands every plain `def` handler to this pool, so its size is how many
+    documents can be worked on at once. The default is shared with everything else anyio
+    does; naming it here makes the concurrency of this service a deliberate number.
+    """
+    try:
+        import anyio.to_thread
+
+        anyio.to_thread.current_default_thread_limiter().total_tokens = settings.thread_pool_size
+    except Exception:  # noqa: BLE001 - a smaller pool is a slowdown, never a failure
+        logger.warning("could not resize the thread pool; using the default")
+    try:
+        yield
+    finally:
+        # Tesseract subprocesses outlive the server otherwise.
+        extract.shutdown_ocr_pool()
+
+
 app = FastAPI(
     title="UXE Consulting AI - Document Worker",
     version=__version__,
     docs_url=None,      # No interactive docs: this service is internal-only.
     redoc_url=None,
     openapi_url=None,
+    lifespan=lifespan,
 )
 
 
@@ -171,8 +196,13 @@ async def capabilities(x_worker_token: str | None = Header(default=None)) -> dic
     }
 
 
+# The document handlers below are plain `def`, deliberately. FastAPI runs a plain function
+# in its thread pool and an `async def` on the event loop itself; every one of these does
+# seconds to minutes of native CPU work, and on the loop that work blocked the whole
+# service — /health stopped answering, the API marked the worker "degraded", and every
+# other document queued behind the one in progress on a single core.
 @app.post("/scan")
-async def scan_endpoint(
+def scan_endpoint(
     payload: ScanRequest, x_worker_token: str | None = Header(default=None)
 ) -> dict[str, Any]:
     require_token(x_worker_token)
@@ -187,7 +217,7 @@ async def scan_endpoint(
 
 
 @app.post("/archive/inspect")
-async def archive_inspect(
+def archive_inspect(
     payload: ArchiveInspectRequest, x_worker_token: str | None = Header(default=None)
 ) -> dict[str, Any]:
     require_token(x_worker_token)
@@ -211,7 +241,7 @@ async def archive_inspect(
 
 
 @app.post("/extract")
-async def extract_endpoint(
+def extract_endpoint(
     payload: ExtractRequest, x_worker_token: str | None = Header(default=None)
 ) -> dict[str, Any]:
     require_token(x_worker_token)
@@ -266,7 +296,7 @@ async def extract_endpoint(
 
 
 @app.post("/correct")
-async def correct_endpoint(
+def correct_endpoint(
     payload: CorrectRequest, x_worker_token: str | None = Header(default=None)
 ) -> dict[str, Any]:
     require_token(x_worker_token)
@@ -336,7 +366,7 @@ def _extract_for_revision(data: bytes, document_type: str) -> extract.Extraction
 
 
 @app.post("/report")
-async def report_endpoint(
+def report_endpoint(
     payload: ReportRequest, x_worker_token: str | None = Header(default=None)
 ) -> dict[str, Any]:
     require_token(x_worker_token)

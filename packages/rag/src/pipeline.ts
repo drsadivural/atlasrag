@@ -296,33 +296,57 @@ export async function buildAndVerifyCitations(
   const citationIdByChunk = new Map<string, string>();
   const failures: Array<{ citationId: string; reason: string }> = [];
 
-  // Page loads are memoised: a 1,300-page regulation will typically supply several
-  // passages from a handful of pages.
+  /*
+   * Drafting is pure, so every citation is drafted before any page is read. That turns
+   * what used to be one query per distinct page — issued one after another, so a review
+   * citing forty pages of a code paid forty round trips in series — into a single query
+   * for exactly the pages this answer quotes.
+   */
+  const drafts = candidates.map((candidate) => ({
+    candidate,
+    citationId: idFactory(),
+    draft: null as ReturnType<typeof draftCitation> | null,
+  }));
+  for (const entry of drafts) {
+    entry.draft = draftCitation(
+      entry.candidate,
+      query,
+      entry.citationId,
+      claimByChunk?.get(entry.candidate.chunkId),
+    );
+  }
+
+  const wanted = new Map<string, { versionId: string; pageNumber: number }>();
+  for (const { candidate, draft } of drafts) {
+    if (draft?.pageNumber == null) continue;
+    wanted.set(`${candidate.sourceVersionId}:${draft.pageNumber}`, {
+      versionId: candidate.sourceVersionId,
+      pageNumber: draft.pageNumber,
+    });
+  }
+
   const pageCache = new Map<string, PageRecord | null>();
-
-  for (const candidate of candidates) {
-    const citationId = idFactory();
-    const draft = draftCitation(candidate, query, citationId, claimByChunk?.get(candidate.chunkId));
-
-    let page: PageRecord | null = null;
-    if (draft.pageNumber !== null) {
-      const key = `${candidate.sourceVersionId}:${draft.pageNumber}`;
-      if (pageCache.has(key)) {
-        page = pageCache.get(key) ?? null;
-      } else {
-        const row = await repo.getPage(ctx, candidate.sourceVersionId, draft.pageNumber);
-        page = row
-          ? {
-              pageNumber: row.pageNumber,
-              text: row.text,
-              width: row.width,
-              height: row.height,
-              wordBoxes: row.wordBoxes,
-            }
-          : null;
-        pageCache.set(key, page);
-      }
+  if (wanted.size > 0) {
+    for (const row of await repo.getPagesByNumber(ctx, [...wanted.values()])) {
+      pageCache.set(`${row.sourceVersionId}:${row.pageNumber}`, {
+        pageNumber: row.pageNumber,
+        text: row.text,
+        width: row.width,
+        height: row.height,
+        wordBoxes: row.wordBoxes,
+      });
     }
+    // A page the index expected but the store does not hold is a miss, not a retry: it is
+    // cached as absent so verification reports it unverified rather than looking again.
+    for (const key of wanted.keys()) if (!pageCache.has(key)) pageCache.set(key, null);
+  }
+
+  for (const { candidate, citationId, draft } of drafts) {
+    if (!draft) continue;
+    const page =
+      draft.pageNumber == null
+        ? null
+        : (pageCache.get(`${candidate.sourceVersionId}:${draft.pageNumber}`) ?? null);
 
     const verification = verifyExcerpt(draft.supportingExcerpt, page);
     const citation = finalizeCitation(draft, verification, ctx.organizationId);
@@ -664,10 +688,23 @@ const SUBJECT_OCCURRENCES = 25;
  * of the document is used unchanged: that is the honest fallback, and the review says
  * separately how much it did not look at.
  */
-function selectRelevantRequirements(
+export function selectRelevantRequirements(
   drafts: RequirementDraft[],
   vocabulary: Map<string, number>,
   budget: number,
+  /**
+   * Clauses the trade router matched to this submission's own trade.
+   *
+   * These have already passed a relevance test, by a stronger signal than word overlap:
+   * something named the clause's trade and it is the trade the submission is in. Making
+   * them clear the vocabulary floor as well filtered out the review's whole subject — a
+   * fire-alarm drawing set was tested against two obligations, with "Manual Fire Alarm
+   * Initiating System (Manual Call Points)" and the detector-spacing clauses excluded,
+   * because a drawing states its requirements in symbols and schedules rather than in the
+   * code's prose. The floor exists to judge clauses no trade claims; it was never a second
+   * opinion on the ones a trade does.
+   */
+  tradeMatched: ReadonlySet<RequirementDraft> = new Set(),
 ): RequirementDraft[] {
   /*
    * How much a word says about what a clause is for.
@@ -715,7 +752,9 @@ function selectRelevantRequirements(
    * useless. The drawing is not about LPG tanks. A clause the submission does not engage
    * with is not a gap in the submission, and listing it buries the gaps that are real.
    */
-  const relevant = scored.filter((entry) => entry.score >= RELEVANCE_FLOOR);
+  const relevant = scored.filter(
+    (entry) => tradeMatched.has(entry.draft) || entry.score >= RELEVANCE_FLOOR,
+  );
 
   // Nothing cleared the floor — a submission in a vocabulary the code does not share, or no
   // project document at all. Fall back to document order so the review still says something.
@@ -982,6 +1021,8 @@ export async function runComplianceReview(
   const inScope: RequirementDraft[] = [];
   const outOfScope: Array<{ draft: RequirementDraft; discipline: Discipline }> = [];
   const outOfBand: Array<{ draft: RequirementDraft; condition: HeightCondition }> = [];
+  /** In scope because the clause names this submission's own trade, not merely because it names none. */
+  const tradeMatched = new Set<RequirementDraft>();
   for (const draft of requirementDrafts) {
     const text = `${draft.title} ${draft.obligationText}`;
 
@@ -996,10 +1037,13 @@ export async function runComplianceReview(
       outOfScope.push({ draft, discipline: discipline as Discipline });
       continue;
     }
+    if (discipline !== null && submissionProfile.disciplines.includes(discipline)) {
+      tradeMatched.add(draft);
+    }
     inScope.push(draft);
   }
 
-  const relevant = selectRelevantRequirements(inScope, vocabulary, budget);
+  const relevant = selectRelevantRequirements(inScope, vocabulary, budget, tradeMatched);
   const omitted = inScope.length - relevant.length;
 
   const usable = relevant.filter((r) => r.obligationText.length > 0);

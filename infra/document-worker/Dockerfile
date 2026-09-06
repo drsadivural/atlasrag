@@ -71,6 +71,11 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
 
 # One worker process per container; scale horizontally instead of threading, because
 # PyMuPDF holds the GIL for long stretches on large documents.
+# One process, but a thread pool wide enough that several documents extract at once: the
+# handlers are plain `def`, so Starlette runs each in that pool and the event loop stays
+# free to answer /health. Uvicorn workers are not used because the OCR process pool is
+# shared per process, and N uvicorn workers would each start their own.
+ENV UXE_THREAD_POOL_SIZE=16
 CMD ["uvicorn", "app.main:app", \
      "--host", "0.0.0.0", \
      "--port", "8000", \

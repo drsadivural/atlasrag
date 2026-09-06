@@ -151,6 +151,14 @@ jobs:
               -c "CREATE EXTENSION IF NOT EXISTS vector; CREATE EXTENSION IF NOT EXISTS pg_trgm;"
           done
 
+      - name: Document worker unit tests
+        run: |
+          python -m venv /tmp/worker-venv
+          /tmp/worker-venv/bin/pip install --quiet \
+            -r services/document-worker/requirements.txt \
+            -r services/document-worker/requirements-dev.txt
+          cd services/document-worker && /tmp/worker-venv/bin/python -m pytest tests/ -q
+
       - name: Build the document worker image
         run: docker build -f infra/document-worker/Dockerfile -t uxe-document-worker:ci .
 

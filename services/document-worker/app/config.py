@@ -30,6 +30,23 @@ class Settings:
     )
     ocr_dpi: int = field(default_factory=lambda: int(os.environ.get("OCR_DPI", "200")))
     ocr_max_pages: int = field(default_factory=lambda: int(os.environ.get("OCR_MAX_PAGES", "300")))
+    # OCR runs page-parallel in a process pool this wide. Tesseract is CPU-bound and a
+    # drawing set is many pages, so the default takes the cores it can find, capped so a
+    # large host does not start dozens of Tesseracts per document.
+    ocr_workers: int = field(
+        default_factory=lambda: max(
+            1, int(os.environ.get("OCR_WORKERS", str(min(8, os.cpu_count() or 1))))
+        )
+    )
+    # A single page is given this long before its OCR is abandoned and the text layer used.
+    ocr_page_timeout_seconds: float = field(
+        default_factory=lambda: float(os.environ.get("OCR_PAGE_TIMEOUT_SECONDS", "120"))
+    )
+    # How many documents may be worked on at once: the handlers are synchronous, so this
+    # is the size of the thread pool Starlette runs them in.
+    thread_pool_size: int = field(
+        default_factory=lambda: max(1, int(os.environ.get("UXE_THREAD_POOL_SIZE", "16")))
+    )
     log_level: str = field(default_factory=lambda: os.environ.get("LOG_LEVEL", "info"))
 
 

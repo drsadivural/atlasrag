@@ -44,6 +44,13 @@ export const EnvSchema = z.object({
   DOCUMENT_WORKER_URL: z.string().default('http://127.0.0.1:8099'),
   DOCUMENT_WORKER_TOKEN: z.string().default(''),
   DOCUMENT_WORKER_TIMEOUT_MS: z.coerce.number().int().min(1000).default(180_000),
+  /* Extraction is the one call whose cost scales with the document: a long scan is
+   * hundreds of OCR passes. It gets its own allowance so a large file fails on its
+   * merits rather than on a clock sized for quick calls. */
+  DOCUMENT_WORKER_EXTRACT_TIMEOUT_MS: z.coerce.number().int().min(1000).default(900_000),
+  /* Jobs run at once in this process. Ingestion mostly waits on the worker and the
+   * database, so several can overlap; the worker processes documents in parallel too. */
+  JOB_CONCURRENCY: z.coerce.number().int().min(1).max(64).default(4),
 
   MODEL_PROVIDER: z.enum(['deterministic', 'anthropic', 'openai']).default('deterministic'),
   ANTHROPIC_API_KEY: z.string().default(''),

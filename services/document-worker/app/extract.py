@@ -9,7 +9,15 @@ at the exact passage that was cited.
 from __future__ import annotations
 
 import io
+import logging
+import math
+import multiprocessing
+import multiprocessing.pool
+import os
 import re
+import tempfile
+import threading
+import time
 import zipfile
 from dataclasses import dataclass, field
 from typing import Any
@@ -17,6 +25,8 @@ from typing import Any
 import pymupdf
 
 from .config import settings
+
+logger = logging.getLogger("uxe.document-worker.extract")
 
 # Coordinates are stored normalised to 0..1 of page width/height so a highlight survives
 # whatever zoom level or render width the viewer happens to use.
@@ -144,11 +154,23 @@ def _normalise(text: str) -> str:
 
 
 def extract_pdf(data: bytes, max_pages: int, force_ocr: bool = False, password: str | None = None) -> Extraction:
+    # Spooled to disk rather than opened from memory: MuPDF reads a file lazily, which on a
+    # large drawing is several times faster than walking a memory stream, and the OCR
+    # subprocesses need a path — a page object cannot cross a process boundary.
+    with tempfile.NamedTemporaryFile(prefix="uxe-extract-", suffix=".pdf") as spool:
+        spool.write(data)
+        spool.flush()
+        return _extract_pdf_file(spool.name, max_pages, force_ocr, password)
+
+
+def _extract_pdf_file(
+    path: str, max_pages: int, force_ocr: bool, password: str | None
+) -> Extraction:
     warnings: list[str] = []
     is_encrypted = False
 
     try:
-        doc = pymupdf.open(stream=data, filetype="pdf")
+        doc = pymupdf.open(path)
     except Exception as exc:  # noqa: BLE001 - surfaced to the user verbatim
         raise ValueError(f"This PDF could not be opened: {exc}") from exc
 
@@ -173,21 +195,47 @@ def extract_pdf(data: bytes, max_pages: int, force_ocr: bool = False, password: 
             f"Only the first {max_pages} of {doc.page_count} pages were indexed (page limit)."
         )
 
+    # First pass: the text layer, and which pages will need OCR.
+    raw_texts: list[str] = []
+    rects: list[pymupdf.Rect] = []
+    ocr_candidates: list[int] = []
     for index in range(total):
         page = doc[index]
         rect = page.rect
+        rects.append(rect)
         page_sizes.append({"w": float(rect.width), "h": float(rect.height)})
         media_count += len(page.get_images(full=True))
 
         raw_text = page.get_text("text") or ""
-        needs_ocr = force_ocr or len(raw_text.strip()) < settings.ocr_text_threshold
+        raw_texts.append(raw_text)
+        if force_ocr or len(raw_text.strip()) < settings.ocr_text_threshold:
+            ocr_candidates.append(index)
+
+    # OCR runs page-parallel. The cap on OCR'd pages is applied to candidates in page
+    # order, so a scan longer than the cap indexes its opening pages — the same pages the
+    # serial loop used to reach.
+    ocr_results: dict[int, OcrResult] = {}
+    if ocr_candidates and settings.ocr_enabled:
+        ocr_results = _ocr_pages(path, ocr_candidates[: settings.ocr_max_pages], password)
+        overrun = [str(i + 1) for i in ocr_candidates[: settings.ocr_max_pages] if i not in ocr_results]
+        if overrun:
+            warnings.append(
+                f"OCR did not finish for page(s) {', '.join(overrun[:20])}"
+                f"{'…' if len(overrun) > 20 else ''}; their text layer was used instead."
+            )
+
+    for index in range(total):
+        page = doc[index]
+        rect = rects[index]
+        raw_text = raw_texts[index]
 
         word_boxes: list[Box] = []
         ocr_applied = False
         ocr_confidence: float | None = None
 
-        if needs_ocr and settings.ocr_enabled and ocr_pages < settings.ocr_max_pages:
-            ocr_text, ocr_boxes, ocr_confidence = _ocr_page(page)
+        result = ocr_results.get(index)
+        if result is not None:
+            ocr_text, ocr_boxes, ocr_confidence = result
             if ocr_text.strip():
                 raw_text = ocr_text
                 word_boxes = ocr_boxes
@@ -241,29 +289,71 @@ def extract_pdf(data: bytes, max_pages: int, force_ocr: bool = False, password: 
     )
 
 
+_OBJECT_REF_RE = re.compile(r"(\d+)\s+\d+\s+R")
+_SIGNATURE_MARKERS = ("/Type/Sig", "/Type /Sig", "/ByteRange", "/FT/Sig", "/FT /Sig")
+# How many pages the widget walk may visit, and for how long. On a large CAD drawing
+# `page.widgets()` is minutes per page, so it is the net of last resort, never the first.
+_WIDGET_SCAN_PAGES = 50
+_WIDGET_SCAN_SECONDS = 5.0
+
+
 def _pdf_is_signed(doc: pymupdf.Document) -> bool:
     """Detects a signature field.
 
     A false positive here is harmless (the user sees a conservative notice); a false
     negative would let the product imply a signature survived an edit, which it must never do.
+
+    The checks run cheapest first. The catalogue's SigFlags and the AcroForm field list are
+    O(1) and O(fields) and answer for every conforming signer; the raw-object sweep catches
+    an incremental-update signature that never registered a field; the widget walk is kept
+    only as a bounded last net, because on a 90 MB drawing it costs minutes per page and a
+    document with no form cannot hold a signature widget in the first place.
     """
+    # 1. The catalogue's SigFlags: bit 1 is set whenever signature fields exist.
     try:
-        for page in doc:
-            for widget in page.widgets() or []:
-                if widget.field_type_string and "signature" in widget.field_type_string.lower():
-                    return True
+        if doc.get_sigflags() > 0:
+            return True
     except Exception:  # noqa: BLE001 - detection must never fail the extraction
         pass
+
+    # 2. The AcroForm field list: a signature is a form field with /FT /Sig.
+    has_form = False
     try:
-        # Fall back to the raw catalogue: an incremental-update signature may not surface
-        # as a widget.
+        kind, value = doc.xref_get_key(-1, "AcroForm")
+        has_form = kind not in ("null", None) and value not in ("null", "")
+        if has_form:
+            _, fields = doc.xref_get_key(-1, "AcroForm/Fields")
+            for ref in _OBJECT_REF_RE.findall(fields or "")[:2000]:
+                field_kind, field_type = doc.xref_get_key(int(ref), "FT")
+                if field_kind == "name" and field_type.strip() == "/Sig":
+                    return True
+    except Exception:  # noqa: BLE001
+        pass
+
+    # 3. The raw objects: an incremental-update signature may not surface as a field.
+    try:
         xref_count = doc.xref_length()
         for xref in range(1, min(xref_count, 3000)):
             obj = doc.xref_object(xref, compressed=False) or ""
-            if "/Type/Sig" in obj or "/Type /Sig" in obj or "/ByteRange" in obj:
+            if any(marker in obj for marker in _SIGNATURE_MARKERS):
                 return True
     except Exception:  # noqa: BLE001
         pass
+
+    # 4. Widgets, only where a form exists, and only for a bounded number of pages and
+    #    seconds. Everything a widget could reveal has already been looked for above.
+    if has_form:
+        deadline = time.monotonic() + _WIDGET_SCAN_SECONDS
+        try:
+            for index in range(min(doc.page_count, _WIDGET_SCAN_PAGES)):
+                if time.monotonic() > deadline:
+                    break
+                for widget in doc[index].widgets() or []:
+                    type_name = widget.field_type_string or ""
+                    if "signature" in type_name.lower():
+                        return True
+        except Exception:  # noqa: BLE001
+            pass
     return False
 
 
@@ -290,7 +380,129 @@ def _pdf_word_boxes(page: pymupdf.Page, rect: pymupdf.Rect) -> list[Box]:
     return boxes
 
 
-def _ocr_page(page: pymupdf.Page) -> tuple[str, list[Box], float | None]:
+OcrResult = tuple[str, list[Box], float | None]
+
+_OCR_POOL: multiprocessing.pool.Pool | None = None
+_OCR_POOL_LOCK = threading.Lock()
+
+
+def _ocr_worker_init() -> None:
+    # One Tesseract per core: without this each subprocess also fans out OpenMP threads,
+    # and eight workers on a 36-core host become 288 threads fighting for the same cores.
+    os.environ["OMP_THREAD_LIMIT"] = "1"
+
+
+def _ocr_pool() -> multiprocessing.pool.Pool:
+    """The shared OCR process pool, sized once by OCR_WORKERS.
+
+    Shared across requests so the number of Tesseract processes stays bounded however many
+    documents arrive at once. Started with the spawn method: a forked copy of a server
+    process inherits its event loop and MuPDF handles, which is a crash waiting to happen.
+    """
+    global _OCR_POOL
+    with _OCR_POOL_LOCK:
+        if _OCR_POOL is None:
+            _OCR_POOL = multiprocessing.get_context("spawn").Pool(
+                processes=settings.ocr_workers,
+                initializer=_ocr_worker_init,
+                maxtasksperchild=64,
+            )
+        return _OCR_POOL
+
+
+def shutdown_ocr_pool() -> None:
+    """Closes the pool at shutdown so no Tesseract outlives the server."""
+    _reset_ocr_pool()
+
+
+def _reset_ocr_pool() -> None:
+    """Kills the pool. Used after a timeout, when a worker may be stuck on a page."""
+    global _OCR_POOL
+    with _OCR_POOL_LOCK:
+        if _OCR_POOL is not None:
+            _OCR_POOL.terminate()
+            _OCR_POOL.join()
+            _OCR_POOL = None
+
+
+def _ocr_page_task(path: str, index: int, dpi: int, lang: str, password: str | None) -> OcrResult:
+    """Runs in a pool process: opens the spooled file and OCRs one page."""
+    doc = pymupdf.open(path)
+    try:
+        if doc.needs_pass and password:
+            doc.authenticate(password)
+        return _ocr_page(doc[index], dpi=dpi, lang=lang)
+    finally:
+        doc.close()
+
+
+def _ocr_pages(path: str, indices: list[int], password: str | None) -> dict[int, OcrResult]:
+    """OCRs the given pages in parallel and returns whatever finished in time.
+
+    Every wait is bounded. A page whose OCR fails or overruns is simply absent from the
+    result, and the caller falls back to that page's text layer — the same outcome the
+    serial loop produced when Tesseract failed on a page.
+    """
+    if not indices:
+        return {}
+
+    workers = max(1, min(settings.ocr_workers, len(indices)))
+    started = time.monotonic()
+    results: dict[int, OcrResult] = {}
+
+    if workers == 1:
+        doc = pymupdf.open(path)
+        try:
+            if doc.needs_pass and password:
+                doc.authenticate(password)
+            for index in indices:
+                results[index] = _ocr_page(doc[index])
+        finally:
+            doc.close()
+        logger.info("ocr %d page(s) in-process in %.0fms", len(indices), (time.monotonic() - started) * 1000)
+        return results
+
+    pool = _ocr_pool()
+    pending = {
+        index: pool.apply_async(
+            _ocr_page_task, (path, index, settings.ocr_dpi, settings.ocr_language, password)
+        )
+        for index in indices
+    }
+    # The whole batch gets one deadline: the per-page allowance times the number of rounds
+    # the pool needs, plus one allowance of slack. Nothing here waits past it.
+    rounds = math.ceil(len(indices) / workers)
+    deadline = started + settings.ocr_page_timeout_seconds * (rounds + 1)
+
+    timed_out = 0
+    failed = 0
+    for index, handle in pending.items():
+        remaining = max(0.0, deadline - time.monotonic())
+        try:
+            results[index] = handle.get(timeout=remaining)
+        except multiprocessing.TimeoutError:
+            timed_out += 1
+        except Exception:  # noqa: BLE001 - one bad page must not sink the document
+            failed += 1
+
+    if timed_out:
+        # A worker may still be stuck on one of those pages; start clean rather than let
+        # the next document queue behind it.
+        _reset_ocr_pool()
+
+    logger.info(
+        "ocr %d page(s) across %d worker(s) in %.0fms: %d ok, %d failed, %d timed out",
+        len(indices),
+        workers,
+        (time.monotonic() - started) * 1000,
+        len(results),
+        failed,
+        timed_out,
+    )
+    return results
+
+
+def _ocr_page(page: pymupdf.Page, dpi: int | None = None, lang: str | None = None) -> OcrResult:
     """OCRs a rendered page and returns text, word boxes and a mean confidence."""
     try:
         import pytesseract
@@ -299,12 +511,12 @@ def _ocr_page(page: pymupdf.Page) -> tuple[str, list[Box], float | None]:
         return "", [], None
 
     try:
-        zoom = settings.ocr_dpi / 72.0
+        zoom = (dpi or settings.ocr_dpi) / 72.0
         pixmap = page.get_pixmap(matrix=pymupdf.Matrix(zoom, zoom), alpha=False)
         image = Image.open(io.BytesIO(pixmap.tobytes("png")))
 
         data = pytesseract.image_to_data(
-            image, lang=settings.ocr_language, output_type=pytesseract.Output.DICT
+            image, lang=lang or settings.ocr_language, output_type=pytesseract.Output.DICT
         )
     except Exception:  # noqa: BLE001 - OCR is best-effort; failure falls back to no text
         return "", [], None
