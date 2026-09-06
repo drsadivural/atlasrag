@@ -37,6 +37,27 @@ RESULT_LABELS = {
     "not_assessed": "Not assessed",
 }
 
+DECISION_LABELS = {
+    "yes": "COMPLIANT",
+    "no": "NOT COMPLIANT",
+    "unable_to_determine": "UNABLE TO DETERMINE",
+}
+
+
+def verdict_text(payload: dict[str, Any]) -> str:
+    """The decision, and only then how it is qualified.
+
+    A review that is partly satisfied is a NO — the submission does not yet comply — and
+    "Partially compliant" describes how far it got, not what was decided. Printing the
+    qualifier in place of the decision put PARTIALLY COMPLIANT alone at the top of a report
+    whose stored decision was "no", which a reader files as a pass. The decision leads; the
+    qualifier follows it.
+    """
+    decision = str(payload.get("decision") or "").strip()
+    qualifier = str(payload.get("decisionQualifier") or "").strip()
+    label = DECISION_LABELS.get(decision.lower(), decision.upper() or "NOT DETERMINED")
+    return f"{label} - {qualifier}" if qualifier else label
+
 
 def build_pdf(payload: dict[str, Any]) -> bytes:
     """Renders a report PDF.
@@ -66,8 +87,7 @@ def build_pdf(payload: dict[str, Any]) -> bytes:
 
     # --- What this document is, before anything it concludes ------------------
     decision = payload.get("decision")
-    qualifier = payload.get("decisionQualifier")
-    verdict = (qualifier or decision or "Not determined").upper()
+    verdict = verdict_text(payload)
     coverage = float(payload.get("coverage") or 0) * 100
     confidence = float(payload.get("confidence") or 0) * 100
     rows = payload.get("rows") or []
@@ -247,7 +267,7 @@ def build_docx(payload: dict[str, Any]) -> bytes:
     decision = payload.get("decision")
     if decision:
         paragraph = document.add_paragraph()
-        run = paragraph.add_run((payload.get("decisionQualifier") or decision).upper())
+        run = paragraph.add_run(verdict_text(payload))
         run.bold = True
         run.font.color.rgb = (
             RGBColor(0xE5, 0x48, 0x4D) if decision == "no" else RGBColor(0x12, 0xA8, 0x6B)
@@ -422,7 +442,7 @@ def build_xlsx(payload: dict[str, Any]) -> bytes:
     summary = workbook.create_sheet("Summary")
     summary.append(["Title", payload.get("title", "")])
     summary.append(["Generated", payload.get("generatedAt", "")])
-    summary.append(["Decision", payload.get("decisionQualifier") or payload.get("decision") or ""])
+    summary.append(["Decision", verdict_text(payload)])
     summary.append(["Evidence coverage", f"{float(payload.get('coverage') or 0) * 100:.0f}%"])
     summary.append(["Confidence", f"{float(payload.get('confidence') or 0) * 100:.0f}%"])
     summary.append([])
@@ -454,7 +474,7 @@ def build_markdown(payload: dict[str, Any]) -> bytes:
     ]
 
     if payload.get("decision"):
-        lines.append(f"**{(payload.get('decisionQualifier') or payload['decision']).upper()}**")
+        lines.append(f"**{verdict_text(payload)}**")
         lines.append("")
 
     lines.extend(
