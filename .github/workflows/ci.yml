@@ -222,6 +222,11 @@ jobs:
       STORAGE_DRIVER: filesystem
       STORAGE_LOCAL_PATH: ./.data/storage
       EMAIL_DRIVER: console
+      # The sign-in form refuses an address outside the domains this deployment accepts,
+      # and refuses it in the browser, so no request is made and the API log stays silent.
+      # The seeded account is the one the tests sign in as; a run that does not admit its
+      # domain cannot get past the login page.
+      GOV_ALLOWED_EMAIL_DOMAINS: uxe.example.com
     steps:
       - uses: actions/checkout@v5
 
