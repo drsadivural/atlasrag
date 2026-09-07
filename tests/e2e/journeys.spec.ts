@@ -312,12 +312,25 @@ test.describe('reports and activity', () => {
   });
 
   test('shows the audit trail with who did what', async ({ page }) => {
-    await page.goto('/activity');
+    /*
+     * The audit tab, named. Activity opens on "needs attention" at every width and the
+     * audit query does not even run until its tab is chosen, so this asked for a page
+     * that never held an audit event. It passed anyway on the wider projects, because
+     * the signed-in person's name is in the header there — the assertion was matching
+     * the top bar. A phone shows initials, and the pretence ended.
+     */
+    await page.goto('/activity?tab=audit');
     await waitForSettled(page);
 
-    // The actor is named on every row, in the table on desktop and in the card list below.
-    // Both are in the DOM at every width, so the visible one is selected explicitly.
-    await expect(page.getByText('Dr Sadi Vural').filter({ visible: true }).first()).toBeVisible({
+    // Scoped to the audit list itself, so the header cannot answer for it again. The
+    // caption names both renderings: a table above md, a list of cards below.
+    const auditEvents = page
+      .getByRole('table', { name: 'Audit events' })
+      .or(page.getByRole('list', { name: 'Audit events' }))
+      .filter({ visible: true })
+      .first();
+
+    await expect(auditEvents.getByText('Dr Sadi Vural').first()).toBeVisible({
       timeout: 30_000,
     });
   });
