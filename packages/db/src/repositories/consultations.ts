@@ -219,6 +219,32 @@ export class ConsultationRepository {
       .where(and(eq(consultations.id, id), eq(consultations.workspaceId, ctx.workspaceId)));
   }
 
+  /**
+   * Removes a consultation outright, rather than archiving it.
+   *
+   * Archiving keeps the conversation and takes it off the list; this is for the case where
+   * somebody wants it gone. The same rule decides who may do it, because a permanent
+   * removal cannot be less guarded than a reversible one.
+   *
+   * What goes with it: the messages, reviews, attachments, correction plans and source
+   * selections, by the cascades declared on those tables. What deliberately stays: the
+   * audit events, which record that this happened and are not the consultation's to take
+   * with it, and any generated report, which detaches rather than disappearing — somebody
+   * may have been sent it.
+   */
+  async hardDelete(ctx: TenantContext, id: string) {
+    const current = await this.getById(ctx, id);
+    if (current.ownerUserId !== ctx.userId && !hasPermission(ctx, 'workspace:update')) {
+      throw new AuthorizationError(
+        'consultation:delete',
+        'You can only delete consultations you own.',
+      );
+    }
+    await this.db
+      .delete(consultations)
+      .where(and(eq(consultations.id, id), eq(consultations.workspaceId, ctx.workspaceId)));
+  }
+
   /* ---------------------------------------------------------------------- */
   /* Source selection                                                       */
   /* ---------------------------------------------------------------------- */

@@ -177,20 +177,32 @@ export function consultationRoutes(deps: AppDeps) {
     if (!tenant) throw ApiError.unauthenticated();
     const id = requireId(c, 'id');
     const consultation = await deps.repos.consultations.getById(tenant, id);
-    await deps.repos.consultations.softDelete(tenant, id);
 
+    /*
+     * Two different things a person can mean by removing a consultation, and they are not
+     * interchangeable. Archiving is the default and is reversible; permanent is asked for
+     * explicitly, in the address, so it cannot be arrived at by accident.
+     */
+    const permanent = c.req.query('permanent') === 'true';
+    if (permanent) await deps.repos.consultations.hardDelete(tenant, id);
+    else await deps.repos.consultations.softDelete(tenant, id);
+
+    // Recorded either way, and the record outlives the consultation: it is the evidence
+    // that it existed and that somebody removed it.
     await deps.repos.audit.record({
       organizationId: tenant.organizationId,
       workspaceId: tenant.workspaceId,
       actorUserId: tenant.userId,
       actorName: c.get('session')?.user.fullName ?? 'Unknown',
-      action: 'consultation.deleted',
+      action: permanent ? 'consultation.purged' : 'consultation.deleted',
       category: 'deletion',
       targetType: 'consultation',
       targetId: id,
       targetLabel: consultation.title,
       traceId: tenant.traceId,
-      summary: `Deleted consultation "${consultation.title}".`,
+      summary: permanent
+        ? `Permanently deleted consultation "${consultation.title}" and its messages.`
+        : `Archived consultation "${consultation.title}".`,
     });
 
     return c.json({ ok: true as const });

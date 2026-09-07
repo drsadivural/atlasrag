@@ -1133,6 +1133,18 @@ export const ResolveAttentionRequest = z.object({
 });
 export type ResolveAttentionRequest = z.infer<typeof ResolveAttentionRequest>;
 
+/** Which item is being taken off the list. The kind is how the dashboard keys it. */
+export const DismissAttentionQuery = z.object({
+  kind: z.enum([
+    'failed_job',
+    'critical_gap',
+    'unresolved_evidence',
+    'stale_knowledge',
+    'pending_review',
+  ]),
+});
+export type DismissAttentionQuery = z.infer<typeof DismissAttentionQuery>;
+
 export const ResolveAttentionResponse = z.object({
   /** 'fixed' — something was actually done. 'acknowledged' — a person said they have it. */
   outcome: z.enum(['fixed', 'acknowledged']),

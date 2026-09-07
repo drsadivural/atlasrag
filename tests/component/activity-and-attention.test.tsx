@@ -151,6 +151,16 @@ afterEach(() => {
  * is outstanding has to be the first thing on the page, and the audit log — which most
  * roles may not read — must not turn the page into an error for them.
  */
+/** The row's own button, as opposed to the "remove from this list" control beside it. */
+async function openerFor(title: string) {
+  const matches = await screen.findAllByRole('button', { name: new RegExp(title) });
+  const opener = matches.find(
+    (element) => !/^Remove/i.test(element.getAttribute('aria-label') ?? ''),
+  );
+  if (!opener) throw new Error(`no opener button found for ${title}`);
+  return opener;
+}
+
 describe('the page the bell opens', () => {
   it('leads with what needs attention', async () => {
     renderActivity('owner', [ITEM]);
@@ -169,7 +179,9 @@ describe('the page the bell opens', () => {
     const user = userEvent.setup();
     renderActivity('owner', [ITEM]);
 
-    await user.click(await screen.findByRole('button', { name: /Marina Tower Evacuation Plan/ }));
+    // Two buttons carry the item's name now — the row itself, and the control that
+    // removes it from the list. This one opens it.
+    await user.click(await openerFor('Marina Tower Evacuation Plan'));
 
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByRole('button', { name: 'Mark as handled' })).toBeInTheDocument();
@@ -186,7 +198,9 @@ describe('the page the bell opens', () => {
     const user = userEvent.setup();
     renderActivity('owner', [ITEM]);
 
-    await user.click(await screen.findByRole('button', { name: /Marina Tower Evacuation Plan/ }));
+    // Two buttons carry the item's name now — the row itself, and the control that
+    // removes it from the list. This one opens it.
+    await user.click(await openerFor('Marina Tower Evacuation Plan'));
 
     const panel = await screen.findByRole('dialog');
     expect(within(panel).getByText('A finding recorded as non-compliant')).toBeInTheDocument();

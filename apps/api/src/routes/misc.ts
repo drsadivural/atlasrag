@@ -4,6 +4,7 @@ import {
   AvailableModelsRequest,
   DashboardQuery,
   InviteUserRequest,
+  DismissAttentionQuery,
   ResolveAttentionRequest,
   ReportsQuery,
   UpdateSettingsRequest,
@@ -154,20 +155,31 @@ export function dashboardRoutes(deps: AppDeps) {
     const tenant = c.get('tenant');
     if (!tenant) throw ApiError.unauthenticated();
 
-    const [failedJobs, attention] = await Promise.all([
+    const [failedJobs, attention, dismissed] = await Promise.all([
       deps.repos.jobs.listFailed(tenant, ATTENTION_LIMIT),
       deps.repos.metrics.attentionItems(tenant, ATTENTION_LIMIT),
+      deps.repos.metrics.dismissedAttentionKeys(tenant),
     ]);
 
     const items = [
-      ...failedJobs.map((job) => ({
-        id: job.id,
-        kind: 'failed_job' as const,
-        title: `${job.kind.replace(/_/g, ' ')} failed`,
-        detail: String(job.error?.message ?? 'The job could not be completed.'),
-        severity: 'critical' as const,
-        href: `/activity?job=${job.id}`,
-      })),
+      /*
+       * Failed jobs are dismissed here rather than in their query.
+       *
+       * They arrive from the jobs table, which knows nothing about the dashboard, so the
+       * filter `attentionItems` applies to everything else missed them entirely: a person
+       * could dismiss a failed job and watch it come straight back. The dismissal is about
+       * the item as this list names it, so this is where it belongs.
+       */
+      ...failedJobs
+        .filter((job) => !dismissed.has(`failed_job:${job.id}`))
+        .map((job) => ({
+          id: job.id,
+          kind: 'failed_job' as const,
+          title: `${job.kind.replace(/_/g, ' ')} failed`,
+          detail: String(job.error?.message ?? 'The job could not be completed.'),
+          severity: 'critical' as const,
+          href: `/activity?job=${job.id}`,
+        })),
       ...attention,
     ];
 
@@ -266,6 +278,50 @@ export function dashboardRoutes(deps: AppDeps) {
       });
 
       return c.json({ outcome, detail });
+    },
+  );
+
+  /**
+   * Takes an item off the list without claiming anything was fixed.
+   *
+   * Resolving says a person dealt with the thing; this only says they do not want to be
+   * told about it again. The two must not be the same button: a non-compliant finding
+   * that is merely hidden has still not been answered, and the audit trail has to be able
+   * to tell those apart afterwards.
+   *
+   * Nothing underneath is touched. The failed job stays failed and the finding stays in
+   * its review with its evidence; only the reminder stops.
+   */
+  app.delete(
+    '/attention/:id',
+    requirePermission('workspace:read'),
+    validateQuery(DismissAttentionQuery),
+    async (c) => {
+      const tenant = c.get('tenant');
+      const session = c.get('session');
+      if (!tenant || !session) throw ApiError.unauthenticated();
+      const itemId = requireId(c, 'id');
+      const { kind } = query<typeof DismissAttentionQuery._output>(c);
+
+      await deps.repos.metrics.dismissAttentionItem(tenant, { kind, itemId });
+
+      await deps.repos.audit.record({
+        organizationId: tenant.organizationId,
+        workspaceId: tenant.workspaceId,
+        actorUserId: tenant.userId,
+        actorName: session.user.fullName,
+        action: 'attention.dismissed',
+        category: 'consultation',
+        targetType: 'attention_item',
+        targetId: itemId,
+        targetLabel: kind,
+        ipAddress: clientIp(c),
+        userAgent: userAgent(c),
+        traceId: tenant.traceId,
+        summary: `Dismissed a ${kind.replace(/_/g, ' ')} from the dashboard without resolving it.`,
+      });
+
+      return c.json({ ok: true as const });
     },
   );
 

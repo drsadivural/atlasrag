@@ -65,8 +65,18 @@ export function Dialog({
             'fixed inset-0 z-50 bg-[rgba(16,22,47,0.45)] backdrop-blur-[2px]',
             'data-[state=open]:animate-[uxe-fade-in_var(--uxe-duration)_var(--uxe-ease)]',
           )}
+          onClick={(event) => event.stopPropagation()}
         />
         <DialogPrimitive.Content
+          /*
+           * As with the menu: portalled out of whatever opened it in the DOM, but React
+           * still carries events up the component tree. Confirming "Move to archive" from
+           * a dialog opened over a table row reached the row's own handler and opened the
+           * consultation, so the archive succeeded and the screen went somewhere else
+           * entirely. What happens inside a dialog stays inside it.
+           */
+          onClick={(event) => event.stopPropagation()}
+          onPointerDown={(event) => event.stopPropagation()}
           className={cn(
             'fixed z-50 flex flex-col border border-[var(--uxe-border)] bg-[var(--uxe-surface)]',
             'shadow-[var(--uxe-shadow-xl)] focus:outline-none',
@@ -356,6 +366,18 @@ export function DropdownMenu({
           align={align}
           sideOffset={6}
           collisionPadding={12}
+          /*
+           * Nothing chosen in here reaches whatever sits behind it.
+           *
+           * The menu is portalled out of the row in the DOM, but React sends events up the
+           * component tree rather than the document tree, so a click on "Move to archive"
+           * still arrived at the row's own click handler — which opened the consultation.
+           * Choosing to archive a draft navigated into it instead, and it looked for all
+           * the world like a brand new consultation. Every call site would otherwise have
+           * to remember this; the menu is the one place that can know it.
+           */
+          onClick={(event) => event.stopPropagation()}
+          onPointerDown={(event) => event.stopPropagation()}
           className={cn(
             'z-50 min-w-52 overflow-hidden rounded-[var(--uxe-radius-control-lg)]',
             'border border-[var(--uxe-border)] bg-[var(--uxe-surface-raised)] p-1.5',

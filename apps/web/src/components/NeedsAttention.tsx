@@ -1,11 +1,12 @@
 import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, CheckCircle2, ChevronRight, Info, XCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ChevronRight, Info, Trash2, XCircle } from 'lucide-react';
 import {
   Badge,
   Button,
   Card,
+  ConfirmDialog,
   CardHeader,
   CardTitle,
   LoadingRegion,
@@ -172,12 +173,12 @@ export function NeedsAttention() {
             return (
               <li
                 key={`${item.kind}-${item.id}`}
-                className="border-t border-[var(--uxe-border)] first:border-t-0"
+                className="flex items-stretch border-t border-[var(--uxe-border)] first:border-t-0"
               >
                 <button
                   type="button"
                   onClick={() => setOpen(item)}
-                  className="flex w-full items-start gap-3 px-5 py-3.5 text-start transition-colors hover:bg-[var(--uxe-surface-hover)] focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--uxe-cobalt)]"
+                  className="flex min-w-0 flex-1 items-start gap-3 px-5 py-3.5 text-start transition-colors hover:bg-[var(--uxe-surface-hover)] focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--uxe-cobalt)]"
                 >
                   <span
                     aria-hidden
@@ -210,6 +211,8 @@ export function NeedsAttention() {
                     aria-hidden
                   />
                 </button>
+                {/* Beside the row, not inside it: a button cannot contain a button. */}
+                <DismissAttentionItem item={item} />
               </li>
             );
           })}
@@ -316,6 +319,58 @@ function AttentionPanel({
 }
 
 /** A labelled line in a detail panel. Shared so every panel reads the same way. */
+/**
+ * Takes one item off the list without saying it was dealt with.
+ *
+ * Kept apart from the panel's resolve button on purpose. Resolving asserts something was
+ * done and, for a real finding, that assertion would be false — this only says stop
+ * telling me. The server records the two differently for the same reason.
+ */
+function DismissAttentionItem({ item }: { item: AttentionItem }) {
+  const { t } = useI18n();
+  const { push } = useToast();
+  const queryClient = useQueryClient();
+  const [confirming, setConfirming] = useState(false);
+
+  const dismiss = useMutation({
+    mutationFn: () => api.delete(`/dashboard/attention/${item.id}?kind=${item.kind}`),
+    onSuccess: () => {
+      push({ tone: 'success', title: t('attention.dismissed') });
+      void queryClient.invalidateQueries({ queryKey: ATTENTION_QUERY_KEY });
+      setConfirming(false);
+    },
+    onError: (error: ApiError) => {
+      push({ tone: 'error', title: t('attention.couldNotDismiss'), description: error.message });
+      setConfirming(false);
+    },
+  });
+
+  return (
+    <>
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        className="me-3 self-center"
+        aria-label={t('attention.dismissLabel', { title: item.title })}
+        onClick={() => setConfirming(true)}
+      >
+        <Trash2 className="h-4 w-4" aria-hidden />
+      </Button>
+      <ConfirmDialog
+        open={confirming}
+        onOpenChange={setConfirming}
+        title={t('attention.dismiss')}
+        description={t('attention.dismissBody', { title: item.title })}
+        confirmLabel={t('attention.dismiss')}
+        cancelLabel={t('common.cancel')}
+        destructive
+        loading={dismiss.isPending}
+        onConfirm={() => dismiss.mutate()}
+      />
+    </>
+  );
+}
+
 export function DetailField({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="flex flex-col gap-1">

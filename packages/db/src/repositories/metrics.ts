@@ -326,6 +326,28 @@ export class MetricsRepository {
     return items.filter((item) => !hidden.has(`${item.kind}:${item.id}`));
   }
 
+  /** The dismissal keys for this workspace, as `kind:itemId`. */
+  async dismissedAttentionKeys(ctx: TenantContext): Promise<Set<string>> {
+    const rows = await this.db
+      .select({ kind: attentionDismissals.kind, itemId: attentionDismissals.itemId })
+      .from(attentionDismissals)
+      .where(eq(attentionDismissals.workspaceId, ctx.workspaceId));
+    return new Set(rows.map((row) => `${row.kind}:${row.itemId}`));
+  }
+
+  /** Puts a dismissed item back on the list. */
+  async restoreAttentionItem(ctx: TenantContext, input: { kind: string; itemId: string }) {
+    await this.db
+      .delete(attentionDismissals)
+      .where(
+        and(
+          eq(attentionDismissals.workspaceId, ctx.workspaceId),
+          eq(attentionDismissals.kind, input.kind),
+          eq(attentionDismissals.itemId, input.itemId),
+        ),
+      );
+  }
+
   /** How many sources a given member can actually see, for the Users page. */
   async accessibleSourceCount(ctx: TenantContext, userId: string): Promise<number> {
     const groupRows = await this.db.execute(sql`

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Archive, ArrowRight, MessageSquare, MoreHorizontal, Plus } from 'lucide-react';
+import { Archive, ArrowRight, MessageSquare, MoreHorizontal, Plus, Trash2 } from 'lucide-react';
 import {
   Avatar,
   Badge,
@@ -233,19 +233,25 @@ function RowActions({
   const queryClient = useQueryClient();
   const { t } = useI18n();
   const { push } = useToast();
-  const [confirming, setConfirming] = useState(false);
+  // Which removal is being confirmed, or none. Archiving is reversible and permanent
+  // deletion is not, so they never share a dialog and never share a default.
+  const [confirming, setConfirming] = useState<'archive' | 'delete' | null>(null);
 
   const remove = useMutation({
-    mutationFn: () => api.delete(`/consultations/${consultation.id}`),
-    onSuccess: () => {
+    mutationFn: (mode: 'archive' | 'delete') =>
+      api.delete(`/consultations/${consultation.id}${mode === 'delete' ? '?permanent=true' : ''}`),
+    onSuccess: (_result, mode) => {
       push({
         tone: 'success',
-        title: t('consult.moved'),
-        description: t('consult.movedBody', { title: consultation.title }),
+        title: mode === 'delete' ? t('consult.deleted') : t('consult.moved'),
+        description:
+          mode === 'delete'
+            ? t('consult.deletedBody', { title: consultation.title })
+            : t('consult.movedBody', { title: consultation.title }),
       });
       void queryClient.invalidateQueries({ queryKey: ['consultations'] });
       void queryClient.invalidateQueries({ queryKey: ATTENTION_QUERY_KEY });
-      setConfirming(false);
+      setConfirming(null);
     },
     /*
      * This had no failure branch at all.
@@ -254,9 +260,13 @@ function RowActions({
      * it was and the person was told "Consultation not found" about something still on
      * their screen. The server now refuses with a reason; this shows the reason.
      */
-    onError: (error: ApiError) => {
-      push({ tone: 'error', title: t('consult.couldNotArchive'), description: error.message });
-      setConfirming(false);
+    onError: (error: ApiError, mode) => {
+      push({
+        tone: 'error',
+        title: mode === 'delete' ? t('consult.couldNotDelete') : t('consult.couldNotArchive'),
+        description: error.message,
+      });
+      setConfirming(null);
     },
   });
 
@@ -286,9 +296,14 @@ function RowActions({
                 {
                   label: t('consult.moveToArchive'),
                   icon: <Archive className="h-4 w-4" aria-hidden />,
-                  onSelect: () => setConfirming(true),
-                  destructive: true,
+                  onSelect: () => setConfirming('archive'),
                   separatorBefore: true,
+                },
+                {
+                  label: t('consult.deletePermanently'),
+                  icon: <Trash2 className="h-4 w-4" aria-hidden />,
+                  onSelect: () => setConfirming('delete'),
+                  destructive: true,
                 },
               ]
             : []),
@@ -296,15 +311,23 @@ function RowActions({
       />
 
       <ConfirmDialog
-        open={confirming}
-        onOpenChange={setConfirming}
-        title={t('consult.moveToArchive')}
-        description={t('consult.moveToArchiveBody', { title: consultation.title })}
-        confirmLabel={t('consult.moveToArchive')}
+        open={confirming !== null}
+        onOpenChange={(next) => setConfirming(next ? (confirming ?? 'archive') : null)}
+        title={
+          confirming === 'delete' ? t('consult.deletePermanently') : t('consult.moveToArchive')
+        }
+        description={
+          confirming === 'delete'
+            ? t('consult.deletePermanentlyBody', { title: consultation.title })
+            : t('consult.moveToArchiveBody', { title: consultation.title })
+        }
+        confirmLabel={
+          confirming === 'delete' ? t('consult.deletePermanently') : t('consult.moveToArchive')
+        }
         cancelLabel={t('common.cancel')}
         destructive
         loading={remove.isPending}
-        onConfirm={() => remove.mutate()}
+        onConfirm={() => remove.mutate(confirming ?? 'archive')}
       />
     </>
   );
