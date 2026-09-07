@@ -224,9 +224,11 @@ jobs:
       EMAIL_DRIVER: console
       # The sign-in form refuses an address outside the domains this deployment accepts,
       # and refuses it in the browser, so no request is made and the API log stays silent.
-      # The seeded account is the one the tests sign in as; a run that does not admit its
-      # domain cannot get past the login page.
-      GOV_ALLOWED_EMAIL_DOMAINS: uxe.example.com
+      # Both domains the suite signs in with: the seeded owner, and the addresses the
+      # sign-up journeys invent. Deliberately no more than those — a login test asserts
+      # that an outlook.com address is turned away, and admitting it would make that
+      # test pass by removing the rule it exists to check.
+      GOV_ALLOWED_EMAIL_DOMAINS: uxe.example.com,example.test
     steps:
       - uses: actions/checkout@v5
 
