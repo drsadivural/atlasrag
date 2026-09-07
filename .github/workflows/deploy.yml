@@ -17,7 +17,6 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  NODE_VERSION: '22.19.2'
   PNPM_VERSION: '11.16.0'
 
 jobs:
@@ -39,7 +38,7 @@ jobs:
 
       - uses: actions/setup-node@v5
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version-file: .nvmrc
           cache: pnpm
 
       - name: Install
@@ -107,7 +106,7 @@ jobs:
 
       - uses: actions/setup-node@v5
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version-file: .nvmrc
           cache: pnpm
 
       - name: Install
