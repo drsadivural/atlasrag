@@ -40,7 +40,10 @@ RUN apt-get update \
 FROM base AS deps
 WORKDIR /app
 COPY services/document-worker/requirements.txt ./requirements.txt
-RUN pip install --require-hashes=false -r requirements.txt
+# `--require-hashes` is a switch, not a setting: pip rejected `=false` with its usage
+# message and exit 2, so this image had never once built. It is off unless a
+# requirement carries a hash, and none here do, so there is nothing to turn off.
+RUN pip install --no-cache-dir -r requirements.txt
 
 FROM deps AS runtime
 WORKDIR /app
