@@ -252,9 +252,12 @@ jobs:
           docker run -d --name document-worker -p 8000:8000 \
             -e DOCUMENT_WORKER_TOKEN=ci-worker-token uxe-document-worker:ci
           for i in $(seq 1 60); do
-            curl -sf http://127.0.0.1:8000/health > /dev/null && break
+            if curl -sf http://127.0.0.1:8000/health > /dev/null; then
+              echo "document worker ready after ${i} attempt(s)"; exit 0
+            fi
             sleep 2
           done
+          echo "ABORT: the document worker never answered /health"; docker logs document-worker; exit 1
 
       - name: Seed a demonstration workspace
         run: pnpm --filter @uxe/db seed
@@ -263,18 +266,27 @@ jobs:
         run: |
           pnpm --filter @uxe/api start > /tmp/api.log 2>&1 &
           for i in $(seq 1 60); do
-            curl -sf http://127.0.0.1:8787/api/v1/health > /dev/null && break
+            if curl -sf http://127.0.0.1:8787/api/v1/health > /dev/null; then
+              echo "api ready after ${i}s"; exit 0
+            fi
             sleep 1
           done
+          echo "ABORT: the api never answered /health"; tail -50 /tmp/api.log; exit 1
 
       - name: Build and serve the web bundle
         run: |
           pnpm --filter @uxe/web build
-          pnpm --filter @uxe/web preview > /tmp/web.log 2>&1 &
+          # Bound explicitly, as the deployed unit is. Vite's default host is the name
+          # "localhost", which the runner may resolve to ::1 while the tests ask for
+          # 127.0.0.1 — and then nothing is listening where they look.
+          pnpm --filter @uxe/web preview --host 127.0.0.1 > /tmp/web.log 2>&1 &
           for i in $(seq 1 60); do
-            curl -sf http://127.0.0.1:4173 > /dev/null && break
+            if curl -sf http://127.0.0.1:4173 > /dev/null; then
+              echo "web ready after ${i}s"; exit 0
+            fi
             sleep 1
           done
+          echo "ABORT: the web server never answered on 127.0.0.1:4173"; tail -50 /tmp/web.log; exit 1
 
       - name: End-to-end tests
         run: pnpm --filter @uxe/tests e2e
