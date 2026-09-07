@@ -68,14 +68,24 @@ export async function waitForSettled(page: Page): Promise<void> {
  * Picks a conversation from the past-consultations list.
  *
  * The list used to be a rail beside the workspace, and a drawer below 1280px; it is a tab
- * on the Activity page now, which is one list at every width. Going through the page
- * rather than a stored id is deliberate — it is the route a person takes, so the test
- * fails if that route breaks.
+ * on the Activity page now. One list, but not one rendering: a table above md and cards
+ * below, which is what the click below has to account for. Going through the page rather
+ * than a stored id is deliberate — it is the route a person takes, so the test fails if
+ * that route breaks.
  */
 export async function openConsultation(page: Page, name: RegExp): Promise<void> {
   await page.goto('/activity?tab=consultations');
   await waitForSettled(page);
-  await page.getByRole('row', { name }).first().click();
+  /*
+   * The list is a table above md and a list of cards below it, so there is no row to
+   * click on a phone — the title is a button instead. Asking only for a row meant every
+   * test that opens a consultation failed on the mobile project, and failed here in the
+   * fixture, which reads as the feature being broken rather than the selector being
+   * half the story. Whichever the width renders, this is the same click a person makes.
+   */
+  const asRow = page.getByRole('row', { name });
+  const asCard = page.getByRole('button', { name });
+  await asRow.or(asCard).first().click();
   await page.waitForURL(/\/consult\/.+/, { timeout: 20_000 });
   await waitForSettled(page);
 }
