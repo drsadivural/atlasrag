@@ -73,6 +73,28 @@ export async function waitForSettled(page: Page): Promise<void> {
  * than a stored id is deliberate — it is the route a person takes, so the test fails if
  * that route breaks.
  */
+/**
+ * Starts a new consultation and waits until the screen is actually in it.
+ *
+ * Consult opens a consultation on arrival, so the address already matches
+ * /consult/<id> before this button is pressed — asserting that pattern afterwards
+ * asserts something that was true a moment ago and returns immediately. Tests then
+ * typed into the consultation they were leaving, and the navigation that followed
+ * carried the question and its answer off the screen; the failure surfaced much later
+ * as an answer that never rendered. Waiting for the id to change is the difference.
+ */
+export async function startNewConsultation(page: Page): Promise<void> {
+  const before = page.url();
+  await page
+    .getByRole('button', { name: /new consultation/i })
+    .first()
+    .click();
+  await page.waitForURL((url) => /\/consult\/[A-Z0-9]+/i.test(url.href) && url.href !== before, {
+    timeout: 20_000,
+  });
+  await waitForSettled(page);
+}
+
 export async function openConsultation(page: Page, name: RegExp): Promise<void> {
   await page.goto('/activity?tab=consultations');
   await waitForSettled(page);

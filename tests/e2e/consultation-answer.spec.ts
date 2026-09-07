@@ -1,4 +1,11 @@
-import { expect, openConsultation, openEvidencePanel, test, waitForSettled } from './fixtures.js';
+import {
+  expect,
+  openConsultation,
+  openEvidencePanel,
+  startNewConsultation,
+  test,
+  waitForSettled,
+} from './fixtures.js';
 
 /**
  * Getting an answer back.
@@ -14,11 +21,7 @@ test.describe('asking a question', () => {
 
     await page.goto('/consult');
     await waitForSettled(page);
-    await page
-      .getByRole('button', { name: /new consultation/i })
-      .first()
-      .click();
-    await expect(page).toHaveURL(/\/consult\/[A-Z0-9]+/i, { timeout: 20_000 });
+    await startNewConsultation(page);
 
     const composer = page.getByPlaceholder(/Ask Ayumi/i);
     await composer.fill('What does the code require for emergency lighting?');
@@ -37,11 +40,7 @@ test.describe('asking a question', () => {
      */
     await page.goto('/consult');
     await waitForSettled(page);
-    await page
-      .getByRole('button', { name: /new consultation/i })
-      .first()
-      .click();
-    await expect(page).toHaveURL(/\/consult\/[A-Z0-9]+/i, { timeout: 20_000 });
+    await startNewConsultation(page);
 
     await expect(page.getByPlaceholder(/Ask Ayumi/i)).toBeVisible();
     await expect(page.getByText(/No sources are selected/i)).toHaveCount(0);
@@ -98,11 +97,7 @@ test.describe('asking a question', () => {
 test('keeps the conversation on screen when a background refresh fails', async ({ page }) => {
   await page.goto('/consult');
   await waitForSettled(page);
-  await page
-    .getByRole('button', { name: /new consultation/i })
-    .first()
-    .click();
-  await expect(page).toHaveURL(/\/consult\/[A-Z0-9]+/i, { timeout: 20_000 });
+  await startNewConsultation(page);
 
   const composer = page.getByPlaceholder(/Ask Ayumi/i);
   await expect(composer).toBeVisible();
